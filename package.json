@@ -1,0 +1,23 @@
+{
+  "name": "zcli",
+  "version": "0.1.0",
+  "description": "多模型 AI 编程 CLI 助手",
+  "type": "module",
+  "bin": {
+    "zcli": "./dist/bin/zcli.js"
+  },
+  "scripts": {
+    "dev": "tsx bin/zcli.ts",
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": ["ai", "cli", "llm", "claude", "openai"],
+  "license": "MIT"
+}
