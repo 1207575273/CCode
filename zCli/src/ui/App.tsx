@@ -1,6 +1,6 @@
 // src/ui/App.tsx
 import React from 'react'
-import { Box, Text, useApp } from 'ink'
+import { Box, Text } from 'ink'
 import { StatusBar } from './StatusBar.js'
 import { ChatView } from './ChatView.js'
 
@@ -15,8 +15,6 @@ export function App({
   provider = 'anthropic',
   sessionId = 'sess_00000000_000000_000',
 }: AppProps) {
-  const { exit } = useApp()
-
   return (
     <Box flexDirection="column" width="100%">
       <Box paddingX={1} marginBottom={1}>
