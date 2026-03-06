@@ -23,16 +23,15 @@ export class AnthropicProvider implements LLMProvider {
     const model = new ChatAnthropic({
       apiKey: this.config.apiKey,
       model: request.model,
-      maxTokens: request.maxTokens,
-      temperature: request.temperature,
+      ...(request.maxTokens !== undefined && { maxTokens: request.maxTokens }),
+      ...(request.temperature !== undefined && { temperature: request.temperature }),
     })
 
     const langchainMsgs = toLangChainMessages(request.messages)
 
     try {
-      const stream = await model.stream(langchainMsgs, {
-        signal: request.signal,
-      })
+      const streamOpts = request.signal !== undefined ? { signal: request.signal } : {}
+      const stream = await model.stream(langchainMsgs, streamOpts)
 
       for await (const chunk of stream) {
         const text = typeof chunk.content === 'string' ? chunk.content : ''

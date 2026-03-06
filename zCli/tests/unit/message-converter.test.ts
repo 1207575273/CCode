@@ -8,20 +8,20 @@ describe('toLangChainMessages', () => {
     const msgs: Message[] = [{ role: 'user', content: 'hello' }]
     const result = toLangChainMessages(msgs)
     expect(result).toHaveLength(1)
-    expect(result[0]).toBeInstanceOf(HumanMessage)
-    expect(result[0].content).toBe('hello')
+    expect(result[0]!).toBeInstanceOf(HumanMessage)
+    expect(result[0]!.content).toBe('hello')
   })
 
   it('assistant 消息 → AIMessage', () => {
     const msgs: Message[] = [{ role: 'assistant', content: 'hi there' }]
     const result = toLangChainMessages(msgs)
-    expect(result[0]).toBeInstanceOf(AIMessage)
+    expect(result[0]!).toBeInstanceOf(AIMessage)
   })
 
   it('system 消息 → SystemMessage', () => {
     const msgs: Message[] = [{ role: 'system', content: 'you are helpful' }]
     const result = toLangChainMessages(msgs)
-    expect(result[0]).toBeInstanceOf(SystemMessage)
+    expect(result[0]!).toBeInstanceOf(SystemMessage)
   })
 
   it('TextContent 对象正确提取文本', () => {
@@ -29,7 +29,7 @@ describe('toLangChainMessages', () => {
       { role: 'user', content: { type: 'text', text: 'test message' } }
     ]
     const result = toLangChainMessages(msgs)
-    expect(result[0].content).toBe('test message')
+    expect(result[0]!.content).toBe('test message')
   })
 
   it('多条消息保持顺序', () => {
@@ -40,8 +40,8 @@ describe('toLangChainMessages', () => {
     ]
     const result = toLangChainMessages(msgs)
     expect(result).toHaveLength(3)
-    expect(result[0]).toBeInstanceOf(HumanMessage)
-    expect(result[1]).toBeInstanceOf(AIMessage)
-    expect(result[2]).toBeInstanceOf(HumanMessage)
+    expect(result[0]!).toBeInstanceOf(HumanMessage)
+    expect(result[1]!).toBeInstanceOf(AIMessage)
+    expect(result[2]!).toBeInstanceOf(HumanMessage)
   })
 })

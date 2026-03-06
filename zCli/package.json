@@ -44,6 +44,7 @@
     "fast-glob": "^3.3.3",
     "hono": "^4.12.5",
     "ink": "^5.2.1",
+    "ink-spinner": "^5.0.0",
     "ink-text-input": "^6.0.0",
     "marked": "^17.0.4",
     "react": "^18.3.1",

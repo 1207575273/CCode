@@ -24,19 +24,16 @@ export class OpenAICompatProvider implements LLMProvider {
     const model = new ChatOpenAI({
       apiKey: this.config.apiKey,
       model: request.model,
-      maxTokens: request.maxTokens,
-      temperature: request.temperature,
-      configuration: this.config.baseURL
-        ? { baseURL: this.config.baseURL }
-        : undefined,
+      ...(request.maxTokens !== undefined && { maxTokens: request.maxTokens }),
+      ...(request.temperature !== undefined && { temperature: request.temperature }),
+      ...(this.config.baseURL !== undefined && { configuration: { baseURL: this.config.baseURL } }),
     })
 
     const langchainMsgs = toLangChainMessages(request.messages)
 
     try {
-      const stream = await model.stream(langchainMsgs, {
-        signal: request.signal,
-      })
+      const streamOpts = request.signal !== undefined ? { signal: request.signal } : {}
+      const stream = await model.stream(langchainMsgs, streamOpts)
 
       for await (const chunk of stream) {
         const text = typeof chunk.content === 'string' ? chunk.content : ''

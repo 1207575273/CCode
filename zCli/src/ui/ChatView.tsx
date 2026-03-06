@@ -1,6 +1,7 @@
 // src/ui/ChatView.tsx
 import React from 'react'
 import { Box, Text } from 'ink'
+import Spinner from 'ink-spinner'
 
 export interface ChatMessage {
   id: string
@@ -15,9 +16,10 @@ const ROLE_CONFIG = {
 
 interface ChatViewProps {
   messages: ChatMessage[]
+  streamingMessage?: string | null  // null/undefined = 空闲; '' = 等待首 token; string = 流入中
 }
 
-export function ChatView({ messages }: ChatViewProps) {
+export function ChatView({ messages, streamingMessage }: ChatViewProps) {
   return (
     <Box flexDirection="column" paddingX={1} flexGrow={1}>
       {messages.map((msg) => (
@@ -28,6 +30,20 @@ export function ChatView({ messages }: ChatViewProps) {
           <Text>{msg.content}</Text>
         </Box>
       ))}
+
+      {/* 流式气泡：streamingMessage 不为 null/undefined 时显示 */}
+      {streamingMessage != null && (
+        <Box marginBottom={1} flexDirection="column">
+          <Text color="cyan" bold>◆ ZCli</Text>
+          {streamingMessage === '' ? (
+            <Box>
+              <Spinner type="dots" />
+            </Box>
+          ) : (
+            <Text>{streamingMessage}</Text>
+          )}
+        </Box>
+      )}
     </Box>
   )
 }
