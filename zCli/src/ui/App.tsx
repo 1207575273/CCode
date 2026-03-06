@@ -4,6 +4,7 @@ import { Box, Text, useApp } from 'ink'
 import { WelcomeScreen } from './WelcomeScreen.js'
 import { ChatView } from './ChatView.js'
 import { InputBar } from './InputBar.js'
+import { PermissionDialog } from './PermissionDialog.js'
 import { useChat } from './useChat.js'
 import { configManager } from '@config/config-manager.js'
 
@@ -19,7 +20,7 @@ export function App({
   cwd = process.cwd(),
 }: AppProps) {
   const { exit } = useApp()
-  const { messages, streamingMessage, isStreaming, error, submit, abort: _abort } = useChat()
+  const { messages, streamingMessage, toolEvents, isStreaming, error, submit, abort: _abort, pendingPermission, resolvePermission } = useChat()
 
   // 从 config 读取当前模型/provider（props 可覆盖）
   const config = configManager.load()
@@ -39,7 +40,7 @@ export function App({
   return (
     <Box flexDirection="column" width="100%">
       {started ? (
-        <ChatView messages={messages} streamingMessage={streamingMessage} />
+        <ChatView messages={messages} streamingMessage={streamingMessage} toolEvents={toolEvents} />
       ) : (
         <WelcomeScreen model={currentModel} provider={currentProvider} cwd={cwd} />
       )}
@@ -50,10 +51,18 @@ export function App({
         </Box>
       )}
 
-      <InputBar
-        onSubmit={handleSubmit}
-        disabled={isStreaming}
-      />
+      {pendingPermission != null ? (
+        <PermissionDialog
+          toolName={pendingPermission.toolName}
+          args={pendingPermission.args}
+          onResolve={resolvePermission}
+        />
+      ) : (
+        <InputBar
+          onSubmit={handleSubmit}
+          disabled={isStreaming}
+        />
+      )}
     </Box>
   )
 }

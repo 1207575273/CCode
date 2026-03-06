@@ -2,6 +2,7 @@
 import React from 'react'
 import { Box, Text } from 'ink'
 import Spinner from 'ink-spinner'
+import { ToolStatusLine, type ToolEvent } from './ToolStatusLine.js'
 
 export interface ChatMessage {
   id: string
@@ -17,9 +18,10 @@ const ROLE_CONFIG = {
 interface ChatViewProps {
   messages: ChatMessage[]
   streamingMessage?: string | null  // null/undefined = 空闲; '' = 等待首 token; string = 流入中
+  toolEvents?: ToolEvent[]
 }
 
-export function ChatView({ messages, streamingMessage }: ChatViewProps) {
+export function ChatView({ messages, streamingMessage, toolEvents }: ChatViewProps) {
   return (
     <Box flexDirection="column" paddingX={1} flexGrow={1}>
       {messages.map((msg) => (
@@ -29,6 +31,10 @@ export function ChatView({ messages, streamingMessage }: ChatViewProps) {
           </Text>
           <Text>{msg.content}</Text>
         </Box>
+      ))}
+
+      {(toolEvents ?? []).map(e => (
+        <ToolStatusLine key={e.id} event={e} />
       ))}
 
       {/* 流式气泡：streamingMessage 不为 null/undefined 时显示 */}
