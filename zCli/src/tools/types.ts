@@ -15,6 +15,7 @@ export interface Tool {
   readonly name: string
   readonly description: string
   readonly parameters: Record<string, unknown>  // JSON Schema
+  readonly dangerous?: boolean
 
   execute(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult>
 }
