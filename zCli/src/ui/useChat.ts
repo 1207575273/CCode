@@ -53,13 +53,16 @@ export function useChat(): UseChatReturn {
   const [error, setError] = useState<string | null>(null)
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null)
   const [allowedTools, setAllowedTools] = useState<Set<string>>(new Set())
+  const allowedToolsRef = useRef<Set<string>>(new Set())
   const abortRef = useRef<AbortController | null>(null)
 
   const resolvePermission = useCallback((allow: boolean, always = false) => {
     setPendingPermission(prev => {
       if (!prev) return null
       if (allow && always) {
-        setAllowedTools(existing => new Set([...existing, prev.toolName]))
+        const newSet = new Set([...allowedToolsRef.current, prev.toolName])
+        allowedToolsRef.current = newSet
+        setAllowedTools(newSet)
       }
       prev.resolve(allow)
       return null
@@ -90,8 +93,8 @@ export function useChat(): UseChatReturn {
       signal: controller.signal,
     })
 
-    // 捕获当前 allowedTools（闭包）
-    const currentAllowed = allowedTools
+    // toolName → eventId 映射，用于 tool_done 精确匹配
+    const pendingToolIds = new Map<string, string>()
 
     ;(async () => {
       let accumulated = ''
@@ -102,15 +105,18 @@ export function useChat(): UseChatReturn {
             setStreamingMessage(accumulated)
           } else if (event.type === 'tool_start') {
             const id = randomUUID()
+            pendingToolIds.set(event.toolName, id)
             setToolEvents(prev => [...prev, { id, toolName: event.toolName, args: event.args, status: 'running' }])
           } else if (event.type === 'tool_done') {
+            const matchId = pendingToolIds.get(event.toolName)
+            if (matchId) pendingToolIds.delete(event.toolName)
             setToolEvents(prev => prev.map(e =>
-              e.toolName === event.toolName && e.status === 'running'
+              e.id === matchId
                 ? { ...e, status: event.success ? 'done' as const : 'error' as const, durationMs: event.durationMs }
                 : e
             ))
           } else if (event.type === 'permission_request') {
-            if (currentAllowed.has(event.toolName)) {
+            if (allowedToolsRef.current.has(event.toolName)) {
               event.resolve(true)
             } else {
               setPendingPermission({ toolName: event.toolName, args: event.args, resolve: event.resolve })
@@ -137,7 +143,7 @@ export function useChat(): UseChatReturn {
         abortRef.current = null
       }
     })()
-  }, [isStreaming, messages, allowedTools])
+  }, [isStreaming, messages])
 
   const abort = useCallback(() => { abortRef.current?.abort() }, [])
 
