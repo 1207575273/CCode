@@ -21,7 +21,8 @@
       "@platform/*": ["src/platform/*"],
       "@commands/*": ["src/commands/*"],
       "@persistence/*": ["src/persistence/*"],
-      "@observability/*": ["src/observability/*"]
+      "@observability/*": ["src/observability/*"],
+      "@config/*": ["src/config/*"]
     },
     "outDir": "dist",
     "rootDir": ".",
