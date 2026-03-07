@@ -210,8 +210,8 @@ export function App({
   // ModelPicker Esc 保险：在 App 层面直接监听 Esc。
   // useCallback 空依赖使 handler 引用永远稳定 → Ink 不会重复注册/注销，
   // 彻底消除重渲染期间按键丢失的竞态窗口（setShowModelPicker 是 React setter，永远稳定）
-  const handleModelPickerKey = useCallback((_input: string, key: { escape: boolean }) => {
-    if (key.escape) setShowModelPicker(false)
+  const handleModelPickerKey = useCallback((input: string, key: { escape: boolean }) => {
+    if (key.escape || input === 'q') setShowModelPicker(false)
   }, [])
   useInput(handleModelPickerKey, { isActive: showModelPicker })
 

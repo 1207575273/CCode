@@ -70,7 +70,7 @@ export function ModelPicker({
   useEffect(() => { selectedRef.current = selected   }, [selected])
 
   // stableHandler：依赖数组为空，Ink 永不重新注册，彻底消除按键丢失的竞态窗口
-  const stableHandler = useCallback((_input: string, key: Key) => {
+  const stableHandler = useCallback((input: string, key: Key) => {
     // 循环导航：到达边界时回绕到另一端
     if (key.upArrow) {
       setSelected(s => {
@@ -92,7 +92,9 @@ export function ModelPicker({
         onSelectRef.current(item.provider, item.model)
       }
     }
-    if (key.escape) {
+    // Esc：独立终端可用；IDE（IntelliJ/VSCode）可能在系统层拦截 Esc，
+    // 导致 stdin 根本收不到 \x1b。因此同时支持 'q' 作为备用退出键。
+    if (key.escape || input === 'q') {
       onCancelRef.current()
     }
   }, [])  // 空依赖：回调永远稳定
@@ -142,7 +144,7 @@ export function ModelPicker({
       </Box>
 
       <Box marginTop={1}>
-        <Text dimColor>↑↓ 选择   Enter 确认   Esc 取消</Text>
+        <Text dimColor>↑↓ 选择   Enter 确认   Esc/q 取消</Text>
       </Box>
     </Box>
   )
