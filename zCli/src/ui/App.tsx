@@ -197,7 +197,10 @@ export function App({
         setInputValue('/' + cmd.name + ' ')
       }
     }
-    if (key.escape) setInputValue('')
+    if (key.escape) {
+      suggestionConsumedRef.current = false  // 清理防双触发标记，防止 ref 残留影响后续 Enter
+      setInputValue('')
+    }
   }, { isActive: suggestions.length > 0 })
 
   return (
