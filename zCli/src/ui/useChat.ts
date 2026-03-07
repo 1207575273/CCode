@@ -80,13 +80,17 @@ export function useChat(): UseChatReturn {
     if (isStreaming) return
 
     const config = configManager.load()
-    const provider = createProvider(config.defaultProvider, config)
+    const provider = createProvider(currentProvider, config)
     const registry = buildRegistry()
 
     const userMsg: ChatMessage = { id: randomUUID(), role: 'user', content: text }
     // 过滤 system 消息，不发送给 LLM
     const llmMessages = [...messages, userMsg].filter(m => m.role !== 'system')
-    const history: Message[] = llmMessages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+    const history: Message[] = llmMessages
+      .filter((m): m is ChatMessage & { role: 'user' | 'assistant' } =>
+        m.role === 'user' || m.role === 'assistant'
+      )
+      .map(m => ({ role: m.role, content: m.content }))
 
     setMessages(prev => [...prev, userMsg])
     setStreamingMessage('')
@@ -98,7 +102,7 @@ export function useChat(): UseChatReturn {
     abortRef.current = controller
 
     const loop = new AgentLoop(provider, registry, {
-      model: config.defaultModel,
+      model: currentModel,
       signal: controller.signal,
     })
 
@@ -152,7 +156,7 @@ export function useChat(): UseChatReturn {
         abortRef.current = null
       }
     })()
-  }, [isStreaming, messages])
+  }, [isStreaming, messages, currentProvider, currentModel])
 
   const abort = useCallback(() => { abortRef.current?.abort() }, [])
 
@@ -162,7 +166,7 @@ export function useChat(): UseChatReturn {
 
   const appendSystemMessage = useCallback((text: string): void => {
     const msg: ChatMessage = {
-      id: Date.now().toString(),
+      id: randomUUID(),
       role: 'system',
       content: text,
     }
