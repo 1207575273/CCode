@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { CommandRegistry } from '@commands/registry.js'
 import type { Command, CommandResult } from '@commands/types.js'
 
-const makeCmd = (name: string, aliases?: string[]): Command => ({
+const makeCmd = (name: string, aliases?: readonly string[]): Command => ({
   name,
-  aliases,
+  ...(aliases !== undefined ? { aliases } : {}),
   description: `mock ${name}`,
   execute: (_args) => ({ handled: true, action: { type: 'clear_messages' } }),
 })
