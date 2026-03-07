@@ -207,11 +207,13 @@ export function App({
     }
   }, { isActive: suggestions.length > 0 })
 
-  // ModelPicker Esc 保险：在 App 层面直接监听 Esc，防止 ModelPicker 内部的
-  // useInput handler 因重渲染竞态丢失按键事件（belt-and-suspenders 策略）
-  useInput((_input, key) => {
+  // ModelPicker Esc 保险：在 App 层面直接监听 Esc。
+  // useCallback 空依赖使 handler 引用永远稳定 → Ink 不会重复注册/注销，
+  // 彻底消除重渲染期间按键丢失的竞态窗口（setShowModelPicker 是 React setter，永远稳定）
+  const handleModelPickerKey = useCallback((_input: string, key: { escape: boolean }) => {
     if (key.escape) setShowModelPicker(false)
-  }, { isActive: showModelPicker })
+  }, [])
+  useInput(handleModelPickerKey, { isActive: showModelPicker })
 
   return (
     <Box flexDirection="column" width="100%">
