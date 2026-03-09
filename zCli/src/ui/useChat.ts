@@ -78,6 +78,14 @@ export interface UseChatReturn {
 let mcpManager: McpManager | null = null
 let mcpInitialized = false
 
+/** 模块级当前 sessionId，供退出时打印 resume 提示 */
+let currentSessionId: string | null = null
+
+/** 获取当前活跃的 sessionId（退出时用于打印 resume 命令） */
+export function getCurrentSessionId(): string | null {
+  return currentSessionId
+}
+
 /** 确保 MCP Server 已初始化连接（幂等，只连接一次） */
 async function ensureMcpInitialized(): Promise<void> {
   if (mcpInitialized) return
@@ -141,6 +149,7 @@ export function useChat(): UseChatReturn {
     try {
       const id = sessionStore.create(process.cwd(), providerName, modelName)
       sessionIdRef.current = id
+      currentSessionId = id
       lastEventUuidRef.current = null
       return id
     } catch {
@@ -333,6 +342,7 @@ export function useChat(): UseChatReturn {
     try {
       const snapshot = sessionStore.loadMessages(sessionId)
       sessionIdRef.current = sessionId
+      currentSessionId = sessionId
       lastEventUuidRef.current = null
 
       // 恢复消息列表
