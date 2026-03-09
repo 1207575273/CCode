@@ -85,7 +85,7 @@ export function ResumePanel({
   getBranches,
   onSelect,
   onClose,
-  hasCurrentSession = false,
+  hasCurrentSession = true,
 }: ResumePanelProps) {
   const [showAll, setShowAll] = useState(false)
   // -1 = 搜索框聚焦；0+ = 列表项

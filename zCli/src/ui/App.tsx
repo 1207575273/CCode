@@ -356,7 +356,7 @@ export function App({
           currentProjectSessions={currentProjectSessions}
           allSessions={allSessions}
           getBranches={getBranches}
-          hasCurrentSession={started}
+          hasCurrentSession
           onSelect={(sessionId, leafEventUuid) => {
             loadSession(sessionId, leafEventUuid)
             setShowResumePanel(false)
