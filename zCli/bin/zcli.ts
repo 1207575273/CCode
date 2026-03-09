@@ -23,11 +23,23 @@ const { unmount } = render(
   React.createElement(App, { resumeSessionId, showResumeOnStart })
 )
 
+/** 检测启动方式，生成对应的 resume 命令 */
+function getResumeCommand(sessionId: string): string {
+  // 通过 `zcli` 全局命令启动时，argv[1] 是 dist/bin/zcli.js
+  const entry = process.argv[1] ?? ''
+  if (entry.endsWith('zcli.js') || entry.endsWith('zcli')) {
+    return `zcli --resume ${sessionId}`
+  }
+  // 开发模式 (tsx bin/zcli.ts)
+  return `pnpm dev -- --resume ${sessionId}`
+}
+
 function exitGracefully() {
   unmount()
   const sessionId = getCurrentSessionId()
   if (sessionId) {
-    console.log(`\nResume this session with:\n  zcli --resume ${sessionId}\n`)
+    const cmd = getResumeCommand(sessionId)
+    console.log(`\nResume this session with:\n  ${cmd}\n`)
   }
   process.exit(0)
 }
