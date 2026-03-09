@@ -3,13 +3,15 @@
 /**
  * ResumePanel — 交互式全屏面板，用于恢复历史 session。
  *
- * 与 McpStatusView 相同的互斥模式：替换 InputBar 渲染。
- * 支持键盘导航（↑↓）、Enter 选择、Ctrl+A 切换项目范围、文本搜索、Esc 退出。
+ * 布局：标题 → 搜索框（TextInput）→ 会话列表
+ * 搜索框是可选中项（index -1），↑↓ 可在搜索框与列表之间导航。
+ * 列表第一项固定为「Current Session」，选中后关闭面板回到当前对话。
  */
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useRef } from 'react'
 import { Box, Text, useInput } from 'ink'
 import type { Key } from 'ink'
+import TextInput from 'ink-text-input'
 import type { SessionSummary, BranchInfo } from '@persistence/index.js'
 
 export interface ResumePanelProps {
@@ -19,6 +21,8 @@ export interface ResumePanelProps {
   getBranches: (sessionId: string) => BranchInfo[]
   onSelect: (sessionId: string, leafEventUuid?: string) => void
   onClose: () => void
+  /** 是否有活跃的当前会话（有则显示 Current Session 项） */
+  hasCurrentSession?: boolean
 }
 
 // ── Helper functions ──
@@ -66,17 +70,28 @@ interface BranchView {
   branches: BranchInfo[]
 }
 
+/**
+ * selectedIndex 含义：
+ *   -1  = 搜索框聚焦（TextInput 激活，可输入文字）
+ *    0  = "Current Session"（如有）或第一条 session
+ *    1+ = 后续 session 条目
+ *
+ * hasCurrentSession 为 true 时，index 0 = Current Session，index 1+ = sessions
+ * hasCurrentSession 为 false 时，index 0+ = sessions（无 Current Session 项）
+ */
 export function ResumePanel({
   currentProjectSessions,
   allSessions,
   getBranches,
   onSelect,
   onClose,
+  hasCurrentSession = false,
 }: ResumePanelProps) {
   const [showAll, setShowAll] = useState(false)
-  const [selectedIndex, setSelectedIndex] = useState(0)
+  // -1 = 搜索框聚焦；0+ = 列表项
+  const [selectedIndex, setSelectedIndex] = useState(-1)
   const [searchText, setSearchText] = useState('')
-  /** 分支子视图：非 null 时显示分支列表而非 session 列表 */
+  /** 分支子视图 */
   const [branchView, setBranchView] = useState<BranchView | null>(null)
   const [branchSelectedIndex, setBranchSelectedIndex] = useState(0)
 
@@ -85,92 +100,95 @@ export function ResumePanel({
     ? baseSessions.filter(s => fuzzyMatch(s.firstMessage, searchText))
     : baseSessions
 
-  const stableHandler = useCallback((input: string, key: Key) => {
-    // ── 分支子视图键盘处理 ──
-    if (branchView) {
-      if (key.escape) {
-        setBranchView(null)
-        setBranchSelectedIndex(0)
-        return
-      }
+  // 列表总项数：Current Session（可选）+ filtered sessions
+  const currentSessionOffset = hasCurrentSession ? 1 : 0
+  const totalItems = currentSessionOffset + filtered.length
+  const maxIndex = totalItems - 1
 
-      if (key.return) {
-        const branch = branchView.branches[branchSelectedIndex]
-        if (branch) {
-          onSelect(branchView.sessionId, branch.leafEventUuid)
-        }
-        return
-      }
-
-      if (key.upArrow) {
-        setBranchSelectedIndex(i => Math.max(0, i - 1))
-        return
-      }
-
-      if (key.downArrow) {
-        setBranchSelectedIndex(i => Math.min(branchView.branches.length - 1, i + 1))
-        return
-      }
-      return
-    }
-
-    // ── Session 列表键盘处理 ──
-    if (key.escape) {
+  /** 选中列表项后的处理 */
+  const handleItemSelect = useCallback((index: number) => {
+    // Current Session 项
+    if (hasCurrentSession && index === 0) {
       onClose()
       return
     }
 
+    const sessionIdx = index - currentSessionOffset
+    const session = filtered[sessionIdx]
+    if (!session) return
+
+    const branches = getBranches(session.sessionId)
+    if (branches.length > 1) {
+      setBranchView({ sessionId: session.sessionId, branches })
+      setBranchSelectedIndex(0)
+    } else {
+      onSelect(session.sessionId)
+    }
+  }, [hasCurrentSession, currentSessionOffset, filtered, getBranches, onSelect, onClose])
+
+  // ── 键盘：分支子视图 ──
+  const branchHandler = useCallback((_input: string, key: Key) => {
+    if (key.escape) {
+      setBranchView(null)
+      setBranchSelectedIndex(0)
+      return
+    }
     if (key.return) {
-      if (filtered.length > 0) {
-        const session = filtered[selectedIndex]
-        if (session) {
-          // 检查是否有多个分支
-          const branches = getBranches(session.sessionId)
-          if (branches.length > 1) {
-            // 有多个分支，进入分支子视图
-            setBranchView({ sessionId: session.sessionId, branches })
-            setBranchSelectedIndex(0)
-          } else {
-            // 单分支或无分支，直接选择
-            onSelect(session.sessionId)
-          }
-        }
+      const branch = branchView?.branches[branchSelectedIndex]
+      if (branch && branchView) {
+        onSelect(branchView.sessionId, branch.leafEventUuid)
+      }
+      return
+    }
+    if (key.upArrow) {
+      setBranchSelectedIndex(i => Math.max(0, i - 1))
+      return
+    }
+    if (key.downArrow && branchView) {
+      setBranchSelectedIndex(i => Math.min(branchView.branches.length - 1, i + 1))
+    }
+  }, [branchView, branchSelectedIndex, onSelect])
+
+  // ── 键盘：主列表导航（仅处理箭头、Esc、Ctrl+A、Enter） ──
+  // 当 selectedIndex === -1（搜索框聚焦）时，字符输入由 TextInput 处理
+  const navHandler = useCallback((input: string, key: Key) => {
+    if (key.escape) {
+      if (searchText) {
+        // 有搜索内容时先清空搜索
+        setSearchText('')
+        setSelectedIndex(-1)
+      } else {
+        onClose()
       }
       return
     }
 
+    // Ctrl+A toggle scope
+    if (key.ctrl && input === 'a') {
+      setShowAll(prev => !prev)
+      setSelectedIndex(-1)
+      return
+    }
+
     if (key.upArrow) {
-      setSelectedIndex(i => Math.max(0, i - 1))
+      setSelectedIndex(i => Math.max(-1, i - 1))
       return
     }
 
     if (key.downArrow) {
-      setSelectedIndex(i => Math.min(filtered.length - 1, i + 1))
+      setSelectedIndex(i => Math.min(maxIndex, i + 1))
       return
     }
 
-    // Ctrl+A toggle
-    if (key.ctrl && input === 'a') {
-      setShowAll(prev => !prev)
-      setSelectedIndex(0)
-      return
+    if (key.return && selectedIndex >= 0) {
+      handleItemSelect(selectedIndex)
     }
+  }, [searchText, onClose, maxIndex, selectedIndex, handleItemSelect])
 
-    // Backspace
-    if (key.backspace || key.delete) {
-      setSearchText(prev => prev.slice(0, -1))
-      setSelectedIndex(0)
-      return
-    }
+  useInput(branchView ? branchHandler : navHandler)
 
-    // Printable character → append to search
-    if (input && !key.ctrl && !key.meta) {
-      setSearchText(prev => prev + input)
-      setSelectedIndex(0)
-    }
-  }, [onClose, onSelect, filtered, selectedIndex, branchView, branchSelectedIndex, getBranches])
-
-  useInput(stableHandler)
+  // 搜索框是否聚焦（TextInput 激活）
+  const searchFocused = selectedIndex === -1 && !branchView
 
   // ── 分支子视图渲染 ──
   if (branchView) {
@@ -182,7 +200,7 @@ export function ResumePanel({
 
         {branchView.branches.map((branch, index) => {
           const isSelected = index === branchSelectedIndex
-          const prefix = isSelected ? '> ' : '  '
+          const prefix = isSelected ? '❯ ' : '  '
           const message = branch.lastMessage.length > MAX_MESSAGE_LENGTH
             ? branch.lastMessage.slice(0, MAX_MESSAGE_LENGTH) + '...'
             : branch.lastMessage
@@ -206,7 +224,7 @@ export function ResumePanel({
 
         <Text> </Text>
         <Box>
-          <Text dimColor>Up/Down navigate - Enter select branch - Esc back to sessions</Text>
+          <Text dimColor>Up/Down navigate · Enter select branch · Esc back to sessions</Text>
         </Box>
       </Box>
     )
@@ -217,11 +235,23 @@ export function ResumePanel({
     <Box flexDirection="column" paddingX={2} paddingY={1}>
       <Text bold color="blue">Resume Session</Text>
 
-      {/* 搜索框：始终显示，参考 Claude Code 风格 */}
-      <Box borderStyle="round" borderColor={searchText ? 'cyan' : 'gray'} paddingX={1} marginTop={1}>
-        <Text dimColor={!searchText}>
-          {'🔍 '}{searchText || 'Search...'}
-        </Text>
+      {/* 搜索框：用 TextInput 实现真实输入体验 */}
+      <Box
+        borderStyle="round"
+        borderColor={searchFocused ? 'cyan' : 'gray'}
+        paddingX={1}
+        marginTop={1}
+      >
+        <Text>{'🔍 '}</Text>
+        <TextInput
+          value={searchText}
+          onChange={(val) => {
+            setSearchText(val)
+            setSelectedIndex(-1) // 输入时自动聚焦回搜索框
+          }}
+          placeholder="Search..."
+          focus={searchFocused}
+        />
       </Box>
 
       <Text dimColor>
@@ -230,13 +260,31 @@ export function ResumePanel({
 
       <Text> </Text>
 
+      {/* Current Session 项 */}
+      {hasCurrentSession && (
+        <Box flexDirection="column">
+          <Box>
+            {selectedIndex === 0 ? (
+              <Text color="cyan" bold>{'❯ ↩ Current Session'}</Text>
+            ) : (
+              <Text>{'  ↩ Current Session'}</Text>
+            )}
+          </Box>
+          <Box>
+            <Text dimColor>{'  Back to current conversation'}</Text>
+          </Box>
+        </Box>
+      )}
+
+      {/* Session 列表 */}
       {filtered.length === 0 ? (
         <Box>
           <Text dimColor>  {searchText ? 'No sessions match your search' : 'No sessions found'}</Text>
         </Box>
       ) : (
         filtered.map((session, index) => {
-          const isSelected = index === selectedIndex
+          const itemIndex = index + currentSessionOffset
+          const isSelected = itemIndex === selectedIndex
           const prefix = isSelected ? '❯ ' : '  '
           const message = session.firstMessage || '(session)'
           const displayMsg = message.length > MAX_MESSAGE_LENGTH
