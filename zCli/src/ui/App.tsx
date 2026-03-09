@@ -18,7 +18,9 @@ import { ModelCommand } from '@commands/model.js'
 import { McpCommand } from '@commands/mcp.js'
 import { ResumeCommand } from '@commands/resume.js'
 import { McpStatusView } from './McpStatusView.js'
+import { ResumePanel } from './ResumePanel.js'
 import type { ServerInfo } from '@mcp/mcp-manager.js'
+import { sessionStore, toProjectSlug } from '@persistence/index.js'
 
 /**
  * App — ZCli 根组件
@@ -34,12 +36,16 @@ interface AppProps {
   model?: string
   provider?: string
   cwd?: string
+  resumeSessionId?: string | undefined
+  showResumeOnStart?: boolean | undefined
 }
 
 export function App({
   model: _model,
   provider: _provider,
   cwd = process.cwd(),
+  resumeSessionId,
+  showResumeOnStart,
 }: AppProps) {
   const { exit } = useApp()
   const {
@@ -58,6 +64,7 @@ export function App({
     appendSystemMessage,
     switchModel,
     getMcpInfo,
+    loadSession,
   } = useChat()
 
   const [showModelPicker, setShowModelPicker] = useState(false)
@@ -74,8 +81,31 @@ export function App({
   const suggestionIndexRef = useRef(0)
   /** /mcp 面板是否正在加载中 */
   const [mcpLoading, setMcpLoading] = useState(false)
+  /** /resume 面板是否显示 */
+  const [showResumePanel, setShowResumePanel] = useState(false)
+
+  // 懒加载 session 列表：仅在 ResumePanel 打开时读取
+  const { currentProjectSessions, allSessions } = useMemo(() => {
+    if (!showResumePanel) return { currentProjectSessions: [], allSessions: [] }
+    const slug = toProjectSlug(cwd)
+    return {
+      currentProjectSessions: sessionStore.list({ projectSlug: slug, limit: 10 }),
+      allSessions: sessionStore.list({ limit: 10 }),
+    }
+  }, [showResumePanel, cwd])
 
   const started = messages.length > 0 || isStreaming
+
+  // Handle --resume CLI flag
+  useEffect(() => {
+    if (resumeSessionId) {
+      // Direct resume by sessionId
+      loadSession(resumeSessionId)
+    } else if (showResumeOnStart) {
+      // Show resume panel
+      setShowResumePanel(true)
+    }
+  }, []) // Only on mount
 
   // CommandRegistry — 当 provider/model 变化时重建，确保 /model 指令能感知当前状态
   const registry = useMemo(() => {
@@ -170,7 +200,7 @@ export function App({
             return
           }
           case 'show_resume_panel':
-            // TODO: Task 7 will add ResumePanel state management here
+            setShowResumePanel(true)
             return
           case 'show_mcp_status':
             setMcpLoading(true)
@@ -290,6 +320,16 @@ export function App({
             <Text dimColor>MCP Server 连接中...</Text>
           </Box>
         )
+      ) : showResumePanel ? (
+        <ResumePanel
+          currentProjectSessions={currentProjectSessions}
+          allSessions={allSessions}
+          onSelect={(sessionId) => {
+            loadSession(sessionId)
+            setShowResumePanel(false)
+          }}
+          onClose={() => setShowResumePanel(false)}
+        />
       ) : (
         <InputBar
           key={inputResetKey}
