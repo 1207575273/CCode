@@ -24,6 +24,7 @@ export default defineConfig({
       '@observability': new URL('./src/observability', import.meta.url).pathname,
       '@config': new URL('./src/config', import.meta.url).pathname,
       '@utils': new URL('./src/utils', import.meta.url).pathname,
+      '@mcp': new URL('./src/mcp', import.meta.url).pathname,
     },
   },
 })

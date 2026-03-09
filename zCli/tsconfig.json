@@ -23,7 +23,8 @@
       "@persistence/*": ["src/persistence/*"],
       "@observability/*": ["src/observability/*"],
       "@config/*": ["src/config/*"],
-      "@utils/*": ["src/utils/*"]
+      "@utils/*": ["src/utils/*"],
+      "@mcp/*": ["src/mcp/*"]
     },
     "outDir": "dist",
     "rootDir": ".",
