@@ -3,18 +3,18 @@ import type { Tool, ToolContext, ToolResult } from './types.js'
 import type { ToolDefinition } from '@providers/provider.js'
 
 export class ToolRegistry {
-  private readonly tools = new Map<string, Tool>()
+  readonly #tools = new Map<string, Tool>()
 
   register(tool: Tool): void {
-    this.tools.set(tool.name, tool)
+    this.#tools.set(tool.name, tool)
   }
 
   getAll(): Tool[] {
-    return Array.from(this.tools.values())
+    return Array.from(this.#tools.values())
   }
 
   isDangerous(name: string): boolean {
-    return this.tools.get(name)?.dangerous === true
+    return this.#tools.get(name)?.dangerous === true
   }
 
   toToolDefinitions(): ToolDefinition[] {
@@ -26,7 +26,7 @@ export class ToolRegistry {
   }
 
   async execute(name: string, args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
-    const tool = this.tools.get(name)
+    const tool = this.#tools.get(name)
     if (!tool) {
       return { success: false, output: '', error: `未知工具: "${name}"` }
     }

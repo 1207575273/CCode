@@ -36,20 +36,20 @@ const DEFAULT_CONFIG: ZCliConfig = {
 }
 
 export class ConfigManager {
-  private readonly configPath: string
+  readonly #configPath: string
 
   constructor(baseDir: string = join(homedir(), '.zcli')) {
-    this.configPath = join(baseDir, 'config.json')
+    this.#configPath = join(baseDir, 'config.json')
   }
 
   load(): ZCliConfig {
-    if (!existsSync(this.configPath)) {
-      this._ensureDir()
-      this._write(DEFAULT_CONFIG)
+    if (!existsSync(this.#configPath)) {
+      this.#ensureDir()
+      this.#write(DEFAULT_CONFIG)
       return { ...DEFAULT_CONFIG }
     }
     try {
-      const raw = readFileSync(this.configPath, 'utf-8')
+      const raw = readFileSync(this.#configPath, 'utf-8')
       return JSON.parse(raw) as ZCliConfig
     } catch {
       return { ...DEFAULT_CONFIG }
@@ -57,17 +57,17 @@ export class ConfigManager {
   }
 
   save(config: ZCliConfig): void {
-    this._ensureDir()
-    this._write(config)
+    this.#ensureDir()
+    this.#write(config)
   }
 
-  private _ensureDir(): void {
-    const dir = this.configPath.replace(/[/\\][^/\\]+$/, '')
+  #ensureDir(): void {
+    const dir = this.#configPath.replace(/[/\\][^/\\]+$/, '')
     mkdirSync(dir, { recursive: true })
   }
 
-  private _write(config: ZCliConfig): void {
-    writeFileSync(this.configPath, JSON.stringify(config, null, 2), 'utf-8')
+  #write(config: ZCliConfig): void {
+    writeFileSync(this.#configPath, JSON.stringify(config, null, 2), 'utf-8')
   }
 }
 

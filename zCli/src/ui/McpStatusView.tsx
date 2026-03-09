@@ -19,7 +19,7 @@ interface McpStatusViewProps {
 }
 
 export function McpStatusView({ servers, onClose }: McpStatusViewProps) {
-  // stableHandler：空依赖保持引用稳定，避免 Ink 重注册导致按键丢失
+  // stableHandler：依赖 [onClose]，当 onClose 引用稳定时 handler 不会重建
   const stableHandler = useCallback((_input: string, key: Key) => {
     if (key.escape || _input === 'q') {
       onClose()

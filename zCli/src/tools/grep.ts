@@ -1,5 +1,5 @@
 // src/tools/grep.ts
-import { readFileSync, statSync } from 'node:fs'
+import { readFile, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import fg from 'fast-glob'
 import type { Tool, ToolContext, ToolResult } from './types.js'
@@ -29,8 +29,12 @@ export class GrepTool implements Tool {
       const regex = new RegExp(pattern, 'i')
       let files: string[]
 
-      const stat = statSync(searchPath, { throwIfNoEntry: false })
-      if (stat?.isFile()) {
+      let fileStat: Awaited<ReturnType<typeof stat>> | null = null
+      try {
+        fileStat = await stat(searchPath)
+      } catch { /* path does not exist */ }
+
+      if (fileStat?.isFile()) {
         files = [searchPath]
       } else {
         const glob = recursive ? '**/*' : '*'
@@ -41,12 +45,13 @@ export class GrepTool implements Tool {
       for (const file of files) {
         if (results.length >= MAX_RESULTS) break
         try {
-          const lines = readFileSync(file, 'utf-8').split('\n')
-          lines.forEach((line, i) => {
+          const lines = (await readFile(file, 'utf-8')).split('\n')
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i]!
             if (regex.test(line) && results.length < MAX_RESULTS) {
               results.push(`${file}:${i + 1}: ${line}`)
             }
-          })
+          }
         } catch { /* 跳过无法读取的文件 */ }
       }
 

@@ -1,5 +1,5 @@
 // src/tools/write-file.ts
-import { writeFileSync, mkdirSync } from 'node:fs'
+import { writeFile, mkdir } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import type { Tool, ToolContext, ToolResult } from './types.js'
 
@@ -22,8 +22,8 @@ export class WriteFileTool implements Tool {
     const content = String(args['content'] ?? '')
 
     try {
-      mkdirSync(dirname(path), { recursive: true })
-      writeFileSync(path, content, 'utf-8')
+      await mkdir(dirname(path), { recursive: true })
+      await writeFile(path, content, 'utf-8')
       return { success: true, output: `已写入 ${path}（${content.length} 字符）` }
     } catch (err) {
       return { success: false, output: '', error: err instanceof Error ? err.message : String(err) }

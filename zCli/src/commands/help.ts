@@ -17,16 +17,20 @@ export class HelpCommand implements Command {
   readonly name = 'help'
   readonly description = 'Show available commands'
 
+  readonly #getCommands: () => Command[]
+
   /**
    * @param getCommands 返回全部已注册指令的工厂函数。
    *   调用方通常传入 `() => registry.getAll()`。
    */
-  constructor(private readonly getCommands: () => Command[]) {}
+  constructor(getCommands: () => Command[]) {
+    this.#getCommands = getCommands
+  }
 
   /** 枚举所有指令，生成格式化帮助文本后作为 system 消息展示。 */
   execute(_args: string[]): CommandResult {
     const lines = ['Available commands:']
-    for (const cmd of this.getCommands()) {
+    for (const cmd of this.#getCommands()) {
       const aliases = cmd.aliases?.length ? ` (${cmd.aliases.join(', ')})` : ''
       lines.push(`  /${cmd.name}${aliases}  ${cmd.description}`)
     }

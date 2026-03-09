@@ -1,7 +1,7 @@
 // src/mcp/mcp-tool.ts
 
 import type { Client } from '@modelcontextprotocol/sdk/client'
-import type { Tool, ToolContext, ToolResult } from '@tools/types'
+import type { Tool, ToolContext, ToolResult } from '@tools/types.js'
 
 export interface McpToolDefinition {
   name: string
@@ -19,20 +19,20 @@ export class McpTool implements Tool {
   readonly parameters: Record<string, unknown>
   readonly dangerous = true
 
-  private readonly toolName: string
-  private readonly client: Client
+  readonly #toolName: string
+  readonly #client: Client
 
   constructor(serverName: string, def: McpToolDefinition, client: Client) {
     this.name = `mcp__${serverName}__${def.name}`
     this.description = def.description ?? ''
     this.parameters = def.inputSchema
-    this.toolName = def.name
-    this.client = client
+    this.#toolName = def.name
+    this.#client = client
   }
 
   async execute(args: Record<string, unknown>, _ctx: ToolContext): Promise<ToolResult> {
     try {
-      const result = await this.client.callTool({ name: this.toolName, arguments: args })
+      const result = await this.#client.callTool({ name: this.#toolName, arguments: args })
 
       const contentArray = (result.content ?? []) as Array<{ type: string; text?: string }>
       const text = contentArray

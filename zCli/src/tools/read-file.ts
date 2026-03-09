@@ -1,5 +1,5 @@
 // src/tools/read-file.ts
-import { readFileSync, existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import type { Tool, ToolContext, ToolResult } from './types.js'
 
@@ -21,12 +21,8 @@ export class ReadFileTool implements Tool {
     const rawPath = String(args['path'] ?? '')
     const filePath = resolve(ctx.cwd, rawPath)
 
-    if (!existsSync(filePath)) {
-      return { success: false, output: '', error: `文件不存在: ${filePath}` }
-    }
-
     try {
-      let content = readFileSync(filePath, 'utf-8')
+      let content = await readFile(filePath, 'utf-8')
       let truncated = false
       if (content.length > MAX_CHARS) {
         content = content.slice(0, MAX_CHARS)
@@ -37,6 +33,9 @@ export class ReadFileTool implements Tool {
         output: truncated ? content + '\n\n[内容已截断]' : content,
       }
     } catch (err) {
+      if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT') {
+        return { success: false, output: '', error: `文件不存在: ${filePath}` }
+      }
       return { success: false, output: '', error: err instanceof Error ? err.message : String(err) }
     }
   }

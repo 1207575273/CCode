@@ -170,10 +170,17 @@ export function App({
           case 'show_mcp_status':
             setMcpLoading(true)
             setMcpServers(null)
-            getMcpInfo().then(servers => {
-              setMcpServers(servers)
-              setMcpLoading(false)
-            })
+            void (async () => {
+              try {
+                const servers = await getMcpInfo()
+                setMcpServers(servers)
+              } catch (err: unknown) {
+                const message = err instanceof Error ? err.message : String(err)
+                appendSystemMessage(`MCP 状态获取失败: ${message}`)
+              } finally {
+                setMcpLoading(false)
+              }
+            })()
             return
           case 'error':
             appendSystemMessage(action.message)

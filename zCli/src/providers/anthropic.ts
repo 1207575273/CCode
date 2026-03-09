@@ -10,19 +10,19 @@ export class AnthropicProvider implements LLMProvider {
   readonly name = 'anthropic'
   readonly protocol: ProviderProtocol = 'native-anthropic'
 
-  private readonly config: ProviderConfig
+  readonly #config: ProviderConfig
 
   constructor(config: ProviderConfig) {
-    this.config = config
+    this.#config = config
   }
 
   isModelSupported(model: string): boolean {
-    return this.config.models.includes(model)
+    return this.#config.models.includes(model)
   }
 
   async *chat(request: ChatRequest): AsyncIterable<StreamChunk> {
     const baseModel = new ChatAnthropic({
-      apiKey: this.config.apiKey,
+      apiKey: this.#config.apiKey,
       model: request.model,
       ...(request.maxTokens !== undefined && { maxTokens: request.maxTokens }),
       ...(request.temperature !== undefined && { temperature: request.temperature }),
@@ -86,8 +86,8 @@ export class AnthropicProvider implements LLMProvider {
 
   async countTokens(messages: Message[]): Promise<number> {
     const model = new ChatAnthropic({
-      apiKey: this.config.apiKey,
-      model: this.config.models[0] ?? 'claude-sonnet-4-6',
+      apiKey: this.#config.apiKey,
+      model: this.#config.models[0] ?? 'claude-sonnet-4-6',
     })
     return model.getNumTokens(messages.map(m =>
       typeof m.content === 'string' ? m.content : ''

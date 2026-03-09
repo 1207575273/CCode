@@ -1,9 +1,8 @@
 // src/mcp/mcp-manager.ts
 
-import type { McpServerConfig } from '@config/mcp-config'
-import type { McpConfigWithSources } from '@config/mcp-config'
-import { McpTool } from '@mcp/mcp-tool'
-import type { McpToolDefinition } from '@mcp/mcp-tool'
+import type { McpServerConfig, McpConfigWithSources } from '@config/mcp-config.js'
+import { McpTool } from '@mcp/mcp-tool.js'
+import type { McpToolDefinition } from '@mcp/mcp-tool.js'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
@@ -34,27 +33,27 @@ interface ConnectedServer {
  * 读取配置 → 连接所有 Server → 收集工具 → 优雅关闭。
  */
 export class McpManager {
-  private readonly mcpServers: Record<string, McpServerConfig>
-  private readonly serverSources: Record<string, string>
-  private readonly servers: ConnectedServer[] = []
+  readonly #mcpServers: Record<string, McpServerConfig>
+  readonly #serverSources: Record<string, string>
+  readonly #servers: ConnectedServer[] = []
   /** 所有 server 的状态信息（含失败的），按 connectAll 顺序填充 */
-  private readonly allServerInfo: ServerInfo[] = []
+  readonly #allServerInfo: ServerInfo[] = []
 
   constructor(config: McpConfigWithSources) {
-    this.mcpServers = config.mcpServers
-    this.serverSources = config.serverSources
+    this.#mcpServers = config.mcpServers
+    this.#serverSources = config.serverSources
   }
 
   /** 连接所有配置的 MCP Server（并行），单个失败不影响其余 */
   async connectAll(): Promise<void> {
-    const entries = Object.entries(this.mcpServers)
+    const entries = Object.entries(this.#mcpServers)
 
     const results = await Promise.allSettled(
       entries.map(async ([serverName, serverConfig]) => {
-        const source = this.serverSources[serverName] ?? 'unknown'
+        const source = this.#serverSources[serverName] ?? 'unknown'
         try {
           const client = new Client({ name: 'zcli', version: '0.1.0' })
-          const transport = this.createTransport(serverConfig)
+          const transport = this.#createTransport(serverConfig)
 
           await client.connect(transport)
 
@@ -98,52 +97,57 @@ export class McpManager {
     // 按原始配置顺序收集结果
     for (const result of results) {
       // Promise.allSettled + 内部 try/catch → 永远是 fulfilled
-      const { server, info } = (result as PromiseFulfilledResult<{ server: ConnectedServer | null; info: ServerInfo }>).value
+      if (result.status !== 'fulfilled') continue
+      const { server, info } = result.value
       if (server) {
-        this.servers.push(server)
+        this.#servers.push(server)
       }
-      this.allServerInfo.push(info)
+      this.#allServerInfo.push(info)
     }
   }
 
   /** 返回所有已连接 Server 的工具列表 */
   getTools(): McpTool[] {
-    return this.servers.flatMap((s) => s.tools)
+    return this.#servers.flatMap((s) => s.tools)
   }
 
   /** 获取所有 Server 的状态摘要（含连接失败的） */
   getStatus(): ServerInfo[] {
-    return [...this.allServerInfo]
+    return [...this.#allServerInfo]
   }
 
   /** 断开所有连接，忽略单个关闭错误 */
   async disconnectAll(): Promise<void> {
-    for (const server of this.servers) {
+    for (const server of this.#servers) {
       try {
         await server.client.close()
       } catch {
         // 静默忽略关闭错误
       }
     }
-    this.servers.length = 0
+    this.#servers.length = 0
   }
 
   /** 根据 ServerConfig 创建对应的 Transport */
-  private createTransport(config: McpServerConfig): Transport {
+  #createTransport(config: McpServerConfig): Transport {
     // Stdio: command 存在
     if (config.command) {
+      const env: Record<string, string> = {}
+      for (const [k, v] of Object.entries({ ...process.env, ...config.env })) {
+        if (v !== undefined) env[k] = v
+      }
       return new StdioClientTransport({
         command: config.command,
         ...(config.args !== undefined ? { args: config.args } : {}),
-        env: { ...process.env, ...config.env } as Record<string, string>,
+        env,
         // 抑制子进程 stderr 输出，防止 Python INFO 等日志泄漏到终端
         stderr: 'pipe',
-      }) as Transport
+      })
     }
 
     // SSE: 显式指定 type=sse 且有 url
     if (config.type === 'sse' && config.url) {
-      return new SSEClientTransport(new URL(config.url)) as Transport
+      return new SSEClientTransport(new URL(config.url))
     }
 
     // Streamable HTTP / HTTP: type=streamable-http 或 type=http（.claude.json 格式）
@@ -152,6 +156,7 @@ export class McpManager {
       if (config.headers) {
         requestInit.headers = config.headers
       }
+      // as Transport: exactOptionalPropertyTypes 导致 sessionId 类型不兼容
       return new StreamableHTTPClientTransport(new URL(config.url), { requestInit }) as Transport
     }
 
@@ -161,6 +166,7 @@ export class McpManager {
       if (config.headers) {
         requestInit.headers = config.headers
       }
+      // as Transport: exactOptionalPropertyTypes 导致 sessionId 类型不兼容
       return new StreamableHTTPClientTransport(new URL(config.url), { requestInit }) as Transport
     }
 

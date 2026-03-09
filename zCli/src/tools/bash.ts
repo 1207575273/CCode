@@ -1,5 +1,5 @@
 // src/tools/bash.ts
-import { execa } from 'execa'
+import { execa, ExecaError } from 'execa'
 import { resolveShell } from '@platform/shell-resolver.js'
 import type { Tool, ToolContext, ToolResult } from './types.js'
 
@@ -32,13 +32,12 @@ export class BashTool implements Tool {
       const output = [stdout, stderr].filter(Boolean).join('\n')
       return { success: true, output: output || '(no output)' }
     } catch (err: unknown) {
-      const e = err as { stdout?: string; stderr?: string; message?: string }
-      const output = [e.stdout, e.stderr].filter(Boolean).join('\n')
-      return {
-        success: false,
-        output: output || '',
-        error: e.message ?? String(err),
+      if (err instanceof ExecaError) {
+        const output = [err.stdout, err.stderr].filter(Boolean).join('\n')
+        return { success: false, output: output || '', error: err.message }
       }
+      const message = err instanceof Error ? err.message : String(err)
+      return { success: false, output: '', error: message }
     }
   }
 }

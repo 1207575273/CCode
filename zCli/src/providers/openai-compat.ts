@@ -10,24 +10,24 @@ export class OpenAICompatProvider implements LLMProvider {
   readonly name: string
   readonly protocol: ProviderProtocol = 'openai-compat'
 
-  private readonly config: ProviderConfig
+  readonly #config: ProviderConfig
 
   constructor(providerName: string, config: ProviderConfig) {
     this.name = providerName
-    this.config = config
+    this.#config = config
   }
 
   isModelSupported(model: string): boolean {
-    return this.config.models.includes(model)
+    return this.#config.models.includes(model)
   }
 
   async *chat(request: ChatRequest): AsyncIterable<StreamChunk> {
     const baseModel = new ChatOpenAI({
-      apiKey: this.config.apiKey,
+      apiKey: this.#config.apiKey,
       model: request.model,
       ...(request.maxTokens !== undefined && { maxTokens: request.maxTokens }),
       ...(request.temperature !== undefined && { temperature: request.temperature }),
-      ...(this.config.baseURL !== undefined && { configuration: { baseURL: this.config.baseURL } }),
+      ...(this.#config.baseURL !== undefined && { configuration: { baseURL: this.#config.baseURL } }),
     })
 
     // 有工具时绑定，转换为 OpenAI function calling 标准格式
@@ -42,7 +42,7 @@ export class OpenAICompatProvider implements LLMProvider {
 
     dbg(`[DEBUG][${this.name}] chat request:\n`)
     dbg(`  model: ${request.model}\n`)
-    dbg(`  baseURL: ${this.config.baseURL ?? '(default)'}\n`)
+    dbg(`  baseURL: ${this.#config.baseURL ?? '(default)'}\n`)
     dbg(`  messages: ${JSON.stringify(request.messages, null, 2)}\n`)
 
     try {
@@ -88,8 +88,8 @@ export class OpenAICompatProvider implements LLMProvider {
 
   async countTokens(messages: Message[]): Promise<number> {
     const model = new ChatOpenAI({
-      apiKey: this.config.apiKey,
-      model: this.config.models[0] ?? 'gpt-4o-mini',
+      apiKey: this.#config.apiKey,
+      model: this.#config.models[0] ?? 'gpt-4o-mini',
     })
     return model.getNumTokens(messages.map(m =>
       typeof m.content === 'string' ? m.content : ''

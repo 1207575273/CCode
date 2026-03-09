@@ -15,16 +15,16 @@ import type { Command, CommandResult } from './types.js'
  */
 export class CommandRegistry {
   /** name/alias → Command 的映射，同一 Command 可能对应多个键 */
-  private readonly commands = new Map<string, Command>()
+  readonly #commands = new Map<string, Command>()
 
   /**
    * 注册一条指令。同时以 name 和所有 aliases 为键写入 Map，
    * 使得 dispatch("/m") 和 dispatch("/model") 都能找到同一实例。
    */
   register(cmd: Command): void {
-    this.commands.set(cmd.name, cmd)
+    this.#commands.set(cmd.name, cmd)
     for (const alias of cmd.aliases ?? []) {
-      this.commands.set(alias, cmd)
+      this.#commands.set(alias, cmd)
     }
   }
 
@@ -34,7 +34,7 @@ export class CommandRegistry {
    */
   getAll(): Command[] {
     const seen = new Set<string>()
-    return Array.from(this.commands.values()).filter(cmd => {
+    return Array.from(this.#commands.values()).filter(cmd => {
       if (seen.has(cmd.name)) return false
       seen.add(cmd.name)
       return true
@@ -60,7 +60,7 @@ export class CommandRegistry {
     const name = parts[0] ?? ''
     const args = parts.slice(1)
 
-    const cmd = this.commands.get(name)
+    const cmd = this.#commands.get(name)
     if (!cmd) {
       return {
         handled: true,

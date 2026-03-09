@@ -13,8 +13,11 @@ export interface PlatformInfo {
   zcliDir: string
 }
 
+const SUPPORTED_PLATFORMS = new Set<string>(['win32', 'linux', 'darwin'])
+
 export function detectPlatform(): PlatformInfo {
-  const platform = os.platform() as Platform
+  const raw = os.platform()
+  const platform: Platform = SUPPORTED_PLATFORMS.has(raw) ? (raw as Platform) : 'linux'
   return {
     platform,
     isWindows: platform === 'win32',

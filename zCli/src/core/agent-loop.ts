@@ -19,27 +19,35 @@ interface AgentConfig {
 const MAX_TURNS = 20
 
 export class AgentLoop {
+  readonly #provider: LLMProvider
+  readonly #registry: ToolRegistry
+  readonly #config: AgentConfig
+
   constructor(
-    private readonly provider: LLMProvider,
-    private readonly registry: ToolRegistry,
-    private readonly config: AgentConfig,
-  ) {}
+    provider: LLMProvider,
+    registry: ToolRegistry,
+    config: AgentConfig,
+  ) {
+    this.#provider = provider
+    this.#registry = registry
+    this.#config = config
+  }
 
   async *run(messages: Message[]): AsyncIterable<AgentEvent> {
     const history: Message[] = [...messages]
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
-      const toolDefs = this.registry.toToolDefinitions()
+      const toolDefs = this.#registry.toToolDefinitions()
       const pendingToolCalls: ToolCallContent[] = []
 
       // 调用 LLM，收集本轮流式输出
       const chatRequest = {
-        model: this.config.model,
+        model: this.#config.model,
         messages: history,
         tools: toolDefs,
-        ...(this.config.signal !== undefined ? { signal: this.config.signal } : {}),
+        ...(this.#config.signal !== undefined ? { signal: this.#config.signal } : {}),
       }
-      for await (const chunk of this.provider.chat(chatRequest)) {
+      for await (const chunk of this.#provider.chat(chatRequest)) {
         if (chunk.type === 'text' && chunk.text) {
           yield { type: 'text', text: chunk.text }
         } else if (chunk.type === 'tool_call' && chunk.toolCall) {
@@ -63,7 +71,7 @@ export class AgentLoop {
 
         let allowed = true
 
-        if (this.registry.isDangerous(tc.toolName)) {
+        if (this.#registry.isDangerous(tc.toolName)) {
           // 用 Promise 暂停 async generator，等待调用方调用 resolve
           let resolvePermission!: (v: boolean) => void
           const permissionPromise = new Promise<boolean>(r => { resolvePermission = r })
@@ -82,7 +90,7 @@ export class AgentLoop {
         }
 
         const start = Date.now()
-        const result = await this.registry.execute(tc.toolName, tc.args, { cwd: process.cwd() })
+        const result = await this.#registry.execute(tc.toolName, tc.args, { cwd: process.cwd() })
         const durationMs = Date.now() - start
 
         // 将工具结果追加到历史，供下一轮 LLM 参考

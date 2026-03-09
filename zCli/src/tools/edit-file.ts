@@ -1,5 +1,5 @@
 // src/tools/edit-file.ts
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import type { Tool, ToolContext, ToolResult } from './types.js'
 
@@ -24,7 +24,7 @@ export class EditFileTool implements Tool {
     const newStr = String(args['new_str'] ?? '')
 
     try {
-      const content = readFileSync(path, 'utf-8')
+      const content = await readFile(path, 'utf-8')
       const count = content.split(oldStr).length - 1
 
       if (count === 0) {
@@ -35,7 +35,7 @@ export class EditFileTool implements Tool {
       }
 
       const updated = content.replace(oldStr, newStr)
-      writeFileSync(path, updated, 'utf-8')
+      await writeFile(path, updated, 'utf-8')
       return { success: true, output: `已替换 ${path}` }
     } catch (err) {
       return { success: false, output: '', error: err instanceof Error ? err.message : String(err) }

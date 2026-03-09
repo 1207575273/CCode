@@ -18,14 +18,20 @@ export class ModelCommand implements Command {
   readonly aliases = ['m'] as const
   readonly description = 'Switch AI model (/model <name> | /model info)'
 
+  readonly #currentProvider: string
+  readonly #currentModel: string
+
   /**
    * @param currentProvider 当前激活的 provider 名称（如 "anthropic"、"glm"）
    * @param currentModel    当前激活的模型名称（如 "claude-sonnet-4-6"）
    */
   constructor(
-    private readonly currentProvider: string,
-    private readonly currentModel: string,
-  ) {}
+    currentProvider: string,
+    currentModel: string,
+  ) {
+    this.#currentProvider = currentProvider
+    this.#currentModel = currentModel
+  }
 
   execute(args: string[]): CommandResult {
     // 无参数 → 打开交互式选择弹窗
@@ -35,7 +41,7 @@ export class ModelCommand implements Command {
 
     // /model info → 展示当前模型信息卡片
     if (args[0] === 'info') {
-      const content = `Current model: ${this.currentModel} (${this.currentProvider})`
+      const content = `Current model: ${this.#currentModel} (${this.#currentProvider})`
       return { handled: true, action: { type: 'show_help', content } }
     }
 
