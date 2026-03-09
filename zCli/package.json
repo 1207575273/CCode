@@ -57,6 +57,7 @@
     "@types/node": "^25.3.3",
     "@types/react": "^18.3.28",
     "@vitest/coverage-v8": "^4.0.18",
+    "ink-testing-library": "^4.0.0",
     "tsup": "^8.5.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
