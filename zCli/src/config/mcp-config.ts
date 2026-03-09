@@ -7,8 +7,10 @@ export interface McpServerConfig {
   command?: string
   args?: string[]
   env?: Record<string, string>
-  type?: 'stdio' | 'sse' | 'streamable-http'
+  type?: 'stdio' | 'sse' | 'streamable-http' | 'http'
   url?: string
+  /** HTTP 传输的自定义请求头（如 Authorization），兼容 .claude.json 格式 */
+  headers?: Record<string, string>
 }
 
 export interface McpConfig {
@@ -17,13 +19,15 @@ export interface McpConfig {
 
 /**
  * MCP 配置文件搜索路径（按优先级从高到低）：
- * 1. ~/.zcli/mcp.json   — 项目专属配置，优先级最高
- * 2. ~/.mcp.json         — 用户全局配置（兼容 Claude Code 等工具）
+ * 1. ~/.zcli/mcp.json   — ZCli 专属配置，优先级最高
+ * 2. ~/.claude.json      — Claude Code 用户配置（含 mcpServers 字段）
+ * 3. ~/.mcp.json         — 用户全局配置（通用 MCP 配置格式）
  *
  * 同名 server 出现在多个文件时，高优先级文件覆盖低优先级。
  */
 export const MCP_CONFIG_PATHS = [
-  join(homedir(), '.zcli', 'mcp.json'),
+  join(homedir(), '.zcli', '.mcp.json'),
+  join(homedir(), '.claude.json'),
   join(homedir(), '.mcp.json'),
 ]
 
@@ -72,4 +76,34 @@ export function loadMcpConfig(configPaths: string[] = MCP_CONFIG_PATHS): McpConf
   }
 
   return { mcpServers: merged }
+}
+
+/** 带来源信息的加载结果 */
+export interface McpConfigWithSources {
+  mcpServers: Record<string, McpServerConfig>
+  /** server name → 来源配置文件路径 */
+  serverSources: Record<string, string>
+}
+
+/**
+ * 加载并合并 MCP 配置，同时追踪每个 server 的来源文件。
+ * 高优先级文件的同名 server 覆盖低优先级。
+ */
+export function loadMcpConfigWithSources(configPaths: string[] = MCP_CONFIG_PATHS): McpConfigWithSources {
+  const merged: Record<string, McpServerConfig> = {}
+  const serverSources: Record<string, string> = {}
+
+  // 从低优先级到高优先级遍历，后写入的覆盖先写入的
+  for (let i = configPaths.length - 1; i >= 0; i--) {
+    const filePath = configPaths[i]!
+    const config = loadSingleConfig(filePath)
+    if (config != null) {
+      for (const serverName of Object.keys(config.mcpServers)) {
+        merged[serverName] = config.mcpServers[serverName]!
+        serverSources[serverName] = filePath
+      }
+    }
+  }
+
+  return { mcpServers: merged, serverSources }
 }

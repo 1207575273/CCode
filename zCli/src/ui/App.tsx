@@ -16,6 +16,8 @@ import { ClearCommand } from '@commands/clear.js'
 import { HelpCommand } from '@commands/help.js'
 import { ModelCommand } from '@commands/model.js'
 import { McpCommand } from '@commands/mcp.js'
+import { McpStatusView } from './McpStatusView.js'
+import type { ServerInfo } from '@mcp/mcp-manager.js'
 
 /**
  * App — ZCli 根组件
@@ -58,6 +60,8 @@ export function App({
   } = useChat()
 
   const [showModelPicker, setShowModelPicker] = useState(false)
+  /** /mcp 指令触发后填充，展示 MCP Server 状态 */
+  const [mcpServers, setMcpServers] = useState<ServerInfo[] | null>(null)
   const [inputValue, setInputValue] = useState('')
   const [suggestionIndex, setSuggestionIndex] = useState(0)
   // Tab 补全后递增，使 InputBar key 变化以强制重挂载，确保 cursor 归位到末尾
@@ -67,6 +71,8 @@ export function App({
   const suggestionConsumedRef = useRef(false)
   // suggestionIndexRef: useInput 回调内读取最新索引值（避免闭包捕获陈旧 state）
   const suggestionIndexRef = useRef(0)
+  /** /mcp 面板是否正在加载中 */
+  const [mcpLoading, setMcpLoading] = useState(false)
 
   const started = messages.length > 0 || isStreaming
 
@@ -162,7 +168,12 @@ export function App({
             return
           }
           case 'show_mcp_status':
-            appendSystemMessage(getMcpInfo())
+            setMcpLoading(true)
+            setMcpServers(null)
+            getMcpInfo().then(servers => {
+              setMcpServers(servers)
+              setMcpLoading(false)
+            })
             return
           case 'error':
             appendSystemMessage(action.message)
@@ -256,6 +267,17 @@ export function App({
           }}
           onCancel={() => setShowModelPicker(false)}
         />
+      ) : mcpLoading || mcpServers != null ? (
+        mcpServers != null ? (
+          <McpStatusView
+            servers={mcpServers}
+            onClose={() => { setMcpServers(null); setMcpLoading(false) }}
+          />
+        ) : (
+          <Box paddingX={2} paddingY={1}>
+            <Text dimColor>MCP Server 连接中...</Text>
+          </Box>
+        )
       ) : (
         <InputBar
           key={inputResetKey}
