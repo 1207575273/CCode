@@ -16,6 +16,7 @@ import { ClearCommand } from '@commands/clear.js'
 import { HelpCommand } from '@commands/help.js'
 import { ModelCommand } from '@commands/model.js'
 import { McpCommand } from '@commands/mcp.js'
+import { ResumeCommand } from '@commands/resume.js'
 import { McpStatusView } from './McpStatusView.js'
 import type { ServerInfo } from '@mcp/mcp-manager.js'
 
@@ -83,6 +84,7 @@ export function App({
     reg.register(new HelpCommand(() => reg.getAll()))
     reg.register(new ModelCommand(currentProvider, currentModel))
     reg.register(new McpCommand())
+    reg.register(new ResumeCommand())
     return reg
   }, [currentProvider, currentModel])
 
@@ -167,6 +169,9 @@ export function App({
             }
             return
           }
+          case 'show_resume_panel':
+            // TODO: Task 7 will add ResumePanel state management here
+            return
           case 'show_mcp_status':
             setMcpLoading(true)
             setMcpServers(null)

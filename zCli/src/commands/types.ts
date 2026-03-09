@@ -19,6 +19,7 @@ export type CommandAction =
   /** provider 可为空字符串，由 App.tsx 从 config 中解析 */
   | { type: 'switch_model'; provider: string; model: string }
   | { type: 'show_mcp_status' }
+  | { type: 'show_resume_panel' }
   | { type: 'error'; message: string }
 
 /**
