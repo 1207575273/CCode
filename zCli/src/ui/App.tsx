@@ -94,6 +94,19 @@ export function App({
     }
   }, [showResumePanel, cwd])
 
+  // WelcomeScreen 用的最近会话（最多 3 条）
+  const recentSessions = useMemo(() => {
+    try {
+      const slug = toProjectSlug(cwd)
+      return sessionStore.list({ projectSlug: slug, limit: 3 }).map(s => ({
+        firstMessage: s.firstMessage,
+        updatedAt: s.updatedAt,
+      }))
+    } catch {
+      return []
+    }
+  }, [cwd])
+
   const started = messages.length > 0 || isStreaming
 
   // Handle --resume CLI flag
@@ -282,7 +295,7 @@ export function App({
       {started ? (
         <ChatView messages={messages} streamingMessage={streamingMessage} toolEvents={toolEvents} />
       ) : (
-        <WelcomeScreen model={currentModel} provider={currentProvider} cwd={cwd} />
+        <WelcomeScreen model={currentModel} provider={currentProvider} cwd={cwd} recentSessions={recentSessions} />
       )}
 
       {error != null && (

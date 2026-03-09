@@ -12,6 +12,27 @@ import React from 'react'
 import { Box, Text } from 'ink'
 
 const APP_VERSION = 'v0.1.0'
+
+// 时间常量（与 ResumePanel 相同，按任务要求独立维护）
+const SECOND = 1000
+const MINUTE = 60 * SECOND
+const HOUR = 60 * MINUTE
+const DAY = 24 * HOUR
+
+/** 将 ISO 时间字符串转为相对时间描述 */
+function timeAgo(isoString: string): string {
+  const diff = Date.now() - new Date(isoString).getTime()
+  if (diff < 0) return '0s ago'
+  if (diff < MINUTE) return `${Math.floor(diff / SECOND)}s ago`
+  if (diff < HOUR) return `${Math.floor(diff / MINUTE)}m ago`
+  if (diff < DAY) return `${Math.floor(diff / HOUR)}h ago`
+  return `${Math.floor(diff / DAY)}d ago`
+}
+
+/** 截断字符串到指定长度，超出部分用省略号替代 */
+function truncate(text: string, maxLen: number): string {
+  return text.length > maxLen ? text.slice(0, maxLen) + '…' : text
+}
 const LEFT_PANEL_WIDTH = 28
 
 // 像素风格机器人（块元素字符 U+2580 系列）
@@ -33,10 +54,12 @@ interface WelcomeScreenProps {
   provider: string
   /** 工作目录，用于在左栏底部显示上下文路径 */
   cwd: string
+  /** 最近会话列表，用于在右栏展示 */
+  recentSessions?: Array<{ firstMessage: string; updatedAt: string }>
 }
 
 /** 启动欢迎界面，会话开始后（有消息时）被 ChatView 替换。 */
-export function WelcomeScreen({ model, provider, cwd }: WelcomeScreenProps) {
+export function WelcomeScreen({ model, provider, cwd, recentSessions }: WelcomeScreenProps) {
   return (
     <Box
       borderStyle="round"
@@ -84,7 +107,18 @@ export function WelcomeScreen({ model, provider, cwd }: WelcomeScreenProps) {
 
           <Box marginTop={1} flexDirection="column">
             <Text color="yellow" bold>Recent sessions</Text>
-            <Text dimColor>No recent activity</Text>
+            {recentSessions && recentSessions.length > 0 ? (
+              <>
+                {recentSessions.slice(0, 3).map((s, i) => (
+                  <Text key={s.updatedAt + String(i)} dimColor>
+                    {truncate(s.firstMessage, 50)}  <Text color="gray">{timeAgo(s.updatedAt)}</Text>
+                  </Text>
+                ))}
+                <Text dimColor>输入 <Text color="cyan">/resume</Text> 查看更多</Text>
+              </>
+            ) : (
+              <Text dimColor>No recent activity</Text>
+            )}
           </Box>
         </Box>
       </Box>
