@@ -15,6 +15,7 @@ import { CommandRegistry } from '@commands/registry.js'
 import { ClearCommand } from '@commands/clear.js'
 import { HelpCommand } from '@commands/help.js'
 import { ModelCommand } from '@commands/model.js'
+import { McpCommand } from '@commands/mcp.js'
 
 /**
  * App — ZCli 根组件
@@ -53,6 +54,7 @@ export function App({
     clearMessages,
     appendSystemMessage,
     switchModel,
+    getMcpInfo,
   } = useChat()
 
   const [showModelPicker, setShowModelPicker] = useState(false)
@@ -74,6 +76,7 @@ export function App({
     reg.register(new ClearCommand())
     reg.register(new HelpCommand(() => reg.getAll()))
     reg.register(new ModelCommand(currentProvider, currentModel))
+    reg.register(new McpCommand())
     return reg
   }, [currentProvider, currentModel])
 
@@ -158,6 +161,9 @@ export function App({
             }
             return
           }
+          case 'show_mcp_status':
+            appendSystemMessage(getMcpInfo())
+            return
           case 'error':
             appendSystemMessage(action.message)
             return
@@ -168,7 +174,7 @@ export function App({
 
     // 非指令，发送给 LLM
     submit(trimmed)
-  }, [registry, clearMessages, appendSystemMessage, switchModel, submit, modelItems, exit])
+  }, [registry, clearMessages, appendSystemMessage, switchModel, submit, modelItems, exit, getMcpInfo])
 
   // isActive: 仅在浮层可见时拦截按键，防止与 TextInput 的正常 Enter 冲突
   useInput((_input, key) => {

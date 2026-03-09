@@ -65,6 +65,8 @@ export interface UseChatReturn {
   appendSystemMessage: (text: string) => void
   /** 切换 provider 和 model（session 级，不写回 config.json） */
   switchModel: (provider: string, model: string) => void
+  /** 获取 MCP Server 状态信息（用于 /mcp 指令） */
+  getMcpInfo: () => string
 }
 
 let mcpManager: McpManager | null = null
@@ -255,6 +257,25 @@ export function useChat(): UseChatReturn {
     setCurrentModel(model)
   }, [])
 
+  /** 获取 MCP Server 状态信息 */
+  const getMcpInfo = useCallback((): string => {
+    if (mcpManager == null || !mcpInitialized) {
+      return 'MCP: 未初始化（首次发送消息后连接）'
+    }
+    const status = mcpManager.getStatus()
+    if (status.length === 0) {
+      return 'MCP: 无已连接的 Server'
+    }
+    const lines = ['MCP Servers:']
+    for (const s of status) {
+      lines.push(`  ● ${s.name} (${s.toolCount} tools)`)
+      for (const toolName of s.toolNames) {
+        lines.push(`    - ${toolName}`)
+      }
+    }
+    return lines.join('\n')
+  }, [])
+
   return {
     messages,
     streamingMessage,
@@ -271,5 +292,6 @@ export function useChat(): UseChatReturn {
     clearMessages,
     appendSystemMessage,
     switchModel,
+    getMcpInfo,
   }
 }

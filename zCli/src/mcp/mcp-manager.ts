@@ -61,6 +61,15 @@ export class McpManager {
     return this.servers.flatMap((s) => s.tools)
   }
 
+  /** 获取所有已连接 Server 的状态摘要 */
+  getStatus(): Array<{ name: string; toolCount: number; toolNames: string[] }> {
+    return this.servers.map(s => ({
+      name: s.name,
+      toolCount: s.tools.length,
+      toolNames: s.tools.map(t => t.name),
+    }))
+  }
+
   /** 断开所有连接，忽略单个关闭错误 */
   async disconnectAll(): Promise<void> {
     for (const server of this.servers) {
