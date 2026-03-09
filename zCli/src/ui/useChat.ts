@@ -8,6 +8,7 @@
  * - 管理当前 provider/model（session 级，不持久化到 config）
  * - 驱动 AgentLoop：发起请求、处理事件流、暂停等待权限确认
  * - 提供 clearMessages / appendSystemMessage / switchModel 供指令系统调用
+ * - 自动持久化对话到 session JSONL 文件（additive，不影响已有功能）
  */
 
 import { useState, useCallback, useRef } from 'react'
@@ -28,6 +29,8 @@ import type { ToolEvent } from './ToolStatusLine.js'
 import { loadMcpConfigWithSources } from '@config/mcp-config.js'
 import { McpManager } from '@mcp/mcp-manager.js'
 import type { ServerInfo } from '@mcp/mcp-manager.js'
+import { sessionStore, generateEventId } from '@persistence/index.js'
+import type { SessionEvent } from '@persistence/index.js'
 
 /** 待用户确认的权限请求，暂停 AgentLoop 直到 resolve 被调用 */
 interface PendingPermission {
@@ -68,6 +71,8 @@ export interface UseChatReturn {
   switchModel: (provider: string, model: string) => void
   /** 初始化 MCP 并返回状态信息（用于 /mcp 指令，会主动触发连接） */
   getMcpInfo: () => Promise<ServerInfo[]>
+  /** 加载历史 session 并恢复消息（/resume 指令用） */
+  loadSession: (sessionId: string) => void
 }
 
 let mcpManager: McpManager | null = null
@@ -125,6 +130,35 @@ export function useChat(): UseChatReturn {
   // allowedTools state 驱动 UI 重渲染
   const allowedToolsRef = useRef<Set<string>>(new Set())
   const abortRef = useRef<AbortController | null>(null)
+
+  // Session 持久化 ref：追踪当前 session 和事件链
+  const sessionIdRef = useRef<string | null>(null)
+  const lastEventUuidRef = useRef<string | null>(null)
+
+  /** 确保当前 session 已创建（幂等），返回 sessionId 或空字符串 */
+  function ensureSession(providerName: string, modelName: string): string {
+    if (sessionIdRef.current) return sessionIdRef.current
+    try {
+      const id = sessionStore.create(process.cwd(), providerName, modelName)
+      sessionIdRef.current = id
+      lastEventUuidRef.current = null
+      return id
+    } catch {
+      // session 创建失败不阻断对话流
+      return ''
+    }
+  }
+
+  /** 向 session 追加事件，静默处理错误 */
+  function appendSessionEvent(event: SessionEvent): void {
+    try {
+      if (!sessionIdRef.current) return
+      sessionStore.append(sessionIdRef.current, event)
+      lastEventUuidRef.current = event.uuid
+    } catch {
+      // 持久化失败不阻断对话流
+    }
+  }
 
   /**
    * 处理权限确认结果。
@@ -185,6 +219,21 @@ export function useChat(): UseChatReturn {
     ;(async () => {
       let accumulated = ''
       try {
+        // 确保 session 已创建，追加 user 事件
+        const sid = ensureSession(currentProvider, currentModel)
+        if (sid) {
+          const userEventId = generateEventId()
+          appendSessionEvent({
+            sessionId: sid,
+            type: 'user',
+            timestamp: new Date().toISOString(),
+            uuid: userEventId,
+            parentUuid: lastEventUuidRef.current,
+            cwd: process.cwd(),
+            message: { role: 'user', content: text },
+          })
+        }
+
         await ensureMcpInitialized()
         registerMcpTools(registry)
         for await (const event of loop.run(history)) {
@@ -221,6 +270,20 @@ export function useChat(): UseChatReturn {
         if (accumulated) {
           const assistantMsg: ChatMessage = { id: randomUUID(), role: 'assistant', content: accumulated }
           setMessages(prev => [...prev, assistantMsg])
+
+          // 追加 assistant 事件到 session
+          if (sessionIdRef.current) {
+            const assistantEventId = generateEventId()
+            appendSessionEvent({
+              sessionId: sessionIdRef.current,
+              type: 'assistant',
+              timestamp: new Date().toISOString(),
+              uuid: assistantEventId,
+              parentUuid: lastEventUuidRef.current,
+              cwd: process.cwd(),
+              message: { role: 'assistant', content: accumulated, model: currentModel },
+            })
+          }
         }
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
@@ -265,6 +328,43 @@ export function useChat(): UseChatReturn {
     return mcpManager.getStatus()
   }, [])
 
+  /** 加载历史 session，恢复消息列表和 provider/model */
+  const loadSession = useCallback((sessionId: string): void => {
+    try {
+      const snapshot = sessionStore.loadMessages(sessionId)
+      sessionIdRef.current = sessionId
+      lastEventUuidRef.current = null
+
+      // 恢复消息列表
+      const restored: ChatMessage[] = snapshot.messages.map(m => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+      }))
+      setMessages(restored)
+
+      // 恢复 provider/model
+      if (snapshot.provider) setCurrentProvider(snapshot.provider)
+      if (snapshot.model) setCurrentModel(snapshot.model)
+
+      // 追加 session_resume 事件
+      const resumeEventId = generateEventId()
+      appendSessionEvent({
+        sessionId,
+        type: 'session_resume',
+        timestamp: new Date().toISOString(),
+        uuid: resumeEventId,
+        parentUuid: lastEventUuidRef.current,
+        cwd: process.cwd(),
+        provider: snapshot.provider,
+        model: snapshot.model,
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      appendSystemMessage(`Failed to load session: ${msg}`)
+    }
+  }, [appendSystemMessage])
+
   return {
     messages,
     streamingMessage,
@@ -282,5 +382,6 @@ export function useChat(): UseChatReturn {
     appendSystemMessage,
     switchModel,
     getMcpInfo,
+    loadSession,
   }
 }
