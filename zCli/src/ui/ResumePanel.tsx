@@ -10,12 +10,14 @@
 import React, { useState, useCallback } from 'react'
 import { Box, Text, useInput } from 'ink'
 import type { Key } from 'ink'
-import type { SessionSummary } from '@persistence/index.js'
+import type { SessionSummary, BranchInfo } from '@persistence/index.js'
 
 export interface ResumePanelProps {
   currentProjectSessions: SessionSummary[]
   allSessions: SessionSummary[]
-  onSelect: (sessionId: string) => void
+  /** 获取指定 session 的分支列表 */
+  getBranches: (sessionId: string) => BranchInfo[]
+  onSelect: (sessionId: string, leafEventUuid?: string) => void
   onClose: () => void
 }
 
@@ -58,15 +60,25 @@ function fuzzyMatch(text: string, query: string): boolean {
 
 const MAX_MESSAGE_LENGTH = 60
 
+/** 分支子视图状态 */
+interface BranchView {
+  sessionId: string
+  branches: BranchInfo[]
+}
+
 export function ResumePanel({
   currentProjectSessions,
   allSessions,
+  getBranches,
   onSelect,
   onClose,
 }: ResumePanelProps) {
   const [showAll, setShowAll] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [searchText, setSearchText] = useState('')
+  /** 分支子视图：非 null 时显示分支列表而非 session 列表 */
+  const [branchView, setBranchView] = useState<BranchView | null>(null)
+  const [branchSelectedIndex, setBranchSelectedIndex] = useState(0)
 
   const baseSessions = showAll ? allSessions : currentProjectSessions
   const filtered = searchText
@@ -74,6 +86,35 @@ export function ResumePanel({
     : baseSessions
 
   const stableHandler = useCallback((input: string, key: Key) => {
+    // ── 分支子视图键盘处理 ──
+    if (branchView) {
+      if (key.escape) {
+        setBranchView(null)
+        setBranchSelectedIndex(0)
+        return
+      }
+
+      if (key.return) {
+        const branch = branchView.branches[branchSelectedIndex]
+        if (branch) {
+          onSelect(branchView.sessionId, branch.leafEventUuid)
+        }
+        return
+      }
+
+      if (key.upArrow) {
+        setBranchSelectedIndex(i => Math.max(0, i - 1))
+        return
+      }
+
+      if (key.downArrow) {
+        setBranchSelectedIndex(i => Math.min(branchView.branches.length - 1, i + 1))
+        return
+      }
+      return
+    }
+
+    // ── Session 列表键盘处理 ──
     if (key.escape) {
       onClose()
       return
@@ -83,7 +124,16 @@ export function ResumePanel({
       if (filtered.length > 0) {
         const session = filtered[selectedIndex]
         if (session) {
-          onSelect(session.sessionId)
+          // 检查是否有多个分支
+          const branches = getBranches(session.sessionId)
+          if (branches.length > 1) {
+            // 有多个分支，进入分支子视图
+            setBranchView({ sessionId: session.sessionId, branches })
+            setBranchSelectedIndex(0)
+          } else {
+            // 单分支或无分支，直接选择
+            onSelect(session.sessionId)
+          }
         }
       }
       return
@@ -118,10 +168,51 @@ export function ResumePanel({
       setSearchText(prev => prev + input)
       setSelectedIndex(0)
     }
-  }, [onClose, onSelect, filtered, selectedIndex])
+  }, [onClose, onSelect, filtered, selectedIndex, branchView, branchSelectedIndex, getBranches])
 
   useInput(stableHandler)
 
+  // ── 分支子视图渲染 ──
+  if (branchView) {
+    return (
+      <Box flexDirection="column" paddingX={2} paddingY={1}>
+        <Text bold>Select Branch</Text>
+        <Text dimColor>  {branchView.branches.length} branches found</Text>
+        <Text> </Text>
+
+        {branchView.branches.map((branch, index) => {
+          const isSelected = index === branchSelectedIndex
+          const prefix = isSelected ? '> ' : '  '
+          const message = branch.lastMessage.length > MAX_MESSAGE_LENGTH
+            ? branch.lastMessage.slice(0, MAX_MESSAGE_LENGTH) + '...'
+            : branch.lastMessage
+          const label = message || '(empty branch)'
+
+          return (
+            <Box key={branch.leafEventUuid}>
+              {isSelected ? (
+                <Text color="cyan" bold>{prefix}{label}</Text>
+              ) : (
+                <Text>{prefix}{label}</Text>
+              )}
+              <Text dimColor>
+                {' · '}{branch.messageCount} msgs
+                {' · '}{timeAgo(branch.updatedAt)}
+                {branch.forkPoint ? ' · forked' : ' · main'}
+              </Text>
+            </Box>
+          )
+        })}
+
+        <Text> </Text>
+        <Box>
+          <Text dimColor>Up/Down navigate - Enter select branch - Esc back to sessions</Text>
+        </Box>
+      </Box>
+    )
+  }
+
+  // ── Session 列表渲染 ──
   return (
     <Box flexDirection="column" paddingX={2} paddingY={1}>
       <Text bold>Resume Session</Text>
@@ -145,7 +236,7 @@ export function ResumePanel({
       ) : (
         filtered.map((session, index) => {
           const isSelected = index === selectedIndex
-          const prefix = isSelected ? '❯ ' : '  '
+          const prefix = isSelected ? '> ' : '  '
           const message = session.firstMessage.length > MAX_MESSAGE_LENGTH
             ? session.firstMessage.slice(0, MAX_MESSAGE_LENGTH) + '...'
             : session.firstMessage
@@ -168,7 +259,7 @@ export function ResumePanel({
 
       <Text> </Text>
       <Box>
-        <Text dimColor>↑↓ navigate · Enter select · Esc close · type to search</Text>
+        <Text dimColor>Up/Down navigate - Enter select - Esc close - type to search</Text>
       </Box>
     </Box>
   )

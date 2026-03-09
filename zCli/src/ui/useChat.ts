@@ -71,8 +71,10 @@ export interface UseChatReturn {
   switchModel: (provider: string, model: string) => void
   /** 初始化 MCP 并返回状态信息（用于 /mcp 指令，会主动触发连接） */
   getMcpInfo: () => Promise<ServerInfo[]>
-  /** 加载历史 session 并恢复消息（/resume 指令用） */
-  loadSession: (sessionId: string) => void
+  /** 加载历史 session 并恢复消息（/resume 指令用），可指定分支叶节点 */
+  loadSession: (sessionId: string, leafEventUuid?: string) => void
+  /** 从指定消息处分叉（message.id = event uuid） */
+  forkFromEvent: (messageId: string) => void
 }
 
 let mcpManager: McpManager | null = null
@@ -337,10 +339,10 @@ export function useChat(): UseChatReturn {
     return mcpManager.getStatus()
   }, [])
 
-  /** 加载历史 session，恢复消息列表和 provider/model */
-  const loadSession = useCallback((sessionId: string): void => {
+  /** 加载历史 session，恢复消息列表和 provider/model，可指定分支叶节点 */
+  const loadSession = useCallback((sessionId: string, leafEventUuid?: string): void => {
     try {
-      const snapshot = sessionStore.loadMessages(sessionId)
+      const snapshot = sessionStore.loadMessages(sessionId, leafEventUuid)
       sessionIdRef.current = sessionId
       currentSessionId = sessionId
       lastEventUuidRef.current = null
@@ -375,6 +377,49 @@ export function useChat(): UseChatReturn {
     }
   }, [appendSystemMessage])
 
+  /** 从指定消息处分叉，截断消息列表并开始新分支 */
+  const forkFromEvent = useCallback((messageId: string): void => {
+    const sid = sessionIdRef.current
+    if (!sid) {
+      appendSystemMessage('No active session to fork from')
+      return
+    }
+
+    try {
+      // 从分叉点重新加载消息
+      const snapshot = sessionStore.loadMessages(sid, messageId)
+
+      // 恢复消息到分叉点
+      const restored: ChatMessage[] = snapshot.messages.map(m => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+      }))
+      setMessages(restored)
+
+      // 将 lastEventUuid 设为分叉点，后续消息将从此处分支
+      lastEventUuidRef.current = messageId
+
+      // 追加 session_resume 事件标记分叉
+      const resumeEventId = generateEventId()
+      appendSessionEvent({
+        sessionId: sid,
+        type: 'session_resume',
+        timestamp: new Date().toISOString(),
+        uuid: resumeEventId,
+        parentUuid: messageId, // 分叉点！
+        cwd: process.cwd(),
+        provider: currentProvider,
+        model: currentModel,
+      })
+
+      appendSystemMessage('Forked from message — new branch started. Continue typing to diverge.')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      appendSystemMessage(`Failed to fork: ${msg}`)
+    }
+  }, [appendSystemMessage, currentProvider, currentModel])
+
   return {
     messages,
     streamingMessage,
@@ -393,5 +438,6 @@ export function useChat(): UseChatReturn {
     switchModel,
     getMcpInfo,
     loadSession,
+    forkFromEvent,
   }
 }

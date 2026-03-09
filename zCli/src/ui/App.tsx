@@ -17,8 +17,10 @@ import { HelpCommand } from '@commands/help.js'
 import { ModelCommand } from '@commands/model.js'
 import { McpCommand } from '@commands/mcp.js'
 import { ResumeCommand } from '@commands/resume.js'
+import { ForkCommand } from '@commands/fork.js'
 import { McpStatusView } from './McpStatusView.js'
 import { ResumePanel } from './ResumePanel.js'
+import { ForkPanel } from './ForkPanel.js'
 import type { ServerInfo } from '@mcp/mcp-manager.js'
 import { sessionStore, toProjectSlug } from '@persistence/index.js'
 
@@ -65,6 +67,7 @@ export function App({
     switchModel,
     getMcpInfo,
     loadSession,
+    forkFromEvent,
   } = useChat()
 
   const [showModelPicker, setShowModelPicker] = useState(false)
@@ -83,6 +86,8 @@ export function App({
   const [mcpLoading, setMcpLoading] = useState(false)
   /** /resume 面板是否显示 */
   const [showResumePanel, setShowResumePanel] = useState(false)
+  /** /fork 面板是否显示 */
+  const [showForkPanel, setShowForkPanel] = useState(false)
 
   // 懒加载 session 列表：仅在 ResumePanel 打开时读取
   const { currentProjectSessions, allSessions } = useMemo(() => {
@@ -107,6 +112,15 @@ export function App({
     }
   }, [cwd])
 
+  /** 获取 session 的分支列表（用于 ResumePanel 分支视图） */
+  const getBranches = useCallback((sessionId: string) => {
+    try {
+      return sessionStore.listBranches(sessionId)
+    } catch {
+      return []
+    }
+  }, [])
+
   const started = messages.length > 0 || isStreaming
 
   // Handle --resume CLI flag
@@ -128,6 +142,7 @@ export function App({
     reg.register(new ModelCommand(currentProvider, currentModel))
     reg.register(new McpCommand())
     reg.register(new ResumeCommand())
+    reg.register(new ForkCommand())
     return reg
   }, [currentProvider, currentModel])
 
@@ -214,6 +229,9 @@ export function App({
           }
           case 'show_resume_panel':
             setShowResumePanel(true)
+            return
+          case 'show_fork_panel':
+            setShowForkPanel(true)
             return
           case 'show_mcp_status':
             setMcpLoading(true)
@@ -337,11 +355,21 @@ export function App({
         <ResumePanel
           currentProjectSessions={currentProjectSessions}
           allSessions={allSessions}
-          onSelect={(sessionId) => {
-            loadSession(sessionId)
+          getBranches={getBranches}
+          onSelect={(sessionId, leafEventUuid) => {
+            loadSession(sessionId, leafEventUuid)
             setShowResumePanel(false)
           }}
           onClose={() => setShowResumePanel(false)}
+        />
+      ) : showForkPanel ? (
+        <ForkPanel
+          messages={messages}
+          onFork={(messageId) => {
+            forkFromEvent(messageId)
+            setShowForkPanel(false)
+          }}
+          onClose={() => setShowForkPanel(false)}
         />
       ) : (
         <InputBar

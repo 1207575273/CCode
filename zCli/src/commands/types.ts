@@ -20,6 +20,7 @@ export type CommandAction =
   | { type: 'switch_model'; provider: string; model: string }
   | { type: 'show_mcp_status' }
   | { type: 'show_resume_panel' }
+  | { type: 'show_fork_panel' }
   | { type: 'error'; message: string }
 
 /**
