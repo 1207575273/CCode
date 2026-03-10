@@ -18,3 +18,5 @@ export {
 
 /** 全局单例，存储路径 ~/.zcli/sessions/ */
 export const sessionStore = new SessionStore(join(homedir(), '.zcli', 'sessions'))
+
+export { getDb, createDb, closeDb } from './db.js'
