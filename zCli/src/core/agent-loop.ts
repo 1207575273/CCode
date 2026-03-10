@@ -15,6 +15,7 @@
 import type { LLMProvider } from '@providers/provider.js'
 import type { ToolRegistry } from '@tools/registry.js'
 import type { Message, ToolCallContent, StreamChunk } from './types.js'
+import { classifyToolCalls, executeSafeToolsInParallel } from './parallel-executor.js'
 
 // ═══════════════════════════════════════════════
 // 类型定义
@@ -48,7 +49,11 @@ export interface AgentConfig {
   model: string
   /** provider 名称，记录到 llm_start 事件 */
   provider: string
-  signal?: AbortSignal
+  signal?: AbortSignal | undefined
+  /** 是否启用并行工具执行（默认 true） */
+  parallelTools?: boolean | undefined
+  /** 最大并行工具数（默认 5） */
+  maxParallelTools?: number | undefined
 }
 
 // ═══════════════════════════════════════════════
@@ -95,9 +100,7 @@ export class AgentLoop {
         return
       }
 
-      for (const tc of llmResult.toolCalls) {
-        yield* this.#executeOneTool(tc, history)
-      }
+      yield* this.#executeToolCalls(llmResult.toolCalls, history)
     }
 
     yield { type: 'error', error: `超过最大轮次限制 (${MAX_TURNS})` }
@@ -175,6 +178,47 @@ export class AgentLoop {
   // ─────────────────────────────────────────────
   // 工具执行
   // ─────────────────────────────────────────────
+
+  /**
+   * 分发工具调用：parallelTools=false 时全部串行；否则安全工具并行、危险工具串行。
+   */
+  async *#executeToolCalls(toolCalls: ToolCallContent[], history: Message[]): AsyncGenerator<AgentEvent> {
+    // parallelTools === false → 全部串行（兼容模式）
+    if (this.#config.parallelTools === false) {
+      for (const tc of toolCalls) {
+        yield* this.#executeOneTool(tc, history)
+      }
+      return
+    }
+
+    // 分组：safe 并行，dangerous 串行
+    const { safe, dangerous } = classifyToolCalls(toolCalls, this.#registry)
+
+    // 1. 并行执行安全工具
+    if (safe.length > 0) {
+      const events: AgentEvent[] = []
+      const ctx = { cwd: process.cwd() }
+      const results = await executeSafeToolsInParallel(
+        safe, this.#registry, (e) => events.push(e), ctx, this.#config.maxParallelTools,
+      )
+      // yield 收集到的事件
+      for (const e of events) { yield e }
+      // 按原始顺序追加到 history
+      for (const pr of results) {
+        history.push({
+          role: 'user',
+          content: pr.success
+            ? `[Tool ${pr.toolName} result]: ${pr.output}`
+            : `[Tool ${pr.toolName} error]: ${pr.error ?? 'error'}`,
+        })
+      }
+    }
+
+    // 2. 串行执行危险工具
+    for (const tc of dangerous) {
+      yield* this.#executeOneTool(tc, history)
+    }
+  }
 
   /**
    * 执行单个工具调用。

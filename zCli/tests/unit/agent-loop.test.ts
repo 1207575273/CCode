@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { AgentLoop } from '@core/agent-loop.js'
+import type { AgentEvent } from '@core/agent-loop.js'
 import { ToolRegistry } from '@tools/registry.js'
 import type { LLMProvider } from '@providers/provider.js'
 import type { StreamChunk } from '@core/types.js'
@@ -137,5 +138,87 @@ describe('AgentLoop', () => {
     }
     expect(events.some(e => e.type === 'permission_request')).toBe(true)
     expect(events.some(e => e.type === 'tool_done')).toBe(true)
+  })
+
+  it('多个安全工具 — 并行执行并产生所有事件', async () => {
+    const registry = new ToolRegistry()
+    registry.register({
+      name: 'glob', description: '', parameters: {}, dangerous: false,
+      execute: async () => ({ success: true, output: '*.ts' }),
+    })
+    registry.register({
+      name: 'grep', description: '', parameters: {}, dangerous: false,
+      execute: async () => ({ success: true, output: 'found' }),
+    })
+    const provider = makeProvider([
+      [
+        { type: 'tool_call', toolCall: { type: 'tool_call', toolCallId: 'c1', toolName: 'glob', args: { pattern: '*.ts' } } },
+        { type: 'tool_call', toolCall: { type: 'tool_call', toolCallId: 'c2', toolName: 'grep', args: { pattern: 'TODO' } } },
+        { type: 'done' },
+      ],
+      [{ type: 'text', text: 'found results' }, { type: 'done' }],
+    ])
+    const loop = new AgentLoop(provider, registry, { model: 'mock', provider: 'mock' })
+    const events: AgentEvent[] = []
+    for await (const e of loop.run([{ role: 'user', content: 'search' }])) {
+      events.push(e)
+    }
+    expect(events.filter(e => e.type === 'tool_start')).toHaveLength(2)
+    expect(events.filter(e => e.type === 'tool_done')).toHaveLength(2)
+  })
+
+  it('混合安全和危险工具 — 安全并行 + 危险串行', async () => {
+    const registry = new ToolRegistry()
+    registry.register({
+      name: 'read_file', description: '', parameters: {}, dangerous: false,
+      execute: async () => ({ success: true, output: 'content' }),
+    })
+    registry.register({
+      name: 'bash', description: '', parameters: {}, dangerous: true,
+      execute: async () => ({ success: true, output: 'output' }),
+    })
+    const provider = makeProvider([
+      [
+        { type: 'tool_call', toolCall: { type: 'tool_call', toolCallId: 'c1', toolName: 'read_file', args: { path: 'a.ts' } } },
+        { type: 'tool_call', toolCall: { type: 'tool_call', toolCallId: 'c2', toolName: 'bash', args: { command: 'ls' } } },
+        { type: 'done' },
+      ],
+      [{ type: 'text', text: 'done' }, { type: 'done' }],
+    ])
+    const loop = new AgentLoop(provider, registry, { model: 'mock', provider: 'mock' })
+    const events: AgentEvent[] = []
+    for await (const e of loop.run([{ role: 'user', content: 'do stuff' }])) {
+      if (e.type === 'permission_request') {
+        (e as { resolve: (v: boolean) => void }).resolve(true)
+      }
+      events.push(e)
+    }
+    expect(events.filter(e => e.type === 'tool_start')).toHaveLength(2)
+    expect(events.filter(e => e.type === 'tool_done')).toHaveLength(2)
+    expect(events.some(e => e.type === 'permission_request')).toBe(true)
+  })
+
+  it('parallelTools=false — 回退到串行执行', async () => {
+    const registry = new ToolRegistry()
+    const callOrder: string[] = []
+    registry.register({
+      name: 'glob', description: '', parameters: {}, dangerous: false,
+      execute: async () => { callOrder.push('glob'); return { success: true, output: 'ok' } },
+    })
+    registry.register({
+      name: 'grep', description: '', parameters: {}, dangerous: false,
+      execute: async () => { callOrder.push('grep'); return { success: true, output: 'ok' } },
+    })
+    const provider = makeProvider([
+      [
+        { type: 'tool_call', toolCall: { type: 'tool_call', toolCallId: 'c1', toolName: 'glob', args: {} } },
+        { type: 'tool_call', toolCall: { type: 'tool_call', toolCallId: 'c2', toolName: 'grep', args: {} } },
+        { type: 'done' },
+      ],
+      [{ type: 'text', text: 'ok' }, { type: 'done' }],
+    ])
+    const loop = new AgentLoop(provider, registry, { model: 'mock', provider: 'mock', parallelTools: false })
+    for await (const _e of loop.run([{ role: 'user', content: 'search' }])) { /* consume */ }
+    expect(callOrder).toEqual(['glob', 'grep'])
   })
 })
