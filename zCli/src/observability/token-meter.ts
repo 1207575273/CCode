@@ -155,14 +155,14 @@ export class TokenMeter {
 
   /** 今日汇总（SQL 聚合，按币种分组，使用本地日期） */
   getTodayStats(): AggregateStats[] {
-    const today = localDateStr() // YYYY-MM-DD 本地时区
-    return this.#todayStmt.all(today + 'T00:00:00.000Z') as AggregateStats[]
+    const todayStart = startOfLocalDay()
+    return this.#todayStmt.all(todayStart) as AggregateStats[]
   }
 
   /** 本月汇总（SQL 聚合，按币种分组，使用本地日期） */
   getMonthStats(): AggregateStats[] {
-    const month = localDateStr().slice(0, 7) // YYYY-MM 本地时区
-    return this.#monthStmt.all(month + '-01T00:00:00.000Z') as AggregateStats[]
+    const monthStart = startOfLocalMonth()
+    return this.#monthStmt.all(monthStart) as AggregateStats[]
   }
 
   /** 解析计价规则（带缓存：同一 provider+model 只查一次 DB） */
@@ -219,10 +219,17 @@ export class TokenMeter {
 }
 
 /** 返回本地时区的 YYYY-MM-DD 字符串 */
-function localDateStr(): string {
+/** 本地今天零点对应的 UTC ISO 字符串 */
+function startOfLocalDay(): string {
   const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+  d.setHours(0, 0, 0, 0)
+  return d.toISOString()
+}
+
+/** 本地本月 1 日零点对应的 UTC ISO 字符串 */
+function startOfLocalMonth(): string {
+  const d = new Date()
+  d.setDate(1)
+  d.setHours(0, 0, 0, 0)
+  return d.toISOString()
 }
