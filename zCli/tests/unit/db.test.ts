@@ -36,6 +36,20 @@ describe('createDb', () => {
     db.close()
   })
 
+  it('should_create_schema_comments_table_with_metadata', () => {
+    const db = createDb(join(tempDir, 'test.db'))
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>
+    expect(tables.map(t => t.name)).toContain('schema_comments')
+
+    // 验证 usage_logs 的字段注释已 seed
+    const comment = db.prepare(
+      "SELECT comment FROM schema_comments WHERE table_name = 'usage_logs' AND column_name = 'input_tokens'"
+    ).get() as { comment: string } | undefined
+    expect(comment).toBeDefined()
+    expect(comment!.comment).toBe('输入 token 数')
+    db.close()
+  })
+
   it('should_be_idempotent_on_second_call', () => {
     const dbPath = join(tempDir, 'test.db')
     const db1 = createDb(dbPath)

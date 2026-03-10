@@ -58,6 +58,15 @@ export function createDb(dbPath: string): DatabaseType {
       priority          INTEGER NOT NULL DEFAULT 0          -- 匹配优先级（越大越优先）
     );
 
+    -- ═══ 字段注释元数据表 ═══
+    -- SQLite 不支持列级 COMMENT，用此表存储字段说明，可运行时查询
+    CREATE TABLE IF NOT EXISTS schema_comments (
+      table_name    TEXT NOT NULL,       -- 所属表名
+      column_name   TEXT NOT NULL,       -- 字段名
+      comment       TEXT NOT NULL,       -- 字段说明
+      PRIMARY KEY (table_name, column_name)
+    );
+
     -- ═══ 索引 ═══
     CREATE INDEX IF NOT EXISTS idx_pricing_lookup
       ON pricing_rules(provider, model_pattern, effective_from);
@@ -70,6 +79,7 @@ export function createDb(dbPath: string): DatabaseType {
   `)
 
   seedDefaultPricing(db)
+  seedSchemaComments(db)
   return db
 }
 
@@ -122,6 +132,54 @@ function seedDefaultPricing(db: DatabaseType): void {
   const tx = db.transaction(() => {
     for (const [provider, pattern, inp, out, cacheR, cacheW, from, source, priority] of rules) {
       insert.run(provider, pattern, inp, out, cacheR, cacheW, from, source, priority, provider, pattern)
+    }
+  })
+  tx()
+}
+
+/** 写入字段注释元数据（幂等：INSERT OR REPLACE） */
+function seedSchemaComments(db: DatabaseType): void {
+  const upsert = db.prepare(`
+    INSERT OR REPLACE INTO schema_comments (table_name, column_name, comment) VALUES (?, ?, ?)
+  `)
+
+  const comments: Array<[string, string, string]> = [
+    // usage_logs
+    ['usage_logs', 'id',              '自增主键'],
+    ['usage_logs', 'session_id',      '所属会话 ID'],
+    ['usage_logs', 'timestamp',       '记录时间 (ISO 8601)'],
+    ['usage_logs', 'provider',        'LLM 供应商 (anthropic/openai/google/deepseek/ollama)'],
+    ['usage_logs', 'model',           '模型标识 (claude-opus-4-6/gpt-4o/...)'],
+    ['usage_logs', 'input_tokens',    '输入 token 数'],
+    ['usage_logs', 'output_tokens',   '输出 token 数'],
+    ['usage_logs', 'cache_read',      '缓存读取 token 数'],
+    ['usage_logs', 'cache_write',     '缓存写入 token 数'],
+    ['usage_logs', 'duration_ms',     'LLM 调用耗时（毫秒）'],
+    ['usage_logs', 'cost_amount',     '计算费用（美元），无匹配规则时为 NULL'],
+    ['usage_logs', 'cost_currency',   '费用币种'],
+    ['usage_logs', 'pricing_rule_id', '匹配的计价规则 ID'],
+    // pricing_rules
+    ['pricing_rules', 'id',                '自增主键'],
+    ['pricing_rules', 'provider',          'LLM 供应商'],
+    ['pricing_rules', 'model_pattern',     '模型匹配模式（支持末尾 * 通配符）'],
+    ['pricing_rules', 'input_price',       '输入价格 ($/百万 token)'],
+    ['pricing_rules', 'output_price',      '输出价格 ($/百万 token)'],
+    ['pricing_rules', 'cache_read_price',  '缓存读取价格 ($/百万 token)'],
+    ['pricing_rules', 'cache_write_price', '缓存写入价格 ($/百万 token)'],
+    ['pricing_rules', 'currency',          '价格币种'],
+    ['pricing_rules', 'effective_from',    '生效起始日期 (ISO 8601)'],
+    ['pricing_rules', 'effective_to',      '生效截止日期（NULL 表示永久有效）'],
+    ['pricing_rules', 'source',            '价格来源说明'],
+    ['pricing_rules', 'priority',          '匹配优先级（越大越优先）'],
+    // schema_comments
+    ['schema_comments', 'table_name',  '所属表名'],
+    ['schema_comments', 'column_name', '字段名'],
+    ['schema_comments', 'comment',     '字段说明'],
+  ]
+
+  const tx = db.transaction(() => {
+    for (const [table, column, comment] of comments) {
+      upsert.run(table, column, comment)
     }
   })
   tx()
