@@ -139,7 +139,14 @@ export class AgentLoop {
         const mapped = this.#mapChunk(chunk, pendingToolCalls)
         if (mapped) {
           if (mapped.type === 'error') {
-            yield makeLlmError(chunk.error ?? 'unknown error', outputTokens)
+            const errorMsg = chunk.error ?? 'unknown error'
+            // Provider 将 abort 错误包装为 error chunk（不抛出）→ 重新抛出使 catch 路径生效
+            if (errorMsg.toLowerCase().includes('aborted')) {
+              const abortErr = new Error(errorMsg)
+              abortErr.name = 'AbortError'
+              throw abortErr
+            }
+            yield makeLlmError(errorMsg, outputTokens)
             yield mapped
             return { toolCalls: [], aborted: true }
           }
