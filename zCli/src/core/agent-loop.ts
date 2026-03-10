@@ -39,7 +39,7 @@ export type AgentEvent =
   | { type: 'done' }
   // 观测事件
   | { type: 'llm_start';          provider: string; model: string; messageCount: number }
-  | { type: 'llm_usage';          inputTokens: number; outputTokens: number; stopReason: string }
+  | { type: 'llm_usage';          inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; stopReason: string }
   | { type: 'llm_error';          error: string; partialOutputTokens?: number }
   | { type: 'tool_fallback';      toolName: string; fromLevel: string; toLevel: string; reason: string }
   | { type: 'permission_grant';   toolName: string; always: boolean }
@@ -128,6 +128,8 @@ export class AgentLoop {
     const pendingToolCalls: ToolCallContent[] = []
     let inputTokens = 0
     let outputTokens = 0
+    let cacheReadTokens = 0
+    let cacheWriteTokens = 0
 
     try {
       for await (const chunk of this.#provider.chat(chatRequest)) {
@@ -143,14 +145,16 @@ export class AgentLoop {
         if (chunk.type === 'usage' && chunk.usage) {
           inputTokens = chunk.usage.inputTokens
           outputTokens = chunk.usage.outputTokens
+          cacheReadTokens = chunk.usage.cacheReadTokens
+          cacheWriteTokens = chunk.usage.cacheWriteTokens
         }
       }
 
-      yield { type: 'llm_usage', inputTokens, outputTokens, stopReason: 'end_turn' }
+      yield { type: 'llm_usage', inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, stopReason: 'end_turn' }
       return { toolCalls: pendingToolCalls, aborted: false }
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
-        yield { type: 'llm_usage', inputTokens, outputTokens, stopReason: 'abort' }
+        yield { type: 'llm_usage', inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, stopReason: 'abort' }
       } else {
         yield makeLlmError(err instanceof Error ? err.message : String(err), outputTokens)
       }

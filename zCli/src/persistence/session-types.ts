@@ -52,6 +52,8 @@ export interface SessionEvent {
   /** LLM 调用相关 */
   inputTokens?: number
   outputTokens?: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
   stopReason?: string        // 'end_turn' | 'max_tokens' | 'abort' | 'error'
   messageCount?: number      // 发送给 LLM 的消息数
 
@@ -77,6 +79,8 @@ export interface SessionEvent {
   /** 会话汇总 (session_end) */
   totalInputTokens?: number
   totalOutputTokens?: number
+  totalCacheReadTokens?: number
+  totalCacheWriteTokens?: number
   totalToolCalls?: number
   totalLlmCalls?: number
   totalErrors?: number

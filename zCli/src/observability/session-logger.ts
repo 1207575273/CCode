@@ -20,6 +20,8 @@ import type { McpConnectEvent } from '@mcp/mcp-manager.js'
 interface TurnStats {
   totalInputTokens: number
   totalOutputTokens: number
+  totalCacheReadTokens: number
+  totalCacheWriteTokens: number
   totalToolCalls: number
   totalLlmCalls: number
   totalErrors: number
@@ -70,9 +72,13 @@ export class SessionLogger {
       case 'llm_usage':
         this.#turnStats.totalInputTokens += event.inputTokens
         this.#turnStats.totalOutputTokens += event.outputTokens
+        this.#turnStats.totalCacheReadTokens += event.cacheReadTokens
+        this.#turnStats.totalCacheWriteTokens += event.cacheWriteTokens
         this.#appendEvent('llm_call_end', {
           inputTokens: event.inputTokens,
           outputTokens: event.outputTokens,
+          cacheReadTokens: event.cacheReadTokens,
+          cacheWriteTokens: event.cacheWriteTokens,
           stopReason: event.stopReason,
         })
         break
@@ -194,6 +200,8 @@ export class SessionLogger {
     this.#appendEvent('session_end', {
       totalInputTokens: this.#turnStats.totalInputTokens,
       totalOutputTokens: this.#turnStats.totalOutputTokens,
+      totalCacheReadTokens: this.#turnStats.totalCacheReadTokens,
+      totalCacheWriteTokens: this.#turnStats.totalCacheWriteTokens,
       totalToolCalls: this.#turnStats.totalToolCalls,
       totalLlmCalls: this.#turnStats.totalLlmCalls,
       totalErrors: this.#turnStats.totalErrors,
@@ -226,6 +234,8 @@ export class SessionLogger {
     return {
       totalInputTokens: 0,
       totalOutputTokens: 0,
+      totalCacheReadTokens: 0,
+      totalCacheWriteTokens: 0,
       totalToolCalls: 0,
       totalLlmCalls: 0,
       totalErrors: 0,

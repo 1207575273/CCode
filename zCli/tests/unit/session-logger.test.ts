@@ -50,7 +50,7 @@ describe('SessionLogger.consume', () => {
 
   it('should_write_llm_call_end_event_with_tokens', () => {
     logger.ensureSession('anthropic', 'claude')
-    const added = consumeAndRead({ type: 'llm_usage', inputTokens: 100, outputTokens: 50, stopReason: 'end_turn' })
+    const added = consumeAndRead({ type: 'llm_usage', inputTokens: 100, outputTokens: 50, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
     expect(added).toHaveLength(1)
     expect(added[0]!.type).toBe('llm_call_end')
     expect(added[0]!.inputTokens).toBe(100)
@@ -114,7 +114,7 @@ describe('SessionLogger.consume', () => {
   it('should_chain_parentUuid_correctly', () => {
     logger.ensureSession('anthropic', 'claude')
     logger.consume({ type: 'llm_start', provider: 'anthropic', model: 'claude', messageCount: 1 })
-    logger.consume({ type: 'llm_usage', inputTokens: 10, outputTokens: 5, stopReason: 'end_turn' })
+    logger.consume({ type: 'llm_usage', inputTokens: 10, outputTokens: 5, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
     const events = readEvents()
     // session_start → llm_call_start → llm_call_end
     expect(events).toHaveLength(3)
@@ -194,7 +194,7 @@ describe('SessionLogger.finalize', () => {
     logger.ensureSession('anthropic', 'claude')
     // 模拟一轮对话
     logger.consume({ type: 'llm_start', provider: 'anthropic', model: 'claude', messageCount: 1 })
-    logger.consume({ type: 'llm_usage', inputTokens: 100, outputTokens: 50, stopReason: 'end_turn' })
+    logger.consume({ type: 'llm_usage', inputTokens: 100, outputTokens: 50, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
     logger.consume({ type: 'tool_start', toolName: 'bash', toolCallId: 'tc1', args: {} })
     logger.consume({ type: 'tool_done', toolName: 'bash', toolCallId: 'tc1', durationMs: 100, success: true })
     logger.consume({ type: 'error', error: 'test error' })

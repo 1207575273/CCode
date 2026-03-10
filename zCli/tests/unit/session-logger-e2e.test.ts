@@ -54,7 +54,7 @@ describe('E2E: 完整对话链路', () => {
     // LLM 调用
     logger.consume({ type: 'llm_start', provider: 'anthropic', model: 'claude', messageCount: 1 })
     logger.consume({ type: 'text', text: '你好！' })  // text 不写日志
-    logger.consume({ type: 'llm_usage', inputTokens: 100, outputTokens: 50, stopReason: 'end_turn' })
+    logger.consume({ type: 'llm_usage', inputTokens: 100, outputTokens: 50, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
     logger.consume({ type: 'done' })  // done 不写日志
 
     logger.logAssistantMessage('你好！', 'claude')
@@ -88,7 +88,7 @@ describe('E2E: 完整对话链路', () => {
 
     // 第一轮 LLM：决定调用工具
     logger.consume({ type: 'llm_start', provider: 'anthropic', model: 'claude', messageCount: 1 })
-    logger.consume({ type: 'llm_usage', inputTokens: 200, outputTokens: 30, stopReason: 'end_turn' })
+    logger.consume({ type: 'llm_usage', inputTokens: 200, outputTokens: 30, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
 
     // 工具执行
     logger.consume({ type: 'tool_start', toolName: 'read_file', toolCallId: 'tc1', args: { path: 'foo.ts' } })
@@ -96,7 +96,7 @@ describe('E2E: 完整对话链路', () => {
 
     // 第二轮 LLM：根据工具结果回复
     logger.consume({ type: 'llm_start', provider: 'anthropic', model: 'claude', messageCount: 3 })
-    logger.consume({ type: 'llm_usage', inputTokens: 500, outputTokens: 100, stopReason: 'end_turn' })
+    logger.consume({ type: 'llm_usage', inputTokens: 500, outputTokens: 100, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
     logger.consume({ type: 'done' })
 
     logger.logAssistantMessage('文件内容是...', 'claude')
@@ -138,7 +138,7 @@ describe('E2E: 完整对话链路', () => {
 
     // LLM 调用
     logger.consume({ type: 'llm_start', provider: 'anthropic', model: 'claude', messageCount: 1 })
-    logger.consume({ type: 'llm_usage', inputTokens: 50, outputTokens: 20, stopReason: 'end_turn' })
+    logger.consume({ type: 'llm_usage', inputTokens: 50, outputTokens: 20, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
     logger.consume({ type: 'done' })
 
     logger.logAssistantMessage('hi', 'claude')
@@ -190,7 +190,7 @@ describe('E2E: 完整对话链路', () => {
     logger.ensureSession('anthropic', 'claude')
     logger.logUserMessage('test')
     logger.consume({ type: 'llm_start', provider: 'anthropic', model: 'claude', messageCount: 1 })
-    logger.consume({ type: 'llm_usage', inputTokens: 10, outputTokens: 5, stopReason: 'end_turn' })
+    logger.consume({ type: 'llm_usage', inputTokens: 10, outputTokens: 5, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
     logger.consume({ type: 'tool_start', toolName: 'bash', toolCallId: 'tc1', args: { command: 'ls' } })
     logger.consume({ type: 'tool_done', toolName: 'bash', toolCallId: 'tc1', durationMs: 100, success: true, resultSummary: 'files' })
     logger.logAssistantMessage('done', 'claude')
@@ -225,7 +225,7 @@ describe('E2E: 完整对话链路', () => {
 
     // LLM
     logger.consume({ type: 'llm_start', provider: 'a', model: 'm', messageCount: 1 })
-    logger.consume({ type: 'llm_usage', inputTokens: 10, outputTokens: 5, stopReason: 'end_turn' })
+    logger.consume({ type: 'llm_usage', inputTokens: 10, outputTokens: 5, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
 
     // Tool
     logger.consume({ type: 'tool_start', toolName: 'bash', toolCallId: 'tc1', args: {} })
@@ -233,7 +233,7 @@ describe('E2E: 完整对话链路', () => {
 
     // 再一轮 LLM
     logger.consume({ type: 'llm_start', provider: 'a', model: 'm', messageCount: 3 })
-    logger.consume({ type: 'llm_usage', inputTokens: 20, outputTokens: 10, stopReason: 'end_turn' })
+    logger.consume({ type: 'llm_usage', inputTokens: 20, outputTokens: 10, cacheReadTokens: 0, cacheWriteTokens: 0, stopReason: 'end_turn' })
     logger.consume({ type: 'done' })
 
     logger.logAssistantMessage('ok', 'm')
