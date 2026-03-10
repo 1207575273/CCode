@@ -4,15 +4,23 @@ import type { ToolRegistry } from '@tools/registry.js'
 import type { Message, ToolCallContent } from './types.js'
 
 export type AgentEvent =
+  // 已有
   | { type: 'text';               text: string }
   | { type: 'tool_start';         toolName: string; toolCallId: string; args: Record<string, unknown> }
-  | { type: 'tool_done';          toolName: string; toolCallId: string; durationMs: number; success: boolean }
+  | { type: 'tool_done';          toolName: string; toolCallId: string; durationMs: number; success: boolean; resultSummary?: string }
   | { type: 'permission_request'; toolName: string; args: Record<string, unknown>; resolve: (allow: boolean) => void }
   | { type: 'error';              error: string }
   | { type: 'done' }
+  // F9 新增：观测事件
+  | { type: 'llm_start';          provider: string; model: string; messageCount: number }
+  | { type: 'llm_usage';          inputTokens: number; outputTokens: number; stopReason: string }
+  | { type: 'llm_error';          error: string; partialOutputTokens?: number }
+  | { type: 'tool_fallback';      toolName: string; fromLevel: string; toLevel: string; reason: string }
+  | { type: 'permission_grant';   toolName: string; always: boolean }
 
 interface AgentConfig {
   model: string
+  provider: string  // provider 名称，用于 llm_start 事件
   signal?: AbortSignal
 }
 
@@ -47,16 +55,44 @@ export class AgentLoop {
         tools: toolDefs,
         ...(this.#config.signal !== undefined ? { signal: this.#config.signal } : {}),
       }
-      for await (const chunk of this.#provider.chat(chatRequest)) {
-        if (chunk.type === 'text' && chunk.text) {
-          yield { type: 'text', text: chunk.text }
-        } else if (chunk.type === 'tool_call' && chunk.toolCall) {
-          pendingToolCalls.push(chunk.toolCall)
-        } else if (chunk.type === 'error') {
-          yield { type: 'error', error: chunk.error ?? 'unknown error' }
-          return
+
+      // F9: LLM 调用前 yield 观测事件
+      yield { type: 'llm_start', provider: this.#config.provider, model: this.#config.model, messageCount: history.length }
+      let llmInputTokens = 0
+      let llmOutputTokens = 0
+
+      try {
+        for await (const chunk of this.#provider.chat(chatRequest)) {
+          if (chunk.type === 'text' && chunk.text) {
+            yield { type: 'text', text: chunk.text }
+          } else if (chunk.type === 'tool_call' && chunk.toolCall) {
+            pendingToolCalls.push(chunk.toolCall)
+          } else if (chunk.type === 'usage' && chunk.usage) {
+            llmInputTokens = chunk.usage.inputTokens
+            llmOutputTokens = chunk.usage.outputTokens
+          } else if (chunk.type === 'error') {
+            const llmErr: AgentEvent = llmOutputTokens > 0
+              ? { type: 'llm_error', error: chunk.error ?? 'unknown error', partialOutputTokens: llmOutputTokens }
+              : { type: 'llm_error', error: chunk.error ?? 'unknown error' }
+            yield llmErr
+            yield { type: 'error', error: chunk.error ?? 'unknown error' }
+            return
+          }
+          // 'done' chunk 不需要 yield，由循环逻辑控制
         }
-        // 'done' / 'usage' chunk 不需要 yield，由循环逻辑控制
+        // F9: LLM 调用正常结束
+        yield { type: 'llm_usage', inputTokens: llmInputTokens, outputTokens: llmOutputTokens, stopReason: 'end_turn' }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if ((err as Error).name === 'AbortError') {
+          yield { type: 'llm_usage', inputTokens: llmInputTokens, outputTokens: llmOutputTokens, stopReason: 'abort' }
+        } else {
+          const catchErr: AgentEvent = llmOutputTokens > 0
+            ? { type: 'llm_error', error: msg, partialOutputTokens: llmOutputTokens }
+            : { type: 'llm_error', error: msg }
+          yield catchErr
+        }
+        throw err
       }
 
       // 无工具调用 → 本轮结束，整个 AgentLoop 结束
@@ -85,8 +121,13 @@ export class AgentLoop {
             role: 'user',
             content: `[Tool ${tc.toolName} was rejected by user]`,
           })
-          yield { type: 'tool_done', toolName: tc.toolName, toolCallId: tc.toolCallId, durationMs: 0, success: false }
+          yield { type: 'tool_done', toolName: tc.toolName, toolCallId: tc.toolCallId, durationMs: 0, success: false, resultSummary: 'rejected by user' }
           continue
+        }
+
+        // F9: 权限授予事件
+        if (this.#registry.isDangerous(tc.toolName)) {
+          yield { type: 'permission_grant', toolName: tc.toolName, always: false }
         }
 
         const start = Date.now()
@@ -94,14 +135,17 @@ export class AgentLoop {
         const durationMs = Date.now() - start
 
         // 将工具结果追加到历史，供下一轮 LLM 参考
-        history.push({
-          role: 'user',
-          content: result.success
-            ? `[Tool ${tc.toolName} result]: ${result.output}`
-            : `[Tool ${tc.toolName} error]: ${result.error ?? 'error'}`,
-        })
+        const resultText = result.success
+          ? `[Tool ${tc.toolName} result]: ${result.output}`
+          : `[Tool ${tc.toolName} error]: ${result.error ?? 'error'}`
+        history.push({ role: 'user', content: resultText })
 
-        yield { type: 'tool_done', toolName: tc.toolName, toolCallId: tc.toolCallId, durationMs, success: result.success }
+        // F9: resultSummary 截断到 200 字符
+        const resultSummary = result.success
+          ? (result.output.length > 200 ? result.output.slice(0, 200) + '...' : result.output)
+          : (result.error ?? 'error')
+
+        yield { type: 'tool_done', toolName: tc.toolName, toolCallId: tc.toolCallId, durationMs, success: result.success, resultSummary }
       }
     }
 

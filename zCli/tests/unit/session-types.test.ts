@@ -22,6 +22,20 @@ describe('SessionEventType', () => {
   it('should reject invalid event type literals', () => {
     expectTypeOf<'invalid_type'>().not.toMatchTypeOf<SessionEventType>()
   })
+
+  // F9 新增事件类型
+  it('should accept F9 observability event types', () => {
+    expectTypeOf<'llm_call_start'>().toMatchTypeOf<SessionEventType>()
+    expectTypeOf<'llm_call_end'>().toMatchTypeOf<SessionEventType>()
+    expectTypeOf<'tool_call_start'>().toMatchTypeOf<SessionEventType>()
+    expectTypeOf<'tool_call_end'>().toMatchTypeOf<SessionEventType>()
+    expectTypeOf<'mcp_connect_start'>().toMatchTypeOf<SessionEventType>()
+    expectTypeOf<'mcp_connect_end'>().toMatchTypeOf<SessionEventType>()
+    expectTypeOf<'tool_fallback'>().toMatchTypeOf<SessionEventType>()
+    expectTypeOf<'permission_grant'>().toMatchTypeOf<SessionEventType>()
+    expectTypeOf<'error'>().toMatchTypeOf<SessionEventType>()
+    expectTypeOf<'session_end'>().toMatchTypeOf<SessionEventType>()
+  })
 })
 
 describe('SessionEvent', () => {
@@ -56,6 +70,31 @@ describe('SessionEvent', () => {
     expectTypeOf<SessionEvent['model']>().toMatchTypeOf<string | undefined>()
     expectTypeOf<SessionEvent['error']>().toMatchTypeOf<string | undefined>()
     expectTypeOf<SessionEvent['durationMs']>().toMatchTypeOf<number | undefined>()
+  })
+
+  // F9 新增字段
+  it('should have F9 LLM-related optional fields', () => {
+    expectTypeOf<SessionEvent['inputTokens']>().toMatchTypeOf<number | undefined>()
+    expectTypeOf<SessionEvent['outputTokens']>().toMatchTypeOf<number | undefined>()
+    expectTypeOf<SessionEvent['stopReason']>().toMatchTypeOf<string | undefined>()
+    expectTypeOf<SessionEvent['messageCount']>().toMatchTypeOf<number | undefined>()
+  })
+
+  it('should have F9 tool/MCP optional fields', () => {
+    expectTypeOf<SessionEvent['success']>().toMatchTypeOf<boolean | undefined>()
+    expectTypeOf<SessionEvent['resultSummary']>().toMatchTypeOf<string | undefined>()
+    expectTypeOf<SessionEvent['serverName']>().toMatchTypeOf<string | undefined>()
+    expectTypeOf<SessionEvent['transport']>().toMatchTypeOf<string | undefined>()
+    expectTypeOf<SessionEvent['toolCount']>().toMatchTypeOf<number | undefined>()
+  })
+
+  it('should have F9 session_end summary fields', () => {
+    expectTypeOf<SessionEvent['totalInputTokens']>().toMatchTypeOf<number | undefined>()
+    expectTypeOf<SessionEvent['totalOutputTokens']>().toMatchTypeOf<number | undefined>()
+    expectTypeOf<SessionEvent['totalToolCalls']>().toMatchTypeOf<number | undefined>()
+    expectTypeOf<SessionEvent['totalLlmCalls']>().toMatchTypeOf<number | undefined>()
+    expectTypeOf<SessionEvent['totalErrors']>().toMatchTypeOf<number | undefined>()
+    expectTypeOf<SessionEvent['totalDurationMs']>().toMatchTypeOf<number | undefined>()
   })
 })
 

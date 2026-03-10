@@ -25,7 +25,7 @@ describe('AgentLoop', () => {
       { type: 'text', text: ' world' },
       { type: 'done' },
     ]])
-    const loop = new AgentLoop(provider, new ToolRegistry(), { model: 'mock' })
+    const loop = new AgentLoop(provider, new ToolRegistry(), { model: 'mock', provider: 'mock' })
     const events: Array<{ type: string; text?: string }> = []
     for await (const e of loop.run([{ role: 'user', content: 'hi' }])) {
       events.push(e)
@@ -51,7 +51,7 @@ describe('AgentLoop', () => {
       [{ type: 'text', text: 'done reading' }, { type: 'done' }],
     ])
 
-    const loop = new AgentLoop(provider, registry, { model: 'mock' })
+    const loop = new AgentLoop(provider, registry, { model: 'mock', provider: 'mock' })
     const events: Array<{ type: string }> = []
     for await (const e of loop.run([{ role: 'user', content: 'read foo.ts' }])) {
       events.push(e)
@@ -59,6 +59,57 @@ describe('AgentLoop', () => {
     expect(events.some(e => e.type === 'tool_start')).toBe(true)
     expect(events.some(e => e.type === 'tool_done')).toBe(true)
     expect(events.some(e => e.type === 'text')).toBe(true)
+  })
+
+  it('LLM 调用 — yield llm_start 和 llm_usage 事件', async () => {
+    const provider = makeProvider([[
+      { type: 'text', text: 'hi' },
+      { type: 'usage', usage: { inputTokens: 100, outputTokens: 50, cacheReadTokens: 0, cacheWriteTokens: 0 } },
+      { type: 'done' },
+    ]])
+    const loop = new AgentLoop(provider, new ToolRegistry(), { model: 'mock', provider: 'mock' })
+    const events: Array<{ type: string }> = []
+    for await (const e of loop.run([{ role: 'user', content: 'test' }])) {
+      events.push(e)
+    }
+    expect(events[0]?.type).toBe('llm_start')
+    expect(events.some(e => e.type === 'llm_usage')).toBe(true)
+    const usage = events.find(e => e.type === 'llm_usage') as { type: string; inputTokens: number; outputTokens: number }
+    expect(usage.inputTokens).toBe(100)
+    expect(usage.outputTokens).toBe(50)
+  })
+
+  it('LLM 错误 — yield llm_error 事件', async () => {
+    const provider = makeProvider([[
+      { type: 'error', error: 'rate limit' },
+    ]])
+    const loop = new AgentLoop(provider, new ToolRegistry(), { model: 'mock', provider: 'mock' })
+    const events: Array<{ type: string }> = []
+    for await (const e of loop.run([{ role: 'user', content: 'test' }])) {
+      events.push(e)
+    }
+    expect(events.some(e => e.type === 'llm_start')).toBe(true)
+    expect(events.some(e => e.type === 'llm_error')).toBe(true)
+    expect(events.some(e => e.type === 'error')).toBe(true)
+  })
+
+  it('工具完成 — tool_done 携带 resultSummary', async () => {
+    const registry = new ToolRegistry()
+    registry.register({
+      name: 'read_file', description: '', parameters: {}, dangerous: false,
+      execute: async () => ({ success: true, output: 'file content here' }),
+    })
+    const provider = makeProvider([
+      [{ type: 'tool_call', toolCall: { type: 'tool_call', toolCallId: 'c1', toolName: 'read_file', args: { path: 'a.ts' } } }, { type: 'done' }],
+      [{ type: 'text', text: 'ok' }, { type: 'done' }],
+    ])
+    const loop = new AgentLoop(provider, registry, { model: 'mock', provider: 'mock' })
+    const events: Array<{ type: string; resultSummary?: string }> = []
+    for await (const e of loop.run([{ role: 'user', content: 'read' }])) {
+      events.push(e)
+    }
+    const toolDone = events.find(e => e.type === 'tool_done')
+    expect(toolDone?.resultSummary).toBe('file content here')
   })
 
   it('危险工具 — yield permission_request 并等待 resolve', async () => {
@@ -76,7 +127,7 @@ describe('AgentLoop', () => {
       [{ type: 'text', text: 'all done' }, { type: 'done' }],
     ])
 
-    const loop = new AgentLoop(provider, registry, { model: 'mock' })
+    const loop = new AgentLoop(provider, registry, { model: 'mock', provider: 'mock' })
     const events: Array<{ type: string; resolve?: (v: boolean) => void }> = []
     for await (const e of loop.run([{ role: 'user', content: 'run ls' }])) {
       if (e.type === 'permission_request') {

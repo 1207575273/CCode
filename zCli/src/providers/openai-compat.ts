@@ -61,10 +61,26 @@ export class OpenAICompatProvider implements LLMProvider {
         allChunks.push(chunk)
       }
 
-      // 聚合 chunk，提取 tool_calls
+      // 聚合 chunk，提取 tool_calls 和 usage
       if (allChunks.length > 0) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const final = allChunks.reduce((a: any, b: any) => a.concat(b))
+
+        // F9: 提取 usage 信息（LangChain OpenAI 在 usage_metadata 或 response_metadata.usage 中）
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const usageMeta = (final as any).usage_metadata ?? (final as any).response_metadata?.usage ?? null
+        if (usageMeta) {
+          yield {
+            type: 'usage',
+            usage: {
+              inputTokens: usageMeta.input_tokens ?? usageMeta.prompt_tokens ?? 0,
+              outputTokens: usageMeta.output_tokens ?? usageMeta.completion_tokens ?? 0,
+              cacheReadTokens: usageMeta.cache_read_input_tokens ?? 0,
+              cacheWriteTokens: usageMeta.cache_creation_input_tokens ?? 0,
+            },
+          }
+        }
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         for (const tc of (final.tool_calls ?? []) as any[]) {
           yield {

@@ -3,6 +3,7 @@
 import type { TokenUsage, MessageContent } from '@core/types.js'
 
 export type SessionEventType =
+  // 已有
   | 'session_start'
   | 'session_resume'
   | 'user'
@@ -11,6 +12,17 @@ export type SessionEventType =
   | 'tool_call'
   | 'tool_result'
   | 'turn_duration'
+  // F9 新增：观测事件
+  | 'llm_call_start'
+  | 'llm_call_end'
+  | 'tool_call_start'
+  | 'tool_call_end'
+  | 'mcp_connect_start'
+  | 'mcp_connect_end'
+  | 'tool_fallback'
+  | 'permission_grant'
+  | 'error'
+  | 'session_end'
 
 export interface SessionEvent {
   sessionId: string
@@ -35,6 +47,40 @@ export interface SessionEvent {
   isError?: boolean
   error?: string
   durationMs?: number
+
+  // F9 新增字段
+  /** LLM 调用相关 */
+  inputTokens?: number
+  outputTokens?: number
+  stopReason?: string        // 'end_turn' | 'max_tokens' | 'abort' | 'error'
+  messageCount?: number      // 发送给 LLM 的消息数
+
+  /** 工具/MCP 相关 */
+  success?: boolean
+  resultSummary?: string     // 结果摘要（截断）
+  serverName?: string
+  transport?: string
+  toolCount?: number         // MCP 发现的工具数
+
+  /** 降级相关 */
+  fromLevel?: string
+  toLevel?: string
+  reason?: string
+
+  /** 权限相关 */
+  always?: boolean
+
+  /** 异常相关 */
+  source?: string            // 'llm' | 'tool' | 'mcp' | 'system'
+  stack?: string
+
+  /** 会话汇总 (session_end) */
+  totalInputTokens?: number
+  totalOutputTokens?: number
+  totalToolCalls?: number
+  totalLlmCalls?: number
+  totalErrors?: number
+  totalDurationMs?: number
 }
 
 export interface SessionSnapshot {

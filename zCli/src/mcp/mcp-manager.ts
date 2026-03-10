@@ -28,6 +28,17 @@ interface ConnectedServer {
   tools: McpTool[]
 }
 
+/** F9: MCP 连接事件，供 SessionLogger 记录 */
+export interface McpConnectEvent {
+  phase: 'start' | 'end'
+  serverName: string
+  transport: string    // 'stdio' | 'sse' | 'streamable-http'
+  success?: boolean
+  toolCount?: number
+  durationMs?: number
+  error?: string
+}
+
 /**
  * MCP Server 连接生命周期管理器。
  * 读取配置 → 连接所有 Server → 收集工具 → 优雅关闭。
@@ -38,6 +49,8 @@ export class McpManager {
   readonly #servers: ConnectedServer[] = []
   /** 所有 server 的状态信息（含失败的），按 connectAll 顺序填充 */
   readonly #allServerInfo: ServerInfo[] = []
+  /** F9: 连接事件回调，用于观测日志 */
+  onConnect?: (event: McpConnectEvent) => void
 
   constructor(config: McpConfigWithSources) {
     this.#mcpServers = config.mcpServers
@@ -51,6 +64,12 @@ export class McpManager {
     const results = await Promise.allSettled(
       entries.map(async ([serverName, serverConfig]) => {
         const source = this.#serverSources[serverName] ?? 'unknown'
+        const transportType = this.#detectTransportType(serverConfig)
+        const startTime = Date.now()
+
+        // F9: 连接前通知
+        this.onConnect?.({ phase: 'start', serverName, transport: transportType })
+
         try {
           const client = new Client({ name: 'zcli', version: '0.1.0' })
           const transport = this.#createTransport(serverConfig)
@@ -67,6 +86,9 @@ export class McpManager {
             return new McpTool(serverName, definition, client)
           })
 
+          // F9: 连接后通知（成功）
+          this.onConnect?.({ phase: 'end', serverName, transport: transportType, success: true, toolCount: tools.length, durationMs: Date.now() - startTime })
+
           return {
             server: { name: serverName, client, tools } as ConnectedServer,
             info: {
@@ -79,6 +101,10 @@ export class McpManager {
           }
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err)
+
+          // F9: 连接后通知（失败）
+          this.onConnect?.({ phase: 'end', serverName, transport: transportType, success: false, error: message, durationMs: Date.now() - startTime })
+
           return {
             server: null,
             info: {
@@ -126,6 +152,13 @@ export class McpManager {
       }
     }
     this.#servers.length = 0
+  }
+
+  /** 检测 transport 类型（用于观测日志） */
+  #detectTransportType(config: McpServerConfig): string {
+    if (config.command) return 'stdio'
+    if (config.type === 'sse') return 'sse'
+    return 'streamable-http'
   }
 
   /** 根据 ServerConfig 创建对应的 Transport */

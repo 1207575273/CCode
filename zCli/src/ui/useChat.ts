@@ -29,8 +29,8 @@ import type { ToolEvent } from './ToolStatusLine.js'
 import { loadMcpConfigWithSources } from '@config/mcp-config.js'
 import { McpManager } from '@mcp/mcp-manager.js'
 import type { ServerInfo } from '@mcp/mcp-manager.js'
+import { SessionLogger } from '@observability/index.js'
 import { sessionStore, generateEventId } from '@persistence/index.js'
-import type { SessionEvent } from '@persistence/index.js'
 
 /** 待用户确认的权限请求，暂停 AgentLoop 直到 resolve 被调用 */
 interface PendingPermission {
@@ -80,12 +80,12 @@ export interface UseChatReturn {
 let mcpManager: McpManager | null = null
 let mcpInitialized = false
 
-/** 模块级当前 sessionId，供退出时打印 resume 提示 */
-let currentSessionId: string | null = null
+/** 模块级 SessionLogger 实例，管理会话持久化和观测事件 */
+export const sessionLogger = new SessionLogger()
 
 /** 获取当前活跃的 sessionId（退出时用于打印 resume 命令） */
 export function getCurrentSessionId(): string | null {
-  return currentSessionId
+  return sessionLogger.sessionId
 }
 
 /** 确保 MCP Server 已初始化连接（幂等，只连接一次） */
@@ -97,6 +97,8 @@ async function ensureMcpInitialized(): Promise<void> {
   if (Object.keys(config.mcpServers).length === 0) return
 
   mcpManager = new McpManager(config)
+  // F9: MCP 连接事件 → SessionLogger
+  mcpManager.onConnect = (event) => sessionLogger.logMcpConnect(event)
   await mcpManager.connectAll()
 }
 
@@ -141,35 +143,6 @@ export function useChat(): UseChatReturn {
   const allowedToolsRef = useRef<Set<string>>(new Set())
   const abortRef = useRef<AbortController | null>(null)
 
-  // Session 持久化 ref：追踪当前 session 和事件链
-  const sessionIdRef = useRef<string | null>(null)
-  const lastEventUuidRef = useRef<string | null>(null)
-
-  /** 确保当前 session 已创建（幂等），返回 sessionId 或空字符串 */
-  function ensureSession(providerName: string, modelName: string): string {
-    if (sessionIdRef.current) return sessionIdRef.current
-    try {
-      const id = sessionStore.create(process.cwd(), providerName, modelName)
-      sessionIdRef.current = id
-      currentSessionId = id
-      lastEventUuidRef.current = null
-      return id
-    } catch {
-      // session 创建失败不阻断对话流
-      return ''
-    }
-  }
-
-  /** 向 session 追加事件，静默处理错误 */
-  function appendSessionEvent(event: SessionEvent): void {
-    try {
-      if (!sessionIdRef.current) return
-      sessionStore.append(sessionIdRef.current, event)
-      lastEventUuidRef.current = event.uuid
-    } catch {
-      // 持久化失败不阻断对话流
-    }
-  }
 
   /**
    * 处理权限确认结果。
@@ -221,6 +194,7 @@ export function useChat(): UseChatReturn {
 
     const loop = new AgentLoop(provider, registry, {
       model: currentModel,
+      provider: currentProvider,
       signal: controller.signal,
     })
 
@@ -230,24 +204,16 @@ export function useChat(): UseChatReturn {
     ;(async () => {
       let accumulated = ''
       try {
-        // 确保 session 已创建，追加 user 事件
-        const sid = ensureSession(currentProvider, currentModel)
-        if (sid) {
-          const userEventId = generateEventId()
-          appendSessionEvent({
-            sessionId: sid,
-            type: 'user',
-            timestamp: new Date().toISOString(),
-            uuid: userEventId,
-            parentUuid: lastEventUuidRef.current,
-            cwd: process.cwd(),
-            message: { role: 'user', content: text },
-          })
-        }
+        // 确保 session 已创建，记录用户消息
+        sessionLogger.ensureSession(currentProvider, currentModel)
+        sessionLogger.logUserMessage(text)
 
         await ensureMcpInitialized()
         registerMcpTools(registry)
         for await (const event of loop.run(history)) {
+          // F9: 观测日志记录
+          sessionLogger.consume(event)
+
           if (event.type === 'text') {
             accumulated += event.text
             setStreamingMessage(accumulated)
@@ -281,20 +247,8 @@ export function useChat(): UseChatReturn {
         if (accumulated) {
           const assistantMsg: ChatMessage = { id: randomUUID(), role: 'assistant', content: accumulated }
           setMessages(prev => [...prev, assistantMsg])
-
-          // 追加 assistant 事件到 session
-          if (sessionIdRef.current) {
-            const assistantEventId = generateEventId()
-            appendSessionEvent({
-              sessionId: sessionIdRef.current,
-              type: 'assistant',
-              timestamp: new Date().toISOString(),
-              uuid: assistantEventId,
-              parentUuid: lastEventUuidRef.current,
-              cwd: process.cwd(),
-              message: { role: 'assistant', content: accumulated, model: currentModel },
-            })
-          }
+          // F9: 记录助手回复
+          sessionLogger.logAssistantMessage(accumulated, currentModel)
         }
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
@@ -343,9 +297,9 @@ export function useChat(): UseChatReturn {
   const loadSession = useCallback((sessionId: string, leafEventUuid?: string): void => {
     try {
       const snapshot = sessionStore.loadMessages(sessionId, leafEventUuid)
-      sessionIdRef.current = sessionId
-      currentSessionId = sessionId
-      lastEventUuidRef.current = null
+
+      // 绑定 SessionLogger 到恢复的会话
+      sessionLogger.bind(sessionId, snapshot.leafEventUuid)
 
       // 恢复消息列表
       const restored: ChatMessage[] = snapshot.messages.map(m => ({
@@ -361,16 +315,18 @@ export function useChat(): UseChatReturn {
 
       // 追加 session_resume 事件
       const resumeEventId = generateEventId()
-      appendSessionEvent({
+      sessionStore.append(sessionId, {
         sessionId,
         type: 'session_resume',
         timestamp: new Date().toISOString(),
         uuid: resumeEventId,
-        parentUuid: lastEventUuidRef.current,
+        parentUuid: sessionLogger.lastEventUuid,
         cwd: process.cwd(),
         provider: snapshot.provider,
         model: snapshot.model,
       })
+      // 更新 logger 的 lastEventUuid
+      sessionLogger.bind(sessionId, resumeEventId)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       appendSystemMessage(`Failed to load session: ${msg}`)
@@ -379,7 +335,7 @@ export function useChat(): UseChatReturn {
 
   /** 从指定消息处分叉，截断消息列表并开始新分支 */
   const forkFromEvent = useCallback((messageId: string): void => {
-    const sid = sessionIdRef.current
+    const sid = sessionLogger.sessionId
     if (!sid) {
       appendSystemMessage('No active session to fork from')
       return
@@ -398,11 +354,11 @@ export function useChat(): UseChatReturn {
       setMessages(restored)
 
       // 将 lastEventUuid 设为分叉点，后续消息将从此处分支
-      lastEventUuidRef.current = messageId
+      sessionLogger.bind(sid, messageId)
 
       // 追加 session_resume 事件标记分叉
       const resumeEventId = generateEventId()
-      appendSessionEvent({
+      sessionStore.append(sid, {
         sessionId: sid,
         type: 'session_resume',
         timestamp: new Date().toISOString(),
@@ -412,6 +368,7 @@ export function useChat(): UseChatReturn {
         provider: currentProvider,
         model: currentModel,
       })
+      sessionLogger.bind(sid, resumeEventId)
 
       appendSystemMessage('Forked from message — new branch started. Continue typing to diverge.')
     } catch (err) {
