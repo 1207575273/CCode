@@ -194,6 +194,10 @@ export class AgentLoop {
     // 分组：safe 并行，dangerous 串行
     const { safe, dangerous } = classifyToolCalls(toolCalls, this.#registry)
 
+    if (safe.length + dangerous.length > 1) {
+      process.stderr.write(`[parallel] ${toolCalls.length} tools → safe: ${safe.map(t => t.toolName).join(',')} | dangerous: ${dangerous.map(t => t.toolName).join(',')}\n`)
+    }
+
     // 1. 并行执行安全工具
     if (safe.length > 0) {
       const events: AgentEvent[] = []
