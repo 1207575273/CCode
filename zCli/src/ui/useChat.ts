@@ -29,7 +29,7 @@ import type { ToolEvent } from './ToolStatusLine.js'
 import { loadMcpConfigWithSources } from '@config/mcp-config.js'
 import { McpManager } from '@mcp/mcp-manager.js'
 import type { ServerInfo } from '@mcp/mcp-manager.js'
-import { SessionLogger } from '@observability/index.js'
+import { SessionLogger, TokenMeter } from '@observability/index.js'
 import { sessionStore, generateEventId } from '@persistence/index.js'
 
 /** 待用户确认的权限请求，暂停 AgentLoop 直到 resolve 被调用 */
@@ -82,6 +82,9 @@ let mcpInitialized = false
 
 /** 模块级 SessionLogger 实例，管理会话持久化和观测事件 */
 export const sessionLogger = new SessionLogger()
+
+/** 模块级 TokenMeter 实例，管理 token 计量和计费 */
+export const tokenMeter = new TokenMeter()
 
 /** 获取当前活跃的 sessionId（退出时用于打印 resume 命令） */
 export function getCurrentSessionId(): string | null {
@@ -205,7 +208,8 @@ export function useChat(): UseChatReturn {
       let accumulated = ''
       try {
         // 确保 session 已创建，记录用户消息
-        sessionLogger.ensureSession(currentProvider, currentModel)
+        const sid = sessionLogger.ensureSession(currentProvider, currentModel)
+        if (sid) tokenMeter.bind(sid, currentProvider, currentModel)
         sessionLogger.logUserMessage(text)
 
         await ensureMcpInitialized()
@@ -213,6 +217,8 @@ export function useChat(): UseChatReturn {
         for await (const event of loop.run(history)) {
           // F9: 观测日志记录
           sessionLogger.consume(event)
+          // F10: token 计量
+          tokenMeter.consume(event)
 
           if (event.type === 'text') {
             accumulated += event.text

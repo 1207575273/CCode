@@ -3,6 +3,7 @@ import React from 'react'
 import { render } from 'ink'
 import { App } from '../src/ui/App.js'
 import { getCurrentSessionId, sessionLogger } from '../src/ui/useChat.js'
+import { closeDb } from '../src/persistence/index.js'
 
 // Simple argument parsing (no external deps)
 const args = process.argv.slice(2)
@@ -50,6 +51,8 @@ function printResumeHint(): void {
 function exitGracefully() {
   // F9: 写入 session_end 汇总事件
   sessionLogger.finalize()
+  // F10: 关闭 SQLite 连接
+  closeDb()
   unmount()
   printResumeHint()
   process.exit(0)
