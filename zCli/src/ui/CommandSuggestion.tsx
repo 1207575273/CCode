@@ -13,6 +13,8 @@ export interface SuggestionItem {
   name: string
   aliases?: readonly string[]
   description: string
+  /** 来源标签（如 "builtin"、"project"），skills 显示来源 */
+  source?: string
 }
 
 export interface CommandSuggestionProps {
@@ -22,38 +24,41 @@ export interface CommandSuggestionProps {
   selectedIndex: number
 }
 
-/** command 列宽，右侧补空格对齐 description */
-const CMD_COL_WIDTH = 10
-
 /**
  * 渲染指令建议浮层。
  *
- * 每行格式：`❯ /name(alias)  description`（高亮行）
- *           `  /name(alias)  description`（其余行）
- * command name 绿色，description dimColor，❯ 绿色。
+ * 指令格式：`/name(alias)       description`
+ * Skill 格式：`/skill-name        (source) description`
  */
 export function CommandSuggestion({ items, selectedIndex }: CommandSuggestionProps) {
+  // 动态计算名称列宽度，适配长 skill 名称
+  const nameColWidth = Math.max(
+    10,
+    ...items.map(item => {
+      const aliasStr = item.aliases?.length ? `(${item.aliases[0]})` : ''
+      return (`/${item.name}${aliasStr}`).length + 2
+    }),
+  )
+
   return (
     <Box flexDirection="column">
       {items.map((item, index) => {
         const isSelected = index === selectedIndex
-        // aliases 展示为 (m) 后缀，如 /model(m)
-        const aliasStr = item.aliases && item.aliases.length > 0
-          ? `(${item.aliases[0]})`
-          : ''
+        const aliasStr = item.aliases?.length ? `(${item.aliases[0]})` : ''
         const nameWithAlias = `/${item.name}${aliasStr}`
-        // 右侧补空格使 description 列对齐
-        const padded = nameWithAlias.padEnd(CMD_COL_WIDTH)
+        const padded = nameWithAlias.padEnd(nameColWidth)
+        // 来源标签：skills 显示 (builtin)/(project) 等
+        const sourceTag = item.source ? `(${item.source}) ` : ''
 
         return (
           <Box key={item.name}>
-            {/* 高亮指示符：❯ 或两空格占位 */}
             {isSelected
               ? <Text color="green">{'❯ '}</Text>
               : <Text>{'  '}</Text>
             }
             <Text color="green">{padded}</Text>
-            <Text dimColor>{'  '}{item.description}</Text>
+            {sourceTag && <Text color="yellow">{sourceTag}</Text>}
+            <Text dimColor>{item.description}</Text>
           </Box>
         )
       })}

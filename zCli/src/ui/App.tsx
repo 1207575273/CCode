@@ -173,10 +173,17 @@ export function App({
   const suggestions: SuggestionItem[] = useMemo(() => {
     if (!inputValue.startsWith('/')) return []
     const query = inputValue.slice(1).toLowerCase()
-    return registry.getAll().filter(cmd =>
-      cmd.name.startsWith(query) ||
-      cmd.aliases?.some(a => a.startsWith(query))
-    )
+
+    // 常规指令
+    const cmdItems: SuggestionItem[] = registry.getAll()
+      .filter(cmd => cmd.name.startsWith(query) || cmd.aliases?.some(a => a.startsWith(query)))
+
+    // Skills 也作为建议项混入
+    const skillItems: SuggestionItem[] = skillStore.getAll()
+      .filter(s => (s.userInvocable ?? true) && s.name.startsWith(query))
+      .map(s => ({ name: s.name, description: s.description, source: s.source }))
+
+    return [...cmdItems, ...skillItems]
   }, [inputValue, registry])
 
   // inputValue 变化时重置高亮索引，避免越界
@@ -203,8 +210,26 @@ export function App({
       return
     }
 
-    // 斜杠指令分发
+    // 斜杠指令分发（含 skill fallback）
     const result = registry.dispatch(trimmed)
+
+    // Skill fallback：registry 不认识的 /xxx 命令，检查是否是 skill 名称
+    // /commit → 提交用户消息让 LLM 调用 skill 工具
+    // /commit <args> → 带参数的 skill 调用
+    if (result.handled && result.action?.type === 'error' && trimmed.startsWith('/')) {
+      const parts = trimmed.slice(1).split(/\s+/)
+      const skillName = parts[0] ?? ''
+      const skillArgs = parts.slice(1).join(' ')
+      const matchedSkill = skillStore.getAll().find(s => s.name === skillName)
+      if (matchedSkill) {
+        const prompt = skillArgs
+          ? `Use the "${skillName}" skill. ${skillArgs}`
+          : `Use the "${skillName}" skill.`
+        submit(prompt)
+        return
+      }
+    }
+
     if (result.handled) {
       const action = result.action
       if (action) {
