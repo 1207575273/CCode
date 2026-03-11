@@ -16,46 +16,16 @@ user-invocable: true
 Hello, World!
 ```
 
-## 能力 2：多语言 Hello World
+## 能力 2：打印语言列表
 
-用以下 4 种语言分别输出 Hello World 程序：
+直接输出以下字符串：
 
-### Java
-
-```java
-public class HelloWorld {
-    public static void main(String[] args) {
-        System.out.println("Hello, World!");
-    }
-}
 ```
-
-### Python
-
-```python
-print("Hello, World!")
-```
-
-### Node.js
-
-```javascript
-console.log("Hello, World!");
-```
-
-### Go
-
-```go
-package main
-
-import "fmt"
-
-func main() {
-    fmt.Println("Hello, World!")
-}
+Java Python Node Go
 ```
 
 ## 执行规则
 
 - 如果用户只说 "hello world" 或 "输出 hello world"，执行能力 1
-- 如果用户提到 "多语言" 或 "java python node go"，执行能力 2
-- 如果不确定，执行能力 2（展示所有语言版本）
+- 如果用户提到 "语言" 或 "java python node go"，执行能力 2
+- 如果不确定，执行能力 2
