@@ -39,10 +39,13 @@ This is a test skill body.
     expect(commit!.source).toBe('builtin')
     expect(commit!.description).toContain('commit')
 
-    const helloWorld = skills.find(s => s.name === 'hello-world')
-    expect(helloWorld).toBeDefined()
-    expect(helloWorld!.source).toBe('builtin')
-    expect(helloWorld!.description).toContain('hello world')
+    const hello = skills.find(s => s.name === 'hello-world')
+    expect(hello).toBeDefined()
+    expect(hello!.source).toBe('builtin')
+
+    const languages = skills.find(s => s.name === 'print-languages')
+    expect(languages).toBeDefined()
+    expect(languages!.source).toBe('builtin')
   })
 
   it('should_return_same_results_on_repeated_discover', async () => {

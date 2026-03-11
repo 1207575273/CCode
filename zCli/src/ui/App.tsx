@@ -141,6 +141,12 @@ export function App({
     }
   }, []) // Only on mount
 
+  // 启动时发现 Skills（幂等），使 / 建议浮层立即可用
+  const [skillsReady, setSkillsReady] = useState(false)
+  useEffect(() => {
+    ensureSkillsDiscovered().then(() => setSkillsReady(true))
+  }, [])
+
   // CommandRegistry — 当 provider/model 变化时重建，确保 /model 指令能感知当前状态
   const registry = useMemo(() => {
     const reg = new CommandRegistry()
@@ -184,7 +190,8 @@ export function App({
       .map(s => ({ name: s.name, description: s.description, source: s.source }))
 
     return [...cmdItems, ...skillItems]
-  }, [inputValue, registry])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputValue, registry, skillsReady])
 
   // inputValue 变化时重置高亮索引，避免越界
   useEffect(() => {
