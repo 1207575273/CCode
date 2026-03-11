@@ -46,6 +46,11 @@ This is a test skill body.
     const languages = skills.find(s => s.name === 'print-languages')
     expect(languages).toBeDefined()
     expect(languages!.source).toBe('builtin')
+
+    const review = skills.find(s => s.name === 'code-review')
+    expect(review).toBeDefined()
+    expect(review!.source).toBe('builtin')
+    expect(review!.description).toContain('review')
   })
 
   it('should_return_same_results_on_repeated_discover', async () => {
@@ -62,6 +67,16 @@ This is a test skill body.
     const content = await store.getContent('commit')
     expect(content).not.toBeNull()
     expect(content).toContain('Conventional Commits')
+  })
+
+  it('should_get_content_for_code_review_skill_with_checklist_reference', async () => {
+    const store = new SkillStore()
+    await store.discover()
+
+    const content = await store.getContent('code-review')
+    expect(content).not.toBeNull()
+    expect(content).toContain('代码审查')
+    expect(content).toContain('checklist.md')
   })
 
   it('should_return_null_for_nonexistent_skill', async () => {

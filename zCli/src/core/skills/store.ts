@@ -46,10 +46,16 @@ export class SkillStore {
     if (this.#discovered) return [...this.#skills.values()]
     this.#discovered = true
 
-    // 按优先级从低到高扫描，后扫描的覆盖先扫描的
-    await this.#scanDir(builtinSkillsDir(), 'builtin')
-    await this.#scanDir(userSkillsDir(), 'user')
-    await this.#scanDir(projectSkillsDir(), 'project')
+    // 三源并行扫描，按优先级从低到高合并（后者覆盖前者）
+    const [builtinSkills, userSkills, projectSkills] = await Promise.all([
+      this.#scanDir(builtinSkillsDir(), 'builtin'),
+      this.#scanDir(userSkillsDir(), 'user'),
+      this.#scanDir(projectSkillsDir(), 'project'),
+    ])
+
+    for (const meta of [...builtinSkills, ...userSkills, ...projectSkills]) {
+      this.#skills.set(meta.name, meta)
+    }
 
     return [...this.#skills.values()]
   }
@@ -98,27 +104,30 @@ export class SkillStore {
     return lines.join('\n')
   }
 
-  /** 扫描指定目录下的 SKILL.md 文件 */
-  async #scanDir(dir: string, source: SkillMetadata['source']): Promise<void> {
+  /** 扫描指定目录下的 SKILL.md 文件，并行读取所有文件 */
+  async #scanDir(dir: string, source: SkillMetadata['source']): Promise<SkillMetadata[]> {
     try {
       // fast-glob 需要 posix 路径（Windows 反斜杠 → 正斜杠）
       const pattern = dir.replace(/\\/g, '/') + '/*/SKILL.md'
       const files = await fg(pattern, { absolute: true })
 
-      for (const filePath of files) {
-        try {
-          const raw = await readFile(filePath, 'utf-8')
-          const { frontmatter } = parseSkillFile(raw)
-          const meta = toSkillMetadata(frontmatter, filePath, source)
-          if (meta) {
-            this.#skills.set(meta.name, meta) // 同名覆盖
+      // 并行读取 + 解析所有 SKILL.md
+      const results = await Promise.all(
+        files.map(async (filePath) => {
+          try {
+            const raw = await readFile(filePath, 'utf-8')
+            const { frontmatter } = parseSkillFile(raw)
+            return toSkillMetadata(frontmatter, filePath, source)
+          } catch {
+            return null
           }
-        } catch {
-          // 单个文件解析失败，跳过
-        }
-      }
+        }),
+      )
+
+      return results.filter((m): m is SkillMetadata => m !== null)
     } catch {
       // 目录不存在，正常情况
+      return []
     }
   }
 }

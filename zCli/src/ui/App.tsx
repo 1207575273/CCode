@@ -84,11 +84,10 @@ export function App({
   const [suggestionIndex, setSuggestionIndex] = useState(0)
   // Tab 补全后递增，使 InputBar key 变化以强制重挂载，确保 cursor 归位到末尾
   const [inputResetKey, setInputResetKey] = useState(0)
-  // useRef: read latest value in async callbacks without closure staleness
-  // (same dual-track pattern as allowedToolsRef in useChat)
-  const suggestionConsumedRef = useRef(false)
   // suggestionIndexRef: useInput 回调内读取最新索引值（避免闭包捕获陈旧 state）
   const suggestionIndexRef = useRef(0)
+  // suggestionsRef: handleSubmit 内读取最新建议列表（避免 useCallback 闭包陈旧）
+  const suggestionsRef = useRef<SuggestionItem[]>([])
   /** /mcp 面板是否正在加载中 */
   const [mcpLoading, setMcpLoading] = useState(false)
   /** /resume 面板是否显示 */
@@ -192,6 +191,7 @@ export function App({
     return [...cmdItems, ...skillItems]
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputValue, registry, skillsReady])
+  suggestionsRef.current = suggestions
 
   // inputValue 变化时重置高亮索引，避免越界
   useEffect(() => {
@@ -200,16 +200,21 @@ export function App({
   }, [inputValue])
 
   const handleSubmit = useCallback((input: string) => {
-    // 建议浮层已通过 useInput 处理了 Enter：
-    // 此时 inputValue 已被 useInput 设为补全后的值（如 '/model '），
-    // 不能在这里清空——否则会覆盖补全结果。直接返回即可。
-    if (suggestionConsumedRef.current) {
-      suggestionConsumedRef.current = false
-      return
-    }
     setInputValue('')
-    const trimmed = input.trim()
-    if (!trimmed) return
+    let trimmed = input.trim()
+
+    // 建议浮层可见时，使用当前选中的建议项替代原始输入
+    // （用户可能只输入了 / 或 /h，但方向键选中了 /hello-world）
+    // 必须在 guard 之前，否则纯 "/" 输入会被提前过滤
+    const activeSuggestions = suggestionsRef.current
+    if (activeSuggestions.length > 0 && trimmed.startsWith('/')) {
+      const selected = activeSuggestions[suggestionIndexRef.current]
+      if (selected) {
+        trimmed = '/' + selected.name
+      }
+    }
+
+    if (!trimmed || trimmed === '/') return
 
     // /exit 和 /quit 不通过 CommandRegistry，直接退出应用
     if (trimmed === '/exit' || trimmed === '/quit') {
@@ -402,24 +407,23 @@ export function App({
     submit(trimmed)
   }, [registry, clearMessages, appendSystemMessage, switchModel, submit, modelItems, exit, getMcpInfo])
 
-  // isActive: 仅在浮层可见时拦截按键，防止与 TextInput 的正常 Enter 冲突
+  // 建议浮层按键：Arrow 导航、Tab 补全、Enter 提交选中项、Escape 取消
   useInput((_input, key) => {
     if (key.upArrow) {
       setSuggestionIndex(i => {
         const next = Math.max(0, i - 1)
-        suggestionIndexRef.current = next  // 同步 ref
+        suggestionIndexRef.current = next
         return next
       })
     }
     if (key.downArrow) {
       setSuggestionIndex(i => {
         const next = Math.min(suggestions.length - 1, i + 1)
-        suggestionIndexRef.current = next  // 同步 ref
+        suggestionIndexRef.current = next
         return next
       })
     }
-    // Tab: 仅补全，不设 ref（Tab 不触发 onSubmit，无需防重触发）
-    // setInputResetKey 强制 InputBar 重挂载，使 ink-text-input 的 cursor 归位到末尾
+    // Tab: 补全选中项到输入框（不提交，方便追加参数）
     if (key.tab) {
       const cmd = suggestions[suggestionIndexRef.current]
       if (cmd) {
@@ -427,17 +431,8 @@ export function App({
         setInputResetKey(k => k + 1)
       }
     }
-    // Enter: 补全并设 ref，阻断 TextInput.onSubmit 的同 tick 重复触发
-    if (key.return) {
-      const cmd = suggestions[suggestionIndexRef.current]
-      if (cmd) {
-        suggestionConsumedRef.current = true
-        setInputValue('/' + cmd.name + ' ')
-        setInputResetKey(k => k + 1)  // 强制 InputBar 重挂载，cursor 归位到末尾
-      }
-    }
+    // Enter: 不拦截，透传给 TextInput.onSubmit → handleSubmit 通过 suggestionsRef 解析选中项
     if (key.escape) {
-      suggestionConsumedRef.current = false  // 清理防双触发标记，防止 ref 残留影响后续 Enter
       setInputValue('')
     }
   }, { isActive: suggestions.length > 0 })
