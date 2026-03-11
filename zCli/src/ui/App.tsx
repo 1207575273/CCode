@@ -411,14 +411,14 @@ export function App({
   useInput((_input, key) => {
     if (key.upArrow) {
       setSuggestionIndex(i => {
-        const next = Math.max(0, i - 1)
+        const next = i <= 0 ? suggestions.length - 1 : i - 1
         suggestionIndexRef.current = next
         return next
       })
     }
     if (key.downArrow) {
       setSuggestionIndex(i => {
-        const next = Math.min(suggestions.length - 1, i + 1)
+        const next = i >= suggestions.length - 1 ? 0 : i + 1
         suggestionIndexRef.current = next
         return next
       })

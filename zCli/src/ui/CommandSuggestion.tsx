@@ -53,12 +53,12 @@ export function CommandSuggestion({ items, selectedIndex }: CommandSuggestionPro
         return (
           <Box key={item.name}>
             {isSelected
-              ? <Text color="green">{'❯ '}</Text>
+              ? <Text color="cyan">{'❯ '}</Text>
               : <Text>{'  '}</Text>
             }
-            <Text color="green">{padded}</Text>
-            {sourceTag && <Text color="yellow">{sourceTag}</Text>}
-            <Text dimColor>{item.description}</Text>
+            <Text color={isSelected ? 'cyan' : 'green'}>{padded}</Text>
+            {sourceTag && <Text color={isSelected ? 'cyan' : 'yellow'}>{sourceTag}</Text>}
+            <Text color={isSelected ? 'cyan' : undefined} dimColor={!isSelected}>{item.description}</Text>
           </Box>
         )
       })}

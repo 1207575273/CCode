@@ -11,7 +11,7 @@
  * - 自动持久化对话到 session JSONL 文件（additive，不影响已有功能）
  */
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { randomUUID } from 'node:crypto'
 import { configManager } from '@config/config-manager.js'
 import { createProvider } from '@providers/registry.js'
@@ -97,6 +97,11 @@ export function useChat(): UseChatReturn {
   // allowedTools state 驱动 UI 重渲染
   const allowedToolsRef = useRef<Set<string>>(new Set())
   const abortRef = useRef<AbortController | null>(null)
+
+  // 组件卸载时自动中止进行中的流式请求，防止更新已卸载组件的状态
+  useEffect(() => {
+    return () => { abortRef.current?.abort() }
+  }, [])
 
 
   /**
