@@ -1,6 +1,6 @@
 // src/tools/grep.ts
 import { readFile, stat } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { resolvePath } from '@platform/path-utils.js'
 import fg from 'fast-glob'
 import type { Tool, ToolContext, ToolResult } from './types.js'
 
@@ -22,7 +22,7 @@ export class GrepTool implements Tool {
 
   async execute(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
     const pattern = String(args['pattern'] ?? '')
-    const searchPath = resolve(ctx.cwd, String(args['path'] ?? ctx.cwd))
+    const searchPath = resolvePath(ctx.cwd, String(args['path'] ?? ctx.cwd))
     const recursive = args['recursive'] !== false
 
     try {

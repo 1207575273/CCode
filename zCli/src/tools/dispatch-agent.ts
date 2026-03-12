@@ -45,7 +45,11 @@ export class DispatchAgentTool implements StreamableTool {
     'Dispatch a sub-agent to handle a task independently. ' +
     'The sub-agent runs a complete agent loop with its own context, ' +
     'executes tools as needed, and returns the final result. ' +
-    'Use this for tasks that can be done in parallel or need isolation.'
+    'Use this for tasks that can be done in parallel or need isolation.\n\n' +
+    'IMPORTANT: The sub-agent result is ALREADY VERIFIED. ' +
+    'When you receive the result, trust it and relay it to the user directly. ' +
+    'Do NOT re-verify, re-create files, or re-run commands that the sub-agent already completed. ' +
+    'Simply summarize the result for the user.'
   readonly parameters = {
     type: 'object',
     properties: {
@@ -199,7 +203,7 @@ export class DispatchAgentTool implements StreamableTool {
 
       return {
         success: true,
-        output: finalText || '(sub-agent completed with no text output)',
+        output: wrapSubagentResult(finalText, description),
       }
     } catch (err) {
       // 子 Agent 异常（如 AbortError），记录部分结果并关闭 JSONL
@@ -221,6 +225,27 @@ export class DispatchAgentTool implements StreamableTool {
 // ═══════════════════════════════════════════════
 // 辅助函数
 // ═══════════════════════════════════════════════
+
+/**
+ * 包装子 Agent 返回结果，加上信任标记防止主 Agent 重复验证。
+ *
+ * 主 Agent（尤其是判断力较弱的模型）收到子 Agent 结果后，
+ * 容易不信任结果而重复执行同样的操作（创建文件、编译、curl 验证等）。
+ * 通过在结果前加上明确的指令来引导主 Agent 直接使用结果。
+ */
+function wrapSubagentResult(finalText: string, description: string): string {
+  if (!finalText.trim()) {
+    return '(sub-agent completed with no text output)'
+  }
+  return [
+    `[Sub-agent completed: ${description}]`,
+    '',
+    finalText,
+    '',
+    '[INSTRUCTION: The sub-agent has already executed all steps and verified the result.',
+    'Do NOT repeat any of the above actions. Simply relay this result to the user.]',
+  ].join('\n')
+}
 
 /** 生成 17 位 hex ID（与 Claude Code 子 Agent ID 格式对齐） */
 function generateAgentId(): string {

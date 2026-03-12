@@ -1,6 +1,6 @@
 // src/tools/edit-file.ts
 import { readFile, writeFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { resolvePath } from '@platform/path-utils.js'
 import type { Tool, ToolContext, ToolResult } from './types.js'
 
 export class EditFileTool implements Tool {
@@ -19,7 +19,7 @@ export class EditFileTool implements Tool {
 
   async execute(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
     const rawPath = String(args['path'] ?? '')
-    const path = resolve(ctx.cwd, rawPath)
+    const path = resolvePath(ctx.cwd, rawPath)
     const oldStr = String(args['old_str'] ?? '')
     const newStr = String(args['new_str'] ?? '')
 

@@ -148,9 +148,11 @@ describe('DispatchAgentTool', () => {
       tool.stream({ description: '测试任务', prompt: '请完成测试' }, ctx),
     )
 
-    // 成功返回
+    // 成功返回（output 包含信任标记包装）
     expect(result.success).toBe(true)
-    expect(result.output).toBe('task completed successfully')
+    expect(result.output).toContain('task completed successfully')
+    expect(result.output).toContain('[Sub-agent completed:')
+    expect(result.output).toContain('Do NOT repeat')
 
     // 应有 subagent_progress 事件（至少一个 llm_start → turn 递增）
     const progressEvents = events.filter(e => e.type === 'subagent_progress')
@@ -174,7 +176,7 @@ describe('DispatchAgentTool', () => {
     )
 
     expect(result.success).toBe(true)
-    expect(result.output).toBe('done reading')
+    expect(result.output).toContain('done reading')
 
     // 应有包含 currentTool 的 progress 事件
     const progressWithTool = events.filter(
@@ -213,7 +215,7 @@ describe('DispatchAgentTool', () => {
     )
 
     expect(result.success).toBe(true)
-    expect(result.output).toBe('fallback result')
+    expect(result.output).toContain('fallback result')
   })
 
   it('llm_usage 事件被透传', async () => {

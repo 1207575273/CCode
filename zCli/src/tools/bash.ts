@@ -1,38 +1,77 @@
 // src/tools/bash.ts
 import { execa, ExecaError } from 'execa'
 import { resolveShell } from '@platform/shell-resolver.js'
+import { detectPlatform } from '@platform/detector.js'
 import type { Tool, ToolContext, ToolResult } from './types.js'
 
-const TIMEOUT_MS = 30_000
+/** 默认超时 120 秒 */
+const DEFAULT_TIMEOUT_MS = 120_000
+/** 最大超时 600 秒（10 分钟） */
+const MAX_TIMEOUT_MS = 600_000
 
 export class BashTool implements Tool {
   readonly name = 'bash'
   readonly dangerous = true
-  readonly description = '执行 Shell 命令。Windows 上优先使用 Git Bash，找不到则用 PowerShell。'
+  readonly description =
+    '执行 Shell 命令。支持 timeout（毫秒，默认 120000，上限 600000）和 run_in_background（后台运行，立即返回 PID）。'
   readonly parameters = {
     type: 'object',
     properties: {
       command: { type: 'string', description: '要执行的 shell 命令' },
       cwd: { type: 'string', description: '工作目录，默认为当前目录' },
+      timeout: {
+        type: 'number',
+        description: '超时时间（毫秒），默认 120000，上限 600000',
+      },
+      run_in_background: {
+        type: 'boolean',
+        description: '后台运行，立即返回进程 PID，不等待命令结束',
+      },
     },
     required: ['command'],
   }
 
   async execute(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
     const command = String(args['command'] ?? '')
+    if (!command.trim()) {
+      return { success: false, output: '', error: '命令不能为空' }
+    }
+
     const cwd = String(args['cwd'] ?? ctx.cwd)
     const shell = resolveShell()
+    const runInBackground = args['run_in_background'] === true
 
+    // 解析 timeout：无效值 / 负数 / 0 → 默认值，超过上限 → 截断
+    const rawTimeout = Number(args['timeout'])
+    const timeout =
+      !Number.isFinite(rawTimeout) || rawTimeout <= 0
+        ? DEFAULT_TIMEOUT_MS
+        : Math.min(rawTimeout, MAX_TIMEOUT_MS)
+
+    // ---- 后台运行模式 ----
+    if (runInBackground) {
+      return this.#runBackground(shell, command, cwd)
+    }
+
+    // ---- 前台运行（等待结束）----
     try {
       const { stdout, stderr } = await execa(shell.path, [...shell.args, command], {
         cwd,
-        timeout: TIMEOUT_MS,
+        timeout,
         reject: true,
       })
       const output = [stdout, stderr].filter(Boolean).join('\n')
       return { success: true, output: output || '(no output)' }
     } catch (err: unknown) {
       if (err instanceof ExecaError) {
+        if (err.timedOut) {
+          const output = [err.stdout, err.stderr].filter(Boolean).join('\n')
+          return {
+            success: false,
+            output,
+            error: `Command timed out after ${timeout} milliseconds`,
+          }
+        }
         const output = [err.stdout, err.stderr].filter(Boolean).join('\n')
         return { success: false, output: output || '', error: err.message }
       }
@@ -40,4 +79,52 @@ export class BashTool implements Tool {
       return { success: false, output: '', error: message }
     }
   }
+
+  /** 后台模式：启动进程后立即 unref 并返回 PID */
+  #runBackground(
+    shell: { path: string; args: string[] },
+    command: string,
+    cwd: string,
+  ): ToolResult {
+    try {
+      const child = execa(shell.path, [...shell.args, command], {
+        cwd,
+        detached: true,
+        stdio: 'ignore',
+      })
+      // 分离子进程，不阻塞父进程退出
+      child.unref()
+
+      // 关键：execa 返回的是 Promise-like 对象，后台进程退出时如果 exitCode != 0
+      // 会产生 rejected promise。不捕获会导致 unhandled rejection 崩溃主进程。
+      child.catch(() => { /* 后台进程退出错误静默忽略 */ })
+
+      const pid = child.pid
+      const killHint = buildKillHint(pid)
+      return {
+        success: true,
+        output: `Background process started (pid: ${pid}). ${killHint}`,
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      return { success: false, output: '', error: message }
+    }
+  }
+}
+
+/**
+ * 根据平台生成终止后台进程的提示命令。
+ *
+ * Windows + Git Bash 环境下 `kill PID` 对 Windows 原生进程不可靠，
+ * 而 `taskkill /F /PID <pid>` 的 `/F` 会被 MSYS 路径转换解释为 Unix 路径。
+ * 解决方案：使用双斜杠 `//F` 绕过 MSYS 路径转换。
+ */
+function buildKillHint(pid: number | undefined): string {
+  if (pid == null) return ''
+  const { isWindows } = detectPlatform()
+  if (isWindows) {
+    // 双斜杠绕过 MSYS 的 Unix 路径自动转换
+    return `Use "taskkill //F //PID ${pid}" to stop it.`
+  }
+  return `Use "kill ${pid}" to stop it.`
 }

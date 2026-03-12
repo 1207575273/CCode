@@ -1,6 +1,7 @@
 // src/tools/write-file.ts
 import { writeFile, mkdir } from 'node:fs/promises'
-import { dirname, resolve } from 'node:path'
+import { dirname } from 'node:path'
+import { resolvePath } from '@platform/path-utils.js'
 import type { Tool, ToolContext, ToolResult } from './types.js'
 
 export class WriteFileTool implements Tool {
@@ -18,7 +19,7 @@ export class WriteFileTool implements Tool {
 
   async execute(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
     const rawPath = String(args['path'] ?? '')
-    const path = resolve(ctx.cwd, rawPath)
+    const path = resolvePath(ctx.cwd, rawPath)
     const content = String(args['content'] ?? '')
 
     try {

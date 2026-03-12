@@ -1,6 +1,6 @@
 // src/tools/read-file.ts
 import { readFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { resolvePath } from '@platform/path-utils.js'
 import type { Tool, ToolContext, ToolResult } from './types.js'
 
 const MAX_CHARS = 20_000
@@ -19,7 +19,7 @@ export class ReadFileTool implements Tool {
 
   async execute(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
     const rawPath = String(args['path'] ?? '')
-    const filePath = resolve(ctx.cwd, rawPath)
+    const filePath = resolvePath(ctx.cwd, rawPath)
 
     try {
       let content = await readFile(filePath, 'utf-8')
