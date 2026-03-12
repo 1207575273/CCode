@@ -23,7 +23,7 @@ import {
 } from '@core/bootstrap.js'
 import type { ChatMessage } from './ChatView.js'
 import type { Message } from '@core/types.js'
-import type { ToolEvent } from './ToolStatusLine.js'
+import type { ToolEvent, SubAgentEvent } from './ToolStatusLine.js'
 import type { ServerInfo } from '@mcp/mcp-manager.js'
 import { sessionStore, generateEventId } from '@persistence/index.js'
 
@@ -44,6 +44,8 @@ export interface UseChatReturn {
   /** null = 空闲；'' = 等待首 token；非空 = 流式内容累积中 */
   streamingMessage: string | null
   toolEvents: ToolEvent[]
+  /** SubAgent 进度事件（动态区实时显示） */
+  subAgentEvents: SubAgentEvent[]
   isStreaming: boolean
   error: string | null
   pendingPermission: PendingPermission | null
@@ -86,6 +88,7 @@ export function useChat(): UseChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streamingMessage, setStreamingMessage] = useState<string | null>(null)
   const [toolEvents, setToolEvents] = useState<ToolEvent[]>([])
+  const [subAgentEvents, setSubAgentEvents] = useState<SubAgentEvent[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null)
@@ -93,9 +96,10 @@ export function useChat(): UseChatReturn {
   const [currentProvider, setCurrentProvider] = useState<string>(() => configManager.load().defaultProvider ?? '')
   const [currentModel, setCurrentModel] = useState<string>(() => configManager.load().defaultModel ?? '')
 
-  // useRef 双轨：allowedToolsRef 供 async 回调读取最新值（避免闭包捕获陈旧 state）；
-  // allowedTools state 驱动 UI 重渲染
+  // useRef 双轨：xxxRef 供 async 回调读取最新值（避免闭包捕获陈旧 state）；
+  // 对应的 state 驱动 UI 重渲染
   const allowedToolsRef = useRef<Set<string>>(new Set())
+  const toolEventsRef = useRef<ToolEvent[]>([])
   const abortRef = useRef<AbortController | null>(null)
 
   // 组件卸载时自动中止进行中的流式请求，防止更新已卸载组件的状态
@@ -145,7 +149,9 @@ export function useChat(): UseChatReturn {
 
     setMessages(prev => [...prev, userMsg])
     setStreamingMessage('')
+    toolEventsRef.current = []
     setToolEvents([])
+    setSubAgentEvents([])
     setIsStreaming(true)
     setError(null)
 
@@ -191,15 +197,54 @@ export function useChat(): UseChatReturn {
           } else if (event.type === 'tool_start') {
             const id = randomUUID()
             pendingToolIds.set(event.toolCallId, id)
-            setToolEvents(prev => [...prev, { id, toolName: event.toolName, args: event.args, status: 'running' }])
+            const newEvent: ToolEvent = { id, toolName: event.toolName, args: event.args, status: 'running' }
+            toolEventsRef.current = [...toolEventsRef.current, newEvent]
+            setToolEvents(toolEventsRef.current)
           } else if (event.type === 'tool_done') {
             const matchId = pendingToolIds.get(event.toolCallId)
             if (matchId) pendingToolIds.delete(event.toolCallId)
-            setToolEvents(prev => prev.map(e =>
-              e.id === matchId
-                ? { ...e, status: event.success ? 'done' as const : 'error' as const, durationMs: event.durationMs }
-                : e
-            ))
+
+            // 从 toolEvents 中查找对应的 running 事件，获取 args
+            const matchedEvent = toolEventsRef.current.find(e => e.id === matchId)
+
+            // 从动态区移除已完成的工具（动态区只保留 running 状态）
+            toolEventsRef.current = toolEventsRef.current.filter(e => e.id !== matchId)
+            setToolEvents(toolEventsRef.current)
+
+            // 写入 messages 历史（Static 永久显示）
+            const toolMsg: ChatMessage = {
+              id: matchId ?? randomUUID(),
+              role: 'tool',
+              content: '',
+              toolCall: {
+                toolName: event.toolName,
+                args: matchedEvent?.args ?? {},
+                durationMs: event.durationMs,
+                success: event.success,
+                ...(event.resultSummary !== undefined ? { resultSummary: event.resultSummary } : {}),
+              },
+            }
+            setMessages(prev => [...prev, toolMsg])
+          } else if (event.type === 'subagent_progress') {
+            // SubAgent 进度：按 agentId 更新或新增
+            setSubAgentEvents(prev => {
+              const idx = prev.findIndex(e => e.agentId === event.agentId)
+              const updated: SubAgentEvent = {
+                id: event.agentId,
+                agentId: event.agentId,
+                description: event.description,
+                status: 'running',
+                turn: event.turn,
+                maxTurns: event.maxTurns,
+                ...(event.currentTool !== undefined ? { currentTool: event.currentTool } : {}),
+              }
+              if (idx >= 0) {
+                const next = [...prev]
+                next[idx] = updated
+                return next
+              }
+              return [...prev, updated]
+            })
           } else if (event.type === 'permission_request') {
             // 白名单工具直接放行，无需弹窗
             if (allowedToolsRef.current.has(event.toolName)) {
@@ -365,6 +410,7 @@ export function useChat(): UseChatReturn {
     messages,
     streamingMessage,
     toolEvents,
+    subAgentEvents,
     isStreaming,
     error,
     pendingPermission,

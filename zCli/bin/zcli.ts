@@ -16,6 +16,11 @@
 
 import { runPipe, readStdin } from '../src/core/pipe-runner.js'
 
+// 过滤 Node.js 内部警告，不泄露到用户终端
+process.on('warning', (warning) => {
+  if (warning.name === 'MaxListenersExceededWarning') return
+})
+
 // ═══ 参数解析（无外部依赖） ═══
 
 interface CliArgs {

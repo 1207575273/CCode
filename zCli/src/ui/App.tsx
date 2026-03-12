@@ -60,6 +60,7 @@ export function App({
     messages,
     streamingMessage,
     toolEvents,
+    subAgentEvents,
     isStreaming,
     error,
     submit,
@@ -483,7 +484,7 @@ export function App({
   return (
     <Box flexDirection="column" width="100%">
       {started ? (
-        <ChatView messages={messages} streamingMessage={streamingMessage} toolEvents={toolEvents} />
+        <ChatView messages={messages} streamingMessage={streamingMessage} toolEvents={toolEvents} subAgentEvents={subAgentEvents} />
       ) : (
         <WelcomeScreen model={currentModel} provider={currentProvider} cwd={cwd} recentSessions={recentSessions} />
       )}
