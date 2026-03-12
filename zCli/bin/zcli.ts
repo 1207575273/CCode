@@ -32,13 +32,14 @@ interface CliArgs {
   yes: boolean
   noTools: boolean
   json: boolean
+  verbose: boolean
 }
 
 function parseArgs(argv: string[]): CliArgs {
   const result: CliArgs = {
     prompt: null, model: null, provider: null,
     resumeSessionId: undefined, showResumeOnStart: false,
-    yes: false, noTools: false, json: false,
+    yes: false, noTools: false, json: false, verbose: false,
   }
 
   const positional: string[] = []
@@ -65,6 +66,8 @@ function parseArgs(argv: string[]): CliArgs {
       result.noTools = true
     } else if (arg === '--json') {
       result.json = true
+    } else if (arg === '--verbose' || arg === '-v') {
+      result.verbose = true
     } else if (!arg.startsWith('-')) {
       positional.push(arg)
     }
@@ -94,6 +97,7 @@ if (args.prompt != null) {
     yes: args.yes,
     noTools: args.noTools,
     json: args.json,
+    verbose: args.verbose,
   })
 } else {
   // 交互模式：启动 Ink REPL

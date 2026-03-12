@@ -12,6 +12,8 @@
  * - --no-tools 禁用工具调用
  */
 
+import { buildArgsSummary } from '@ui/ToolStatusLine.js'
+import { formatDuration } from '@ui/format-utils.js'
 import { configManager } from '@config/config-manager.js'
 import { createProvider } from '@providers/registry.js'
 import { AgentLoop } from './agent-loop.js'
@@ -34,6 +36,8 @@ export interface PipeOptions {
   noTools?: boolean | undefined
   /** JSON 格式输出 */
   json?: boolean | undefined
+  /** 在 stderr 输出工具执行进度 */
+  verbose?: boolean | undefined
 }
 
 export async function runPipe(options: PipeOptions): Promise<void> {
@@ -91,6 +95,15 @@ export async function runPipe(options: PipeOptions): Promise<void> {
         if (!options.json) {
           process.stdout.write(event.text)
         }
+      } else if (event.type === 'tool_start' && options.verbose) {
+        // --verbose: 在 stderr 输出工具进度（不污染 stdout 管道数据）
+        const summary = buildArgsSummary(event.toolName, event.args)
+        process.stderr.write(`[tool] ${event.toolName}: ${summary}...`)
+      } else if (event.type === 'tool_done' && options.verbose) {
+        const icon = event.success ? '✓' : '✗'
+        const duration = formatDuration(event.durationMs)
+        const meta = event.resultSummary ? `  ${event.resultSummary.split('\n')[0]!.slice(0, 60)}` : ''
+        process.stderr.write(` ${icon}${meta}  ${duration}\n`)
       } else if (event.type === 'permission_request') {
         // --yes: 自动批准；否则跳过危险工具
         event.resolve(options.yes === true)
