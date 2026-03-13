@@ -92,24 +92,23 @@ ZCli 的配置文件位于 `~/.zcli/` 目录下，首次启动时自动创建。
 
 ```jsonc
 {
-  // 默认使用的 Provider
   "defaultProvider": "anthropic",
-  // 默认使用的模型
   "defaultModel": "claude-sonnet-4-6",
   "providers": {
+    // Anthropic 官方
     "anthropic": {
       "apiKey": "sk-ant-xxxxx",
       "models": ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"]
     },
-    "openai": {
-      "apiKey": "sk-xxxxx",
-      "models": ["gpt-4o", "gpt-4o-mini"]
-    },
-    // 任意 OpenAI 兼容 Provider，通过 baseURL 指定
+    // OpenAI 兼容协议（GLM、DeepSeek、Ollama 等）
     "glm": {
       "apiKey": "your-api-key",
       "baseURL": "https://open.bigmodel.cn/api/coding/paas/v4",
-      "models": ["glm-4-flash", "glm-4-air", "glm-4"]
+      "models": ["glm-5", "glm-4.7"]
+    },
+    "openai": {
+      "apiKey": "sk-xxxxx",
+      "models": ["gpt-4o", "gpt-4o-mini"]
     }
   }
 }
@@ -122,10 +121,58 @@ ZCli 的配置文件位于 `~/.zcli/` 目录下，首次启动时自动创建。
 | `defaultProvider` | `string` | 启动时默认使用的 Provider 名称 |
 | `defaultModel` | `string` | 启动时默认使用的模型名称 |
 | `providers.<name>.apiKey` | `string` | Provider 的 API Key |
-| `providers.<name>.baseURL` | `string?` | 自定义 API 端点（OpenAI 兼容协议） |
+| `providers.<name>.baseURL` | `string?` | 自定义 API 端点 |
+| `providers.<name>.protocol` | `'anthropic' \| 'openai'?` | 协议类型（见下方说明） |
 | `providers.<name>.models` | `string[]` | 该 Provider 可用的模型列表 |
 
 > 运行时可通过 `/model` 指令或 `/model <模型名>` 快速切换模型。
+
+### 接入 Anthropic 兼容协议的第三方 Provider
+
+ZCli 支持两种 LLM 协议：**Anthropic 原生协议**和 **OpenAI 兼容协议**。
+
+- 名为 `anthropic` 的 provider 自动走 Anthropic 原生协议
+- 其他 provider 默认走 OpenAI 兼容协议
+- 通过 `protocol` 字段可以显式指定协议类型
+
+如果你使用的第三方 API 兼容 Anthropic Messages API（如 MiniMax），需要声明 `"protocol": "anthropic"`：
+
+```jsonc
+{
+  "defaultProvider": "minimax",
+  "defaultModel": "MiniMax-M2.5",
+  "providers": {
+    "minimax": {
+      "apiKey": "your-minimax-api-key",
+      "baseURL": "https://api.minimaxi.com/anthropic",
+      "protocol": "anthropic",
+      "models": ["MiniMax-M2.5", "MiniMax-M2.5-highspeed"]
+    }
+  }
+}
+```
+
+更多示例：
+
+```jsonc
+{
+  "providers": {
+    // DeepSeek — OpenAI 兼容，不需要写 protocol
+    "deepseek": {
+      "apiKey": "sk-xxx",
+      "baseURL": "https://api.deepseek.com/v1",
+      "models": ["deepseek-chat", "deepseek-reasoner"]
+    },
+    // 某个兼容 Anthropic API 的代理
+    "my-proxy": {
+      "apiKey": "proxy-key",
+      "baseURL": "https://my-proxy.example.com/anthropic/v1",
+      "protocol": "anthropic",
+      "models": ["claude-sonnet-4-6"]
+    }
+  }
+}
+```
 
 ### .mcp.json — MCP Server 配置
 
@@ -191,11 +238,50 @@ ZCli 支持 [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) 协
 
 ---
 
+## 项目级权限配置
+
+ZCli 支持项目级工具权限白名单，白名单内的工具执行时无需确认，不在白名单内的仍遵循原有的询问确认机制。
+
+### 配置文件
+
+路径：`<项目根目录>/.zcli/settings.local.json`（首次启动时自动创建空模板）
+
+```jsonc
+{
+  "permissions": {
+    "allow": [
+      "Bash(*)",           // bash 命令免确认
+      "Read(*)",           // 读文件免确认
+      "Write(*)",          // 写文件免确认
+      "Edit(*)",           // 编辑文件免确认
+      "Glob(*)",           // 文件搜索免确认
+      "Grep(*)",           // 内容搜索免确认
+      "mcp__*"             // 所有 MCP 工具免确认
+    ]
+  }
+}
+```
+
+### 规则格式
+
+| 格式 | 示例 | 说明 |
+|------|------|------|
+| `FriendlyName(*)` | `Bash(*)`, `Read(*)` | 友好名匹配，自动解析为实际工具名 |
+| `前缀通配符` | `mcp__*` | 匹配所有以该前缀开头的工具 |
+| `精确工具名` | `mcp__context7__query-docs` | 精确匹配特定工具 |
+| `内部工具名` | `bash`, `read_file` | 直接使用内部注册的工具名 |
+
+> 默认模板为 `"allow": []`（空），即所有危险工具仍需确认。按需添加规则即可。
+
+> 建议将 `.zcli/settings.local.json` 加入 `.gitignore`，避免团队成员间权限配置冲突。
+
+---
+
 ## 技术栈
 
 - **运行时**：Node.js 20 + TypeScript 5（strict 模式）
 - **终端 UI**：Ink 5 + React 18
-- **LLM 调用层**：LangChain（`@langchain/openai` / `@langchain/anthropic` / `@langchain/google-genai`）
+- **LLM 调用层**：`@anthropic-ai/sdk`（Anthropic 原生协议）+ `@langchain/openai`（OpenAI 兼容协议）
 - **Agent Loop**：完全自研（不使用 LangGraph）
 - **包管理**：pnpm
 - **构建**：tsup

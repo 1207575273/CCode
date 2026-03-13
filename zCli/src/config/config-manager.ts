@@ -6,6 +6,8 @@ import { homedir } from 'node:os'
 export interface ProviderConfig {
   apiKey: string
   baseURL?: string
+  /** 协议类型：anthropic 原生 或 openai 兼容（默认 openai） */
+  protocol?: 'anthropic' | 'openai'
   models: string[]
 }
 

@@ -22,6 +22,7 @@ import {
   sessionLogger, tokenMeter,
   buildRegistry, ensureMcpInitialized, registerMcpTools,
 } from './bootstrap.js'
+import { PermissionManager } from '@config/permissions.js'
 import { closeDb } from '@persistence/index.js'
 
 export interface PipeOptions {
@@ -105,8 +106,14 @@ export async function runPipe(options: PipeOptions): Promise<void> {
         const meta = event.resultSummary ? `  ${event.resultSummary.split('\n')[0]!.slice(0, 60)}` : ''
         process.stderr.write(` ${icon}${meta}  ${duration}\n`)
       } else if (event.type === 'permission_request') {
-        // --yes: 自动批准；否则跳过危险工具
-        event.resolve(options.yes === true)
+        // 权限检查：项目级白名单 → --yes 全部放行 → 拒绝
+        const toolNames = registry.getAll().map(t => t.name)
+        const pm = PermissionManager.fromProjectDir(process.cwd(), toolNames)
+        if (pm.isAllowed(event.toolName)) {
+          event.resolve(true)
+        } else {
+          event.resolve(options.yes === true)
+        }
       } else if (event.type === 'error') {
         exitCode = 1
         if (!options.json) {

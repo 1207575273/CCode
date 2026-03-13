@@ -4,8 +4,15 @@ import { OpenAICompatProvider } from './openai-compat.js'
 import type { LLMProvider } from './provider.js'
 import type { ZCliConfig } from '@config/config-manager.js'
 
-// anthropic 使用原生协议，其余全走 OpenAI 兼容
-const NATIVE_ANTHROPIC_PROVIDERS = new Set(['anthropic'])
+/**
+ * 判断协议类型：
+ * 1. 配置了 protocol 字段 → 直接使用
+ * 2. 未配置 → provider 名为 'anthropic' 时走原生协议，其余走 OpenAI 兼容
+ */
+function resolveProtocol(providerName: string, protocol?: 'anthropic' | 'openai'): 'anthropic' | 'openai' {
+  if (protocol) return protocol
+  return providerName === 'anthropic' ? 'anthropic' : 'openai'
+}
 
 export function createProvider(providerName: string, config: ZCliConfig): LLMProvider {
   const providerCfg = config.providers[providerName]
@@ -13,10 +20,11 @@ export function createProvider(providerName: string, config: ZCliConfig): LLMPro
     throw new Error(`Provider "${providerName}" 未在 ~/.zcli/config.json 中配置`)
   }
 
-  if (NATIVE_ANTHROPIC_PROVIDERS.has(providerName)) {
-    return new AnthropicProvider(providerCfg)
+  const protocol = resolveProtocol(providerName, providerCfg.protocol)
+
+  if (protocol === 'anthropic') {
+    return new AnthropicProvider(providerName, providerCfg)
   }
 
-  // 其余均视为 OpenAI 兼容协议（glm / openai / deepseek / ollama 等）
   return new OpenAICompatProvider(providerName, providerCfg)
 }

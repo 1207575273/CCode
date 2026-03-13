@@ -26,6 +26,7 @@ import type { Message } from '@core/types.js'
 import type { ToolEvent, SubAgentEvent } from './ToolStatusLine.js'
 import type { ServerInfo } from '@mcp/mcp-manager.js'
 import { sessionStore, generateEventId } from '@persistence/index.js'
+import { PermissionManager } from '@config/permissions.js'
 
 // 从 bootstrap 重导出，供 bin/zcli.ts 和 App.tsx 使用
 export { sessionLogger, tokenMeter, getCurrentSessionId }
@@ -102,6 +103,9 @@ export function useChat(): UseChatReturn {
   const toolEventsRef = useRef<ToolEvent[]>([])
   const abortRef = useRef<AbortController | null>(null)
 
+  // 项目级权限白名单（lazy 初始化：首次 submit 时基于实际注册工具构建）
+  const permissionManagerRef = useRef<PermissionManager | null>(null)
+
   // 组件卸载时自动中止进行中的流式请求，防止更新已卸载组件的状态
   useEffect(() => {
     return () => { abortRef.current?.abort() }
@@ -136,6 +140,12 @@ export function useChat(): UseChatReturn {
     // 使用 state 中的 provider/model（可能已通过 /model 切换，与 config 文件不同）
     const provider = createProvider(currentProvider, config)
     const registry = buildRegistry()
+
+    // 首次 submit 时基于实际注册工具构建权限管理器
+    if (!permissionManagerRef.current) {
+      const toolNames = registry.getAll().map(t => t.name)
+      permissionManagerRef.current = PermissionManager.fromProjectDir(process.cwd(), toolNames)
+    }
 
     const userMsg: ChatMessage = { id: randomUUID(), role: 'user', content: text }
     // 过滤 system 消息，不发送给 LLM（system 消息仅用于 UI 展示）
@@ -247,8 +257,10 @@ export function useChat(): UseChatReturn {
               return [...prev, updated]
             })
           } else if (event.type === 'permission_request') {
-            // 白名单工具直接放行，无需弹窗
-            if (allowedToolsRef.current.has(event.toolName)) {
+            // 权限检查优先级：项目级白名单 → session 级白名单 → 弹窗询问
+            if (permissionManagerRef.current?.isAllowed(event.toolName)) {
+              event.resolve(true)
+            } else if (allowedToolsRef.current.has(event.toolName)) {
               event.resolve(true)
             } else {
               setPendingPermission({ toolName: event.toolName, args: event.args, resolve: event.resolve })

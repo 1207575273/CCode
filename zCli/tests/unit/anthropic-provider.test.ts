@@ -1,23 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Mock LangChain BEFORE importing provider
-vi.mock('@langchain/anthropic', () => {
-  const makeChunk = (content: string) => ({
-    content,
-    tool_calls: [] as unknown[],
-    concat(other: { content: string; tool_calls: unknown[] }) {
-      return makeChunk(this.content + other.content)
-    },
-  })
-  const mockStream = async function* () {
-    yield makeChunk('hello ')
-    yield makeChunk('world')
-  }
+// Mock @anthropic-ai/sdk BEFORE importing provider
+vi.mock('@anthropic-ai/sdk', () => {
   return {
-    ChatAnthropic: vi.fn().mockImplementation(function () {
+    default: vi.fn().mockImplementation(function () {
       return {
-        stream: vi.fn().mockImplementation(mockStream),
-        getNumTokens: vi.fn().mockResolvedValue(10),
+        messages: {
+          stream: vi.fn().mockImplementation(() => {
+            // 默认：返回纯文本流
+            const events = [
+              { type: 'content_block_delta', delta: { type: 'text_delta', text: 'hello ' } },
+              { type: 'content_block_delta', delta: { type: 'text_delta', text: 'world' } },
+            ]
+            const finalMessage = {
+              content: [{ type: 'text', text: 'hello world' }],
+              usage: { input_tokens: 10, output_tokens: 5 },
+              stop_reason: 'end_turn',
+            }
+            return {
+              [Symbol.asyncIterator]: async function* () {
+                for (const e of events) yield e
+              },
+              finalMessage: async () => finalMessage,
+            }
+          }),
+        },
       }
     }),
   }
@@ -30,7 +37,7 @@ describe('AnthropicProvider', () => {
   let provider: AnthropicProvider
 
   beforeEach(() => {
-    provider = new AnthropicProvider({
+    provider = new AnthropicProvider('anthropic', {
       apiKey: 'sk-test',
       models: ['claude-sonnet-4-6'],
     })
@@ -57,28 +64,45 @@ describe('AnthropicProvider', () => {
     }
     const textChunks = chunks.filter(c => c.type === 'text')
     const doneChunks = chunks.filter(c => c.type === 'done')
+    const usageChunks = chunks.filter(c => c.type === 'usage')
     expect(textChunks.length).toBeGreaterThan(0)
     expect(doneChunks).toHaveLength(1)
+    expect(usageChunks).toHaveLength(1)
     const fullText = textChunks.map(c => c.text).join('')
     expect(fullText).toBe('hello world')
   })
 
   it('chat 带 tools 时返回 tool_call chunk', async () => {
-    // 重新 mock，让 stream 返回带 tool_calls 的 chunk
-    const { ChatAnthropic } = await import('@langchain/anthropic')
-    const mockChunkWithTool = {
-      content: '',
-      tool_calls: [{ name: 'read_file', args: { path: 'foo.ts' }, id: 'call_1' }],
-      concat: (_other: unknown) => mockChunkWithTool,
-    }
-    vi.mocked(ChatAnthropic).mockImplementationOnce(function () {
+    const Anthropic = (await import('@anthropic-ai/sdk')).default
+    vi.mocked(Anthropic).mockImplementationOnce(function () {
       return {
-        bindTools: vi.fn().mockReturnThis(),
-        stream: vi.fn().mockImplementation(async function* () {
-          yield mockChunkWithTool
-        }),
-        getNumTokens: vi.fn().mockResolvedValue(5),
-      } as unknown as InstanceType<typeof ChatAnthropic>
+        messages: {
+          stream: vi.fn().mockImplementation(() => {
+            const events = [
+              { type: 'content_block_delta', delta: { type: 'text_delta', text: '' } },
+            ]
+            const finalMessage = {
+              content: [
+                { type: 'tool_use', id: 'call_1', name: 'read_file', input: { path: 'foo.ts' } },
+              ],
+              usage: { input_tokens: 10, output_tokens: 5 },
+              stop_reason: 'tool_use',
+            }
+            return {
+              [Symbol.asyncIterator]: async function* () {
+                for (const e of events) yield e
+              },
+              finalMessage: async () => finalMessage,
+            }
+          }),
+        },
+      } as unknown as InstanceType<typeof Anthropic>
+    })
+
+    // 需要新建 provider 让 mock 生效
+    const p = new AnthropicProvider('anthropic', {
+      apiKey: 'sk-test',
+      models: ['claude-sonnet-4-6'],
     })
 
     const req: ChatRequest = {
@@ -87,11 +111,31 @@ describe('AnthropicProvider', () => {
       tools: [{ name: 'read_file', description: 'read', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } }],
     }
     const chunks = []
-    for await (const chunk of provider.chat(req)) {
+    for await (const chunk of p.chat(req)) {
       chunks.push(chunk)
     }
     const toolChunks = chunks.filter(c => c.type === 'tool_call')
     expect(toolChunks).toHaveLength(1)
     expect((toolChunks[0] as { type: string; toolCall?: { toolName: string } })?.toolCall?.toolName).toBe('read_file')
+  })
+
+  it('第三方 provider 使用 baseURL + authToken', async () => {
+    const Anthropic = vi.mocked((await import('@anthropic-ai/sdk')).default)
+    Anthropic.mockClear()
+
+    new AnthropicProvider('minimax', {
+      apiKey: 'mm-key',
+      baseURL: 'https://api.minimaxi.com/anthropic',
+      protocol: 'anthropic',
+      models: ['MiniMax-M2.5'],
+    })
+
+    expect(Anthropic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseURL: 'https://api.minimaxi.com/anthropic',
+        apiKey: 'mm-key',
+        defaultHeaders: { 'Authorization': 'Bearer mm-key' },
+      }),
+    )
   })
 })

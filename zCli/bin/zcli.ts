@@ -15,11 +15,21 @@
  */
 
 import { runPipe, readStdin } from '../src/core/pipe-runner.js'
+import { initialize } from '../src/core/initializer.js'
 
 // 过滤 Node.js 内部警告，不泄露到用户终端
 process.on('warning', (warning) => {
   if (warning.name === 'MaxListenersExceededWarning') return
 })
+
+// ═══ 启动初始化 ═══
+const initResult = initialize()
+if (initResult.created.length > 0) {
+  process.stderr.write(`[init] 已创建: ${initResult.created.join(', ')}\n`)
+}
+for (const warn of initResult.warnings) {
+  process.stderr.write(`[init] ⚠ ${warn}\n`)
+}
 
 // ═══ 参数解析（无外部依赖） ═══
 
