@@ -238,6 +238,68 @@ ZCli 支持 [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) 协
 
 ---
 
+## 指令文件（ZCLI.md / CLAUDE.md）
+
+ZCli 支持通过指令文件向 LLM 注入自定义规范和偏好，**完全兼容 Claude Code 的 CLAUDE.md 生态**。
+
+### 工作原理
+
+启动时自动扫描以下位置的指令文件，内容注入 system prompt，LLM 在每次对话中自动遵循。
+
+**每个层级优先查找 `ZCLI.md`，没有则 fallback 到 `CLAUDE.md`**（同层只取一个）。
+
+### 查找顺序
+
+| 优先级 | 路径 | 说明 |
+|--------|------|------|
+| 1 | `~/.zcli/ZCLI.md` → `~/.claude/CLAUDE.md` | 全局用户级 — 你的通用编码习惯和偏好 |
+| 2 | `<git-root>/ZCLI.md` → `<git-root>/CLAUDE.md` | 项目根 — 团队共享的项目规范 |
+| 3 | `<git-root>/.zcli/ZCLI.md` → `<git-root>/.claude/CLAUDE.md` | 项目配置目录 |
+| 4 | `<cwd>/ZCLI.md` → `<cwd>/CLAUDE.md` | 当前工作目录（仅当 cwd ≠ git-root 时） |
+
+所有找到的文件内容会按层级顺序拼接，一起注入 system prompt。
+
+### 兼容 Claude Code
+
+如果你已经在使用 Claude Code 并配置了 `CLAUDE.md`，**无需任何改动**，ZCli 会自动加载：
+
+- `~/.claude/CLAUDE.md` — 你的全局 Claude Code 指令会被 ZCli 直接复用
+- `<项目>/CLAUDE.md` — 项目级 Claude Code 指令同样生效
+
+当你想为 ZCli 定制不同于 Claude Code 的指令时，在同层级放一个 `ZCLI.md` 即可覆盖 `CLAUDE.md`。
+
+### 示例
+
+**全局指令**（`~/.zcli/ZCLI.md` 或 `~/.claude/CLAUDE.md`）：
+
+```markdown
+# 编码规范
+
+- 永远使用中文与我对话
+- Git 提交信息遵循 Conventional Commits 格式
+- 优先使用 TypeScript，strict 模式
+- 异常处理：禁止空 catch 块
+```
+
+**项目级指令**（`<项目根>/ZCLI.md` 或 `<项目根>/CLAUDE.md`）：
+
+```markdown
+# 项目约定
+
+- 这是一个 React + Vite 项目
+- 组件放在 src/components/，hooks 放在 src/hooks/
+- 使用 Tailwind CSS，不写内联样式
+- 测试框架：Vitest + Testing Library
+```
+
+### 注意事项
+
+- 指令文件在会话启动时加载，**会话期间修改不会自动生效**，需重启对话
+- 空文件或读取失败的文件会被静默跳过，不影响启动
+- REPL 模式和 Pipe 模式（`zcli "问题"`）均会加载指令文件
+
+---
+
 ## 项目级权限配置
 
 ZCli 支持项目级工具权限白名单，白名单内的工具执行时无需确认，不在白名单内的仍遵循原有的询问确认机制。
