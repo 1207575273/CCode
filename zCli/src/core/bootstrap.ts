@@ -24,6 +24,8 @@ import { McpManager } from '@mcp/mcp-manager.js'
 import { SessionLogger, TokenMeter } from '@observability/index.js'
 import { SkillStore } from '@skills/engine/store.js'
 import { SkillTool } from '@skills/engine/skill-tool.js'
+import { loadInstructions, formatInstructionsPrompt } from '@config/instructions-loader.js'
+import type { LoadedInstruction } from '@config/instructions-loader.js'
 
 // ═══ 模块级单例 ═══
 
@@ -69,6 +71,30 @@ export async function ensureSkillsDiscovered(): Promise<void> {
 /** 获取 skills 的 system prompt 段落 */
 export function getSkillsSystemPrompt(): string {
   return skillStore.buildSystemPromptSection()
+}
+
+// ═══ 指令文件（ZCLI.md / CLAUDE.md） ═══
+
+let cachedInstructions: LoadedInstruction[] | null = null
+
+/**
+ * 加载多层级指令文件（幂等，只加载一次）。
+ * 会话期间不热更新，重启生效。
+ */
+export function ensureInstructionsLoaded(): void {
+  if (cachedInstructions != null) return
+  cachedInstructions = loadInstructions(process.cwd())
+}
+
+/** 获取指令文件的 system prompt 段落 */
+export function getInstructionsPrompt(): string {
+  if (cachedInstructions == null) return ''
+  return formatInstructionsPrompt(cachedInstructions)
+}
+
+/** 获取已加载的指令文件列表（诊断/调试用） */
+export function getLoadedInstructions(): LoadedInstruction[] {
+  return cachedInstructions ?? []
 }
 
 /** 确保 MCP Server 已初始化连接（幂等，只连接一次） */

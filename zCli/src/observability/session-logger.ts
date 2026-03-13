@@ -66,6 +66,7 @@ export class SessionLogger {
           provider: event.provider,
           model: event.model,
           messageCount: event.messageCount,
+          ...(event.systemPrompt !== undefined ? { systemPrompt: event.systemPrompt } : {}),
         })
         break
 

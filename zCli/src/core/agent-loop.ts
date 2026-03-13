@@ -70,7 +70,7 @@ export type AgentEvent =
   | { type: 'error';              error: string }
   | { type: 'done' }
   // 观测事件
-  | { type: 'llm_start';          provider: string; model: string; messageCount: number }
+  | { type: 'llm_start';          provider: string; model: string; messageCount: number; systemPrompt?: string }
   | { type: 'llm_usage';          inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; stopReason: string }
   | { type: 'llm_error';          error: string; partialOutputTokens?: number }
   | { type: 'tool_fallback';      toolName: string; fromLevel: string; toLevel: string; reason: string }
@@ -179,7 +179,13 @@ export class AgentLoop {
       ...(this.#config.systemPrompt !== undefined ? { systemPrompt: this.#config.systemPrompt } : {}),
     }
 
-    yield { type: 'llm_start', provider: this.#config.provider, model: this.#config.model, messageCount: history.length }
+    yield {
+      type: 'llm_start',
+      provider: this.#config.provider,
+      model: this.#config.model,
+      messageCount: history.length,
+      ...(this.#config.systemPrompt !== undefined ? { systemPrompt: this.#config.systemPrompt } : {}),
+    }
 
     const pendingToolCalls: ToolCallContent[] = []
     let inputTokens = 0

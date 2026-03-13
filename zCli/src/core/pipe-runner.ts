@@ -21,6 +21,7 @@ import type { Message } from './types.js'
 import {
   sessionLogger, tokenMeter,
   buildRegistry, ensureMcpInitialized, registerMcpTools,
+  ensureInstructionsLoaded, getInstructionsPrompt, getSkillsSystemPrompt,
 } from './bootstrap.js'
 import { PermissionManager } from '@config/permissions.js'
 import { closeDb } from '@persistence/index.js'
@@ -62,11 +63,17 @@ export async function runPipe(options: PipeOptions): Promise<void> {
   if (sid) tokenMeter.bind(sid, providerName, modelName)
   sessionLogger.logUserMessage(userContent)
 
-  // MCP 工具注册（除非 --no-tools）
+  // MCP 工具注册（除非 --no-tools）+ 指令文件加载
   if (!options.noTools) {
     await ensureMcpInitialized()
     registerMcpTools(registry)
   }
+  ensureInstructionsLoaded()
+
+  // 组合 system prompt：指令文件 + Skills 段落
+  const instructionsPrompt = getInstructionsPrompt()
+  const skillsPrompt = getSkillsSystemPrompt()
+  const systemPrompt = [instructionsPrompt, skillsPrompt].filter(Boolean).join('\n\n') || undefined
 
   const controller = new AbortController()
 
@@ -79,6 +86,7 @@ export async function runPipe(options: PipeOptions): Promise<void> {
     provider: providerName,
     signal: controller.signal,
     nonInteractive: true,
+    ...(systemPrompt !== undefined ? { systemPrompt } : {}),
     ...(sid ? { sessionId: sid } : {}),
   })
 
