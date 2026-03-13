@@ -127,6 +127,32 @@ ZCli 的配置文件位于 `~/.zcli/` 目录下，首次启动时自动创建。
 
 > 运行时可通过 `/model` 指令或 `/model <模型名>` 快速切换模型。
 
+### 快速上手：以 GLM 为例
+
+本项目日常开发使用 **智谱 GLM-5** 驱动。以下是一个最小化的 GLM 配置示例，可直接复制使用：
+
+```jsonc
+{
+  "defaultProvider": "glm",
+  "defaultModel": "glm-5",
+  "providers": {
+    "glm": {
+      "apiKey": "your-zhipu-api-key",        // 智谱开放平台 API Key
+      "baseURL": "https://open.bigmodel.cn/api/coding/paas/v4",
+      "models": ["glm-5", "glm-4.7"]
+    }
+  }
+}
+```
+
+**步骤：**
+
+1. 前往 [智谱开放平台](https://open.bigmodel.cn/) 注册并获取 API Key
+2. 将上述配置写入 `~/.zcli/config.json`，替换 `your-zhipu-api-key` 为你的真实 Key
+3. 启动 ZCli（`pnpm dev`），即可使用 GLM-5 进行对话和 Agent 工具调用
+
+> GLM 走 **OpenAI 兼容协议**，无需额外声明 `protocol` 字段。如需切换模型，在对话中输入 `/model glm-4.7` 即可。
+
 ### 接入 Anthropic 兼容协议的第三方 Provider
 
 ZCli 支持两种 LLM 协议：**Anthropic 原生协议**和 **OpenAI 兼容协议**。
