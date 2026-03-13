@@ -18,6 +18,7 @@ import type { ToolResult, ToolResultMeta } from '@tools/types.js'
 import { isStreamableTool } from '@tools/types.js'
 import type { Message, ToolCallContent, StreamChunk } from './types.js'
 import { classifyToolCalls, executeSafeToolsInParallel } from './parallel-executor.js'
+import type { HookManager } from '@hooks/hook-manager.js'
 
 // ═══════════════════════════════════════════════
 // 类型定义
@@ -99,6 +100,8 @@ export interface AgentConfig {
   sessionId?: string | undefined
   /** 标记非交互模式，工具不可弹出用户界面 */
   nonInteractive?: boolean | undefined
+  /** Hook 管理器（可选，注入后启用 PreToolUse / PostToolUse 钩子） */
+  hookManager?: HookManager | undefined
 }
 
 // ═══════════════════════════════════════════════
@@ -309,6 +312,28 @@ export class AgentLoop {
       return
     }
 
+    // PreToolUse Hook：检查是否被拦截或参数被修改
+    let toolArgs = tc.args
+    if (this.#config.hookManager) {
+      const preResults = await this.#config.hookManager.run('PreToolUse', {
+        trigger: tc.toolName,
+        env: { ZCLI_TOOL_NAME: tc.toolName, ZCLI_TOOL_CALL_ID: tc.toolCallId },
+        stdin: JSON.stringify({ toolName: tc.toolName, args: tc.args }),
+      })
+      for (const r of preResults) {
+        if (!r) continue
+        if (r['decision'] === 'block') {
+          const reason = typeof r['reason'] === 'string' ? r['reason'] : 'blocked by hook'
+          history.push({ role: 'user', content: `[Tool ${tc.toolName} blocked]: ${reason}` })
+          yield { type: 'tool_done', toolName: tc.toolName, toolCallId: tc.toolCallId, durationMs: 0, success: false, resultSummary: reason }
+          return
+        }
+        if (r['decision'] === 'modify' && typeof r['modifiedArgs'] === 'object' && r['modifiedArgs'] !== null) {
+          toolArgs = r['modifiedArgs'] as Record<string, unknown>
+        }
+      }
+    }
+
     // 构建 ToolContext（流式工具需要 provider/registry 来创建子 AgentLoop）
     const ctx = buildToolContext(this.#provider, this.#registry, this.#config)
 
@@ -318,13 +343,22 @@ export class AgentLoop {
     let result: ToolResult
     if (tool && isStreamableTool(tool)) {
       // 流式工具（如 dispatch_agent）：yield* 透传中间事件，return 值为最终结果
-      result = yield* (tool.stream(tc.args, ctx) as AsyncGenerator<AgentEvent, ToolResult>)
+      result = yield* (tool.stream(toolArgs, ctx) as AsyncGenerator<AgentEvent, ToolResult>)
     } else {
       // 普通工具：await execute()
-      result = await this.#registry.execute(tc.toolName, tc.args, ctx)
+      result = await this.#registry.execute(tc.toolName, toolArgs, ctx)
     }
 
     const durationMs = Date.now() - start
+
+    // PostToolUse Hook：工具执行后通知
+    if (this.#config.hookManager) {
+      await this.#config.hookManager.run('PostToolUse', {
+        trigger: tc.toolName,
+        env: { ZCLI_TOOL_NAME: tc.toolName, ZCLI_TOOL_CALL_ID: tc.toolCallId },
+        stdin: JSON.stringify({ toolName: tc.toolName, result: { success: result.success, output: truncate(result.output, 1000) } }),
+      })
+    }
 
     history.push({
       role: 'user',

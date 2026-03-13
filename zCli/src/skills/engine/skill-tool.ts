@@ -39,7 +39,8 @@ export class SkillTool implements Tool {
       return { success: false, output: '', error: 'Missing required parameter: name' }
     }
 
-    const content = await this.#store.getContent(name.trim())
+    const trimmedName = name.trim()
+    const content = await this.#store.getContent(trimmedName)
     if (!content) {
       const available = this.#store.getAll().map(s => s.name).join(', ')
       return {
@@ -47,6 +48,14 @@ export class SkillTool implements Tool {
         output: '',
         error: `Skill "${name}" not found. Available skills: ${available || 'none'}`,
       }
+    }
+
+    // 检查支撑文件，有则附加 <skill-context> 标签
+    const supportingFiles = await this.#store.getSupportingFiles(trimmedName)
+    if (supportingFiles.length > 0) {
+      const fileList = supportingFiles.map(f => `- ${f}`).join('\n')
+      const contextBlock = `<skill-context>\nSupporting files available in the skill directory:\n${fileList}\n</skill-context>\n\n`
+      return { success: true, output: contextBlock + content }
     }
 
     return { success: true, output: content }

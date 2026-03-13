@@ -25,7 +25,9 @@
       "@config/*": ["src/config/*"],
       "@utils/*": ["src/utils/*"],
       "@mcp/*": ["src/mcp/*"],
-      "@skills/*": ["src/skills/*"]
+      "@skills/*": ["src/skills/*"],
+      "@hooks": ["src/hooks/index.ts"],
+      "@hooks/*": ["src/hooks/*"]
     },
     "outDir": "dist",
     "rootDir": ".",

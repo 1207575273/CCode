@@ -21,7 +21,9 @@ import type { Message } from './types.js'
 import {
   sessionLogger, tokenMeter,
   buildRegistry, ensureMcpInitialized, registerMcpTools,
-  ensureInstructionsLoaded, getInstructionsPrompt, getSkillsSystemPrompt,
+  ensureInstructionsLoaded,
+  ensureSkillsDiscovered, ensureHooksDiscovered, runSessionStartHooks, hookManager,
+  buildSystemPrompt, getSystemPrompt,
 } from './bootstrap.js'
 import { PermissionManager } from '@config/permissions.js'
 import { closeDb } from '@persistence/index.js'
@@ -63,17 +65,19 @@ export async function runPipe(options: PipeOptions): Promise<void> {
   if (sid) tokenMeter.bind(sid, providerName, modelName)
   sessionLogger.logUserMessage(userContent)
 
-  // MCP 工具注册（除非 --no-tools）+ 指令文件加载
+  // 初始化 Skills、Hooks、MCP、指令文件（幂等）
+  await ensureSkillsDiscovered()
+  await ensureHooksDiscovered()
   if (!options.noTools) {
     await ensureMcpInitialized()
     registerMcpTools(registry)
   }
   ensureInstructionsLoaded()
 
-  // 组合 system prompt：指令文件 + Skills 段落
-  const instructionsPrompt = getInstructionsPrompt()
-  const skillsPrompt = getSkillsSystemPrompt()
-  const systemPrompt = [instructionsPrompt, skillsPrompt].filter(Boolean).join('\n\n') || undefined
+  // 构建 system prompt（幂等，一次构建全程复用）
+  const hookContext = await runSessionStartHooks('startup')
+  buildSystemPrompt(hookContext)
+  const systemPrompt = getSystemPrompt()
 
   const controller = new AbortController()
 
@@ -86,6 +90,7 @@ export async function runPipe(options: PipeOptions): Promise<void> {
     provider: providerName,
     signal: controller.signal,
     nonInteractive: true,
+    hookManager,
     ...(systemPrompt !== undefined ? { systemPrompt } : {}),
     ...(sid ? { sessionId: sid } : {}),
   })

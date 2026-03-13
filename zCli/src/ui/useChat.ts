@@ -19,8 +19,10 @@ import { AgentLoop, isAbortError } from '@core/agent-loop.js'
 import {
   sessionLogger, tokenMeter, getCurrentSessionId,
   buildRegistry, ensureMcpInitialized, registerMcpTools, getMcpStatus,
-  ensureSkillsDiscovered, getSkillsSystemPrompt, skillStore,
-  ensureInstructionsLoaded, getInstructionsPrompt,
+  ensureSkillsDiscovered, skillStore,
+  ensureInstructionsLoaded,
+  ensureHooksDiscovered, runSessionStartHooks, hookManager,
+  buildSystemPrompt, getSystemPrompt,
 } from '@core/bootstrap.js'
 import type { ChatMessage } from './ChatView.js'
 import type { Message } from '@core/types.js'
@@ -203,21 +205,23 @@ export function useChat(): UseChatReturn {
         if (sid) tokenMeter.bind(sid, currentProvider, currentModel)
         sessionLogger.logUserMessage(text)
 
-        // 初始化 Skills、MCP、指令文件（幂等）
+        // 初始化 Skills、Hooks、MCP、指令文件（幂等）
         await ensureSkillsDiscovered()
+        await ensureHooksDiscovered()
         await ensureMcpInitialized()
         registerMcpTools(registry)
         ensureInstructionsLoaded()
 
-        // 组合 system prompt：指令文件 + Skills 段落
-        const instructionsPrompt = getInstructionsPrompt()
-        const skillsPrompt = getSkillsSystemPrompt()
-        const systemPrompt = [instructionsPrompt, skillsPrompt].filter(Boolean).join('\n\n') || undefined
+        // 构建 system prompt（幂等，一次构建全程复用，利用 LLM cache 前缀命中）
+        const hookContext = await runSessionStartHooks('startup')
+        buildSystemPrompt(hookContext)
+        const systemPrompt = getSystemPrompt()
 
         const loop = new AgentLoop(provider, registry, {
           model: currentModel,
           provider: currentProvider,
           signal: controller.signal,
+          hookManager,
           ...(systemPrompt !== undefined ? { systemPrompt } : {}),
           ...(sid ? { sessionId: sid } : {}),
         })

@@ -30,6 +30,8 @@ import type { ServerInfo } from '@mcp/mcp-manager.js'
 import { sessionStore, toProjectSlug } from '@persistence/index.js'
 import { tokenMeter } from './useChat.js'
 import { skillStore, ensureSkillsDiscovered } from '@core/bootstrap.js'
+import { enterAlternateScreen } from './terminal-screen.js'
+import { useTerminalSize } from './useTerminalSize.js'
 
 /**
  * App — ZCli 根组件
@@ -57,6 +59,8 @@ export function App({
   showResumeOnStart,
 }: AppProps) {
   const { exit } = useApp()
+  // 订阅终端尺寸变化：debounce + 清屏，避免 Ink 差分渲染残留
+  useTerminalSize()
   const {
     messages,
     streamingMessage,
@@ -133,20 +137,19 @@ export function App({
 
   const started = messages.length > 0 || isStreaming
 
-  // 对话开始时清屏：WelcomeScreen 已写入终端的内容不会被 Ink 自动移除，
-  // 需要手动清屏让 ChatView 从干净的终端开始渲染
+  // 备用屏幕切换标记：首次进入对话时切换到备用屏幕缓冲区（和 vim/less 相同机制），
+  // 在 handleSubmit / loadSession 中同步执行（状态变化前），
+  // 避免 useEffect 时序问题（Ink <Static> 在 render 时冻结帧，useEffect 在 render 后才执行）
   const hasClearedRef = useRef(false)
-  useEffect(() => {
-    if (started && !hasClearedRef.current) {
-      hasClearedRef.current = true
-      process.stdout.write('\x1b[2J\x1b[H')
-    }
-  }, [started])
 
   // Handle --resume CLI flag
   useEffect(() => {
     if (resumeSessionId) {
-      // Direct resume by sessionId
+      // Direct resume by sessionId — 同步清屏
+      if (!hasClearedRef.current) {
+        hasClearedRef.current = true
+        enterAlternateScreen()
+      }
       loadSession(resumeSessionId)
     } else if (showResumeOnStart) {
       // Show resume panel
@@ -251,6 +254,10 @@ export function App({
         const prompt = skillArgs
           ? `Use the "${skillName}" skill. ${skillArgs}`
           : `Use the "${skillName}" skill.`
+        if (!hasClearedRef.current) {
+          hasClearedRef.current = true
+          enterAlternateScreen()
+        }
         submit(prompt)
         return
       }
@@ -418,6 +425,11 @@ export function App({
     }
 
     // 非指令，发送给 LLM
+    // 首次提交前切换到备用屏幕，避免 WelcomeScreen 残留被 Ink <Static> 冻结到输出中
+    if (!hasClearedRef.current) {
+      hasClearedRef.current = true
+      enterAlternateScreen()
+    }
     submit(trimmed)
   }, [registry, clearMessages, appendSystemMessage, switchModel, submit, modelItems, exit, getMcpInfo])
 
@@ -539,6 +551,10 @@ export function App({
           getBranches={getBranches}
           hasCurrentSession
           onSelect={(sessionId, leafEventUuid) => {
+            if (!hasClearedRef.current) {
+              hasClearedRef.current = true
+              enterAlternateScreen()
+            }
             loadSession(sessionId, leafEventUuid)
             setShowResumePanel(false)
           }}

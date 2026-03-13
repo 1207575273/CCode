@@ -136,16 +136,30 @@ export function loadInstructions(cwd: string): LoadedInstruction[] {
   return loaded
 }
 
+/** system prompt 注入时每个指令文件的最大行数，超出部分截断并附加提示 */
+const MAX_INSTRUCTION_LINES = 400
+
 /**
  * 将已加载的指令格式化为 system prompt 段落。
  * 使用 <instructions> 标签包裹，便于 LLM 区分来源。
+ *
+ * 超过 MAX_INSTRUCTION_LINES 行的文件会被截断，末尾附加完整路径提示，
+ * LLM 在需要时可通过 Read 工具自行加载完整内容。
  */
 export function formatInstructionsPrompt(instructions: LoadedInstruction[]): string {
   if (instructions.length === 0) return ''
 
   return instructions
-    .map(({ source, level, content }) =>
-      `<instructions source="${source}" level="${level}">\n${content}\n</instructions>`
-    )
+    .map(({ source, level, content }) => {
+      const lines = content.split('\n')
+      let body: string
+      if (lines.length > MAX_INSTRUCTION_LINES) {
+        body = lines.slice(0, MAX_INSTRUCTION_LINES).join('\n')
+        body += `\n\n[... 已截断，共 ${lines.length} 行。需要完整内容时用 Read 工具读取: ${source}]`
+      } else {
+        body = content
+      }
+      return `<instructions source="${source}" level="${level}">\n${body}\n</instructions>`
+    })
     .join('\n\n')
 }

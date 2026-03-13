@@ -26,6 +26,9 @@ import { SkillStore } from '@skills/engine/store.js'
 import { SkillTool } from '@skills/engine/skill-tool.js'
 import { loadInstructions, formatInstructionsPrompt } from '@config/instructions-loader.js'
 import type { LoadedInstruction } from '@config/instructions-loader.js'
+import { HookManager } from '@hooks/hook-manager.js'
+import { join } from 'node:path'
+import { homedir } from 'node:os'
 
 // ═══ 模块级单例 ═══
 
@@ -73,6 +76,68 @@ export function getSkillsSystemPrompt(): string {
   return skillStore.buildSystemPromptSection()
 }
 
+// ═══ Hook 系统 ═══
+
+/** 模块级 HookManager 实例 */
+export const hookManager = new HookManager()
+
+let hooksDiscovered = false
+
+/**
+ * 发现所有 hooks（从插件包 + 项目级 + 用户级，幂等）。
+ * 需要在 ensureSkillsDiscovered() 之后调用，因为依赖插件目录列表。
+ */
+export async function ensureHooksDiscovered(): Promise<void> {
+  if (hooksDiscovered) return
+  hooksDiscovered = true
+
+  // 1. 从已发现的插件包中收集 hooks
+  for (const pluginDir of skillStore.getPluginDirs()) {
+    const pluginName = pluginDir.replace(/\\/g, '/').split('/').pop() ?? ''
+    await hookManager.discoverFromFile(
+      join(pluginDir, 'hooks', 'hooks.json'),
+      'plugin',
+      pluginName,
+    )
+  }
+
+  // 2. 项目级
+  await hookManager.discoverFromFile(join(process.cwd(), '.zcli', 'hooks.json'), 'project')
+
+  // 3. 用户级
+  await hookManager.discoverFromFile(join(homedir(), '.zcli', 'hooks.json'), 'user')
+}
+
+/**
+ * 执行 SessionStart hooks，返回合并的 additionalContext。
+ * @param trigger 触发子类型：'startup' | 'resume' | 'compact'
+ */
+export async function runSessionStartHooks(trigger: string): Promise<string> {
+  const results = await hookManager.run('SessionStart', {
+    trigger,
+    env: {
+      ZCLI_CWD: process.cwd(),
+      ZCLI_TRIGGER: trigger,
+    },
+  })
+
+  const contexts: string[] = []
+  for (const r of results) {
+    if (!r) continue
+    // 兼容 Claude Code 格式（hookSpecificOutput.additionalContext）和通用格式（additionalContext / additional_context）
+    const hookOutput = r['hookSpecificOutput']
+    const ctx = (typeof hookOutput === 'object' && hookOutput !== null
+      ? (hookOutput as Record<string, unknown>)['additionalContext']
+      : undefined)
+      ?? r['additionalContext']
+      ?? r['additional_context']
+    if (typeof ctx === 'string' && ctx.trim()) {
+      contexts.push(ctx)
+    }
+  }
+  return contexts.join('\n\n')
+}
+
 // ═══ 指令文件（ZCLI.md / CLAUDE.md） ═══
 
 let cachedInstructions: LoadedInstruction[] | null = null
@@ -95,6 +160,34 @@ export function getInstructionsPrompt(): string {
 /** 获取已加载的指令文件列表（诊断/调试用） */
 export function getLoadedInstructions(): LoadedInstruction[] {
   return cachedInstructions ?? []
+}
+
+// ═══ System Prompt 一次构建 ═══
+
+let cachedSystemPrompt: string | undefined
+
+/**
+ * 构建并缓存 system prompt（幂等，只构建一次）。
+ *
+ * 需要在 ensureSkillsDiscovered / ensureHooksDiscovered / ensureInstructionsLoaded 之后调用。
+ * 构建后全程复用同一字符串引用，不再重新拼接：
+ * - 利用 Anthropic API 的 prompt caching（前缀不变 → cache 命中率高）
+ * - 指令文件超过 400 行自动截断，LLM 需要时自行 Read 完整内容
+ *
+ * @param hookContext SessionStart hook 注入的 additionalContext
+ */
+export function buildSystemPrompt(hookContext: string): void {
+  if (cachedSystemPrompt !== undefined) return
+
+  const instructionsPrompt = getInstructionsPrompt()
+  const skillsPrompt = getSkillsSystemPrompt()
+  const parts = [instructionsPrompt, skillsPrompt, hookContext].filter(Boolean)
+  cachedSystemPrompt = parts.length > 0 ? parts.join('\n\n') : undefined
+}
+
+/** 获取已缓存的 system prompt（未构建时返回 undefined） */
+export function getSystemPrompt(): string | undefined {
+  return cachedSystemPrompt
 }
 
 /** 确保 MCP Server 已初始化连接（幂等，只连接一次） */

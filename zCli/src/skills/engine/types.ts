@@ -9,7 +9,9 @@ export interface SkillMetadata {
   /** SKILL.md 文件绝对路径 */
   filePath: string
   /** 来源层级 */
-  source: 'builtin' | 'user' | 'project'
+  source: 'builtin' | 'plugin' | 'user' | 'project'
+  /** 插件包名称（仅 source='plugin' 时存在） */
+  pluginName?: string
   /** 限制该 skill 可使用的工具列表 */
   allowedTools?: string[]
   /** 是否可通过 /skills 手动触发，默认 true */
