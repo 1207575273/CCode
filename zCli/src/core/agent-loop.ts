@@ -23,11 +23,36 @@ import { classifyToolCalls, executeSafeToolsInParallel } from './parallel-execut
 // 类型定义
 // ═══════════════════════════════════════════════
 
+/** AskUserQuestion 工具 — 单个问题定义 */
+export interface UserQuestion {
+  /** 答案字段名，如 "domain", "focus" */
+  key: string
+  /** 问题标题 */
+  title: string
+  /** 问题类型 */
+  type: 'select' | 'multiselect' | 'text'
+  /** select/multiselect 时的选项列表 */
+  options?: UserQuestionOption[]
+  /** text 类型的输入提示 */
+  placeholder?: string
+}
+
+export interface UserQuestionOption {
+  label: string
+  description?: string
+}
+
+/** AskUserQuestion 工具 — 用户回答结果 */
+export interface UserQuestionResult {
+  cancelled: boolean
+  answers?: Record<string, string | string[]>
+}
+
 /**
  * AgentEvent — run() 的 yield 类型。
  *
  * 业务事件（UI 消费）：
- *   text / tool_start / tool_done / permission_request / error / done
+ *   text / tool_start / tool_done / permission_request / user_question_request / error / done
  *
  * 观测事件（SessionLogger 消费，写入 JSONL）：
  *   llm_start / llm_usage / llm_error / tool_fallback / permission_grant
@@ -41,6 +66,7 @@ export type AgentEvent =
   | { type: 'tool_start';         toolName: string; toolCallId: string; args: Record<string, unknown> }
   | { type: 'tool_done';          toolName: string; toolCallId: string; durationMs: number; success: boolean; resultSummary?: string; meta?: ToolResultMeta }
   | { type: 'permission_request'; toolName: string; args: Record<string, unknown>; resolve: (allow: boolean) => void }
+  | { type: 'user_question_request'; questions: UserQuestion[]; resolve: (result: UserQuestionResult) => void }
   | { type: 'error';              error: string }
   | { type: 'done' }
   // 观测事件
@@ -71,6 +97,8 @@ export interface AgentConfig {
   agentId?: string | undefined
   /** 当前会话 ID（子 Agent JSONL 需要关联父会话） */
   sessionId?: string | undefined
+  /** 标记非交互模式，工具不可弹出用户界面 */
+  nonInteractive?: boolean | undefined
 }
 
 // ═══════════════════════════════════════════════
@@ -367,5 +395,6 @@ function buildToolContext(provider: LLMProvider, registry: ToolRegistry, config:
   }
   if (config.signal !== undefined) { ctx.signal = config.signal }
   if (config.sessionId !== undefined) { ctx.sessionId = config.sessionId }
+  if (config.nonInteractive) { ctx.nonInteractive = config.nonInteractive }
   return ctx
 }

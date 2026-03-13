@@ -5,6 +5,7 @@ import { WelcomeScreen } from './WelcomeScreen.js'
 import { ChatView } from './ChatView.js'
 import { InputBar } from './InputBar.js'
 import { PermissionDialog } from './PermissionDialog.js'
+import { UserQuestionForm } from './UserQuestionForm.js'
 import { ModelPicker } from './ModelPicker.js'
 import type { ModelItem } from './ModelPicker.js'
 import { CommandSuggestion } from './CommandSuggestion.js'
@@ -67,7 +68,9 @@ export function App({
     abort,
     interruptAndSubmit,
     pendingPermission,
+    pendingQuestion,
     resolvePermission,
+    resolveQuestion,
     currentProvider,
     currentModel,
     clearMessages,
@@ -500,6 +503,11 @@ export function App({
           toolName={pendingPermission.toolName}
           args={pendingPermission.args}
           onResolve={resolvePermission}
+        />
+      ) : pendingQuestion != null ? (
+        <UserQuestionForm
+          questions={pendingQuestion.questions}
+          onResolve={resolveQuestion}
         />
       ) : showModelPicker ? (
         <ModelPicker

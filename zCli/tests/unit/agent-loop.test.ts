@@ -129,10 +129,11 @@ describe('AgentLoop', () => {
     ])
 
     const loop = new AgentLoop(provider, registry, { model: 'mock', provider: 'mock' })
-    const events: Array<{ type: string; resolve?: (v: boolean) => void }> = []
+    const events: Array<{ type: string }> = []
     for await (const e of loop.run([{ role: 'user', content: 'run ls' }])) {
       if (e.type === 'permission_request') {
-        (e as { type: string; resolve: (v: boolean) => void }).resolve(true)  // 自动允许
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (e as any).resolve(true)  // 自动允许
       }
       events.push(e)
     }

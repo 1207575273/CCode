@@ -23,6 +23,7 @@ import {
 } from '@core/bootstrap.js'
 import type { ChatMessage } from './ChatView.js'
 import type { Message } from '@core/types.js'
+import type { UserQuestion, UserQuestionResult } from '@core/agent-loop.js'
 import type { ToolEvent, SubAgentEvent } from './ToolStatusLine.js'
 import type { ServerInfo } from '@mcp/mcp-manager.js'
 import { sessionStore, generateEventId } from '@persistence/index.js'
@@ -39,6 +40,12 @@ interface PendingPermission {
   resolve: (allow: boolean) => void
 }
 
+/** 待用户回答的问题表单，暂停 AgentLoop 直到 resolve 被调用 */
+interface PendingQuestion {
+  questions: UserQuestion[]
+  resolve: (result: UserQuestionResult) => void
+}
+
 /** useChat 的完整返回接口 */
 export interface UseChatReturn {
   messages: ChatMessage[]
@@ -50,6 +57,8 @@ export interface UseChatReturn {
   isStreaming: boolean
   error: string | null
   pendingPermission: PendingPermission | null
+  /** 待用户回答的问题表单 */
+  pendingQuestion: PendingQuestion | null
   /** session 级工具白名单（选择"always"后写入） */
   allowedTools: Set<string>
   currentProvider: string
@@ -66,6 +75,8 @@ export interface UseChatReturn {
    * @param always 是否将工具加入 session 白名单
    */
   resolvePermission: (allow: boolean, always?: boolean) => void
+  /** 解决问题表单回答 */
+  resolveQuestion: (result: UserQuestionResult) => void
   /** 清空所有消息（/clear 指令调用） */
   clearMessages: () => void
   /** 追加 system 角色消息，仅用于 UI 展示，不发送给 LLM */
@@ -93,6 +104,7 @@ export function useChat(): UseChatReturn {
   const [isStreaming, setIsStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null)
+  const [pendingQuestion, setPendingQuestion] = useState<PendingQuestion | null>(null)
   const [allowedTools, setAllowedTools] = useState<Set<string>>(new Set())
   const [currentProvider, setCurrentProvider] = useState<string>(() => configManager.load().defaultProvider ?? '')
   const [currentModel, setCurrentModel] = useState<string>(() => configManager.load().defaultModel ?? '')
@@ -125,6 +137,17 @@ export function useChat(): UseChatReturn {
         setAllowedTools(newSet)
       }
       prev.resolve(allow)
+      return null
+    })
+  }, [])
+
+  /**
+   * 处理用户问题表单回答。
+   */
+  const resolveQuestion = useCallback((result: UserQuestionResult) => {
+    setPendingQuestion(prev => {
+      if (!prev) return null
+      prev.resolve(result)
       return null
     })
   }, [])
@@ -256,6 +279,9 @@ export function useChat(): UseChatReturn {
               }
               return [...prev, updated]
             })
+          } else if (event.type === 'user_question_request') {
+            // AskUserQuestion 工具：暂停等待用户填写表单
+            setPendingQuestion({ questions: event.questions, resolve: event.resolve })
           } else if (event.type === 'permission_request') {
             // 权限检查优先级：项目级白名单 → session 级白名单 → 弹窗询问
             if (permissionManagerRef.current?.isAllowed(event.toolName)) {
@@ -427,6 +453,7 @@ export function useChat(): UseChatReturn {
     isStreaming,
     error,
     pendingPermission,
+    pendingQuestion,
     allowedTools,
     currentProvider,
     currentModel,
@@ -434,6 +461,7 @@ export function useChat(): UseChatReturn {
     abort,
     interruptAndSubmit,
     resolvePermission,
+    resolveQuestion,
     clearMessages,
     appendSystemMessage,
     switchModel,

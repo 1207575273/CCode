@@ -15,6 +15,8 @@ export interface ToolContext {
   registry?: ToolRegistry
   /** 当前会话 ID（子 Agent JSONL 关联父会话用） */
   sessionId?: string
+  /** 标记非交互模式（pipe），不可弹出用户交互 */
+  nonInteractive?: boolean
 }
 
 export interface ToolResult {
@@ -32,6 +34,7 @@ export type ToolResultMeta =
   | { type: 'read'; path: string; totalLines: number }
   | { type: 'grep'; matchCount: number; fileCount: number }
   | { type: 'glob'; fileCount: number }
+  | { type: 'ask_user'; questionCount: number; answered: boolean; pairs?: Array<{ question: string; answer: string }> }
 
 export interface Tool {
   readonly name: string

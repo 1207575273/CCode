@@ -63,6 +63,7 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   grep: 'Grep',
   bash: 'Bash',
   dispatch_agent: 'Agent',
+  ask_user_question: 'AskUser',
 }
 
 /** 工具名 → running 态动作描述 */
@@ -74,6 +75,7 @@ const TOOL_RUNNING_LABELS: Record<string, string> = {
   grep: 'Searching content',
   bash: 'Running',
   dispatch_agent: 'Dispatching agent',
+  ask_user_question: '等待用户回答...',
 }
 
 function displayName(toolName: string): string {
@@ -118,6 +120,12 @@ export function buildArgsSummary(toolName: string, args?: Record<string, unknown
 
     case 'dispatch_agent':
       return truncate(String(args['description'] ?? ''), MAX_ARGS_LENGTH)
+
+    case 'ask_user_question': {
+      const questions = args['questions']
+      const count = Array.isArray(questions) ? questions.length : 0
+      return `${count} 个问题`
+    }
 
     default: {
       // MCP 等未知工具：提取第一个字符串参数作为摘要
@@ -368,6 +376,29 @@ function buildMetaDisplay(toolCall: CompletedToolCall): { headerSummary: string;
           </Box>
         ) : null,
       }
+    }
+
+    case 'ask_user': {
+      const summary = meta.answered
+        ? `${meta.questionCount} 个问题已回答`
+        : `${meta.questionCount} 个问题（已取消）`
+
+      // 有 pairs 时渲染 question → answer 摘要
+      const pairsBlock = meta.answered && meta.pairs && meta.pairs.length > 0 ? (
+        <Box flexDirection="column" paddingLeft={2}>
+          {meta.pairs.map((p, i) => (
+            <Box key={i}>
+              <Text dimColor>{i === 0 ? '⎿  ' : '   '}</Text>
+              <Text dimColor>{'· '}</Text>
+              <Text>{p.question}</Text>
+              <Text dimColor>{' → '}</Text>
+              <Text color="cyan">{p.answer}</Text>
+            </Box>
+          ))}
+        </Box>
+      ) : null
+
+      return { headerSummary: summary, outputBlock: pairsBlock }
     }
 
     default:

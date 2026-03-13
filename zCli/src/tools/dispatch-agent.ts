@@ -111,7 +111,8 @@ export class DispatchAgentTool implements StreamableTool {
     const subLogger = createSubagentLogger(agentId, ctx.cwd, providerName, modelName, ctx.sessionId)
 
     // 构建子 Agent 受限工具集：排除 dispatch_agent 防递归
-    const subRegistry = ctx.registry.cloneWithout('dispatch_agent')
+    // 排除 dispatch_agent 防递归、排除 ask_user_question 因子 Agent 无用户交互
+    const subRegistry = ctx.registry.cloneWithout('dispatch_agent', 'ask_user_question')
 
     // 创建子 AgentLoop
     const subLoop = new AgentLoop(ctx.provider, subRegistry, {
