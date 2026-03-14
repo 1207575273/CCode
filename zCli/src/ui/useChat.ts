@@ -485,6 +485,19 @@ export function useChat(): UseChatReturn {
     return off
   }, [abort])
 
+  /** Web 端问卷响应 → 触发 resolveQuestion */
+  useEffect(() => {
+    const off = eventBus.onType('question_response', (event) => {
+      if (event.source === 'web' && pendingQuestion) {
+        resolveQuestion({
+          cancelled: event.cancelled,
+          ...(event.answers ? { answers: event.answers } : {}),
+        })
+      }
+    })
+    return off
+  }, [pendingQuestion, resolveQuestion])
+
   return {
     messages,
     streamingMessage,

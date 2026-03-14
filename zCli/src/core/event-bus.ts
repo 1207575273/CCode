@@ -6,6 +6,7 @@ import type { AgentEvent } from './agent-loop.js'
 export type BridgeEvent =
   | { type: 'user_input'; text: string; source: 'cli' | 'web' }
   | { type: 'permission_response'; allow: boolean; source: 'cli' | 'web' }
+  | { type: 'question_response'; cancelled: boolean; answers?: Record<string, string | string[]>; source: 'cli' | 'web' }
   | { type: 'client_connect'; clientId: string; clientType: 'cli' | 'web' }
   | { type: 'client_disconnect'; clientId: string }
 

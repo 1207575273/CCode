@@ -1,11 +1,13 @@
 // src/pages/ChatPage.tsx
+
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useWebSocket } from '../hooks/useWebSocket.js'
 import { MessageBubble } from '../components/MessageBubble.js'
 import { InputBar } from '../components/InputBar.js'
 import { ToolStatus } from '../components/ToolStatus.js'
 import { PermissionCard } from '../components/PermissionCard.js'
-import type { ChatMessage, ToolEvent, ServerEvent } from '../types.js'
+import { UserQuestionForm } from '../components/UserQuestionForm.js'
+import type { ChatMessage, ToolEvent, ServerEvent, UserQuestion } from '../types.js'
 
 export function ChatPage() {
   const { connected, lastEvent, send } = useWebSocket()
@@ -14,6 +16,7 @@ export function ChatPage() {
   const [isStreaming, setIsStreaming] = useState(false)
   const [toolEvents, setToolEvents] = useState<ToolEvent[]>([])
   const [pendingPermission, setPendingPermission] = useState<{ toolName: string; args: Record<string, unknown> } | null>(null)
+  const [pendingQuestions, setPendingQuestions] = useState<UserQuestion[] | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const msgIdCounter = useRef(0)
 
@@ -24,12 +27,12 @@ export function ChatPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, streaming])
+  }, [messages, streaming, toolEvents])
 
-  // 处理服务端事件，根据事件类型更新 UI 状态
   function handleServerEvent(event: ServerEvent) {
     switch (event.type) {
       case 'user_input': {
+        // CLI 端的输入同步到 Web 显示
         const msg: ChatMessage = {
           id: `msg-${++msgIdCounter.current}`,
           role: 'user',
@@ -42,7 +45,6 @@ export function ChatPage() {
         break
       }
       case 'text':
-        // 流式追加文本
         setStreaming(prev => prev + event.text)
         break
       case 'tool_start':
@@ -63,6 +65,9 @@ export function ChatPage() {
       case 'permission_request':
         setPendingPermission({ toolName: event.toolName, args: event.args })
         break
+      case 'user_question_request':
+        setPendingQuestions(event.questions)
+        break
       case 'done': {
         // 将流式内容固化为消息气泡
         setStreaming(prev => {
@@ -76,9 +81,26 @@ export function ChatPage() {
           }
           return ''
         })
+        // 将已完成的工具事件写入消息历史（保留展示）
+        setToolEvents(prev => {
+          if (prev.length > 0) {
+            const summary = prev.map(e => {
+              const status = e.success ? '✓' : e.success === false ? '✗' : '?'
+              const dur = e.durationMs != null ? ` (${e.durationMs}ms)` : ''
+              const result = e.resultSummary ? `\n  ⎿ ${e.resultSummary}` : ''
+              return `${status} ${e.toolName}${dur}${result}`
+            }).join('\n')
+            setMessages(msgs => [...msgs, {
+              id: `msg-${++msgIdCounter.current}`,
+              role: 'system',
+              content: summary,
+            }])
+          }
+          return []
+        })
         setIsStreaming(false)
-        setToolEvents([])
         setPendingPermission(null)
+        setPendingQuestions(null)
         break
       }
       case 'error':
@@ -90,14 +112,12 @@ export function ChatPage() {
           content: `错误: ${event.error}`,
         }])
         break
-      // llm_start / llm_usage 暂不渲染
       default:
         break
     }
   }
 
   const handleSubmit = useCallback((text: string) => {
-    // 本地立即添加用户消息（不等服务端 echo）
     setMessages(prev => [...prev, {
       id: `msg-${++msgIdCounter.current}`,
       role: 'user' as const,
@@ -114,7 +134,16 @@ export function ChatPage() {
     setPendingPermission(null)
   }, [send])
 
-  // isStreaming 用于禁用输入框，避免多轮并发
+  const handleQuestionSubmit = useCallback((answers: Record<string, string | string[]>) => {
+    send({ type: 'question', cancelled: false, answers })
+    setPendingQuestions(null)
+  }, [send])
+
+  const handleQuestionCancel = useCallback(() => {
+    send({ type: 'question', cancelled: true })
+    setPendingQuestions(null)
+  }, [send])
+
   const inputDisabled = !connected || isStreaming
 
   return (
@@ -130,10 +159,16 @@ export function ChatPage() {
         {messages.map(msg => (
           <MessageBubble key={msg.id} message={msg} />
         ))}
+
+        {/* 流式输出 */}
         {streaming && (
           <MessageBubble message={{ id: 'streaming', role: 'assistant', content: streaming }} />
         )}
+
+        {/* 工具执行进度（实时） */}
         <ToolStatus events={toolEvents} />
+
+        {/* 权限确认 */}
         {pendingPermission && (
           <PermissionCard
             toolName={pendingPermission.toolName}
@@ -142,6 +177,16 @@ export function ChatPage() {
             onDeny={() => handlePermission(false)}
           />
         )}
+
+        {/* 用户问卷 */}
+        {pendingQuestions && (
+          <UserQuestionForm
+            questions={pendingQuestions}
+            onSubmit={handleQuestionSubmit}
+            onCancel={handleQuestionCancel}
+          />
+        )}
+
         <div ref={bottomRef} />
       </div>
 

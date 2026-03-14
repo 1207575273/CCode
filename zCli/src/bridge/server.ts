@@ -43,6 +43,7 @@ let clientCounter = 0
 const BRIDGE_EVENT_TYPES = new Set([
   'user_input',
   'permission_response',
+  'question_response',
   'client_connect',
   'client_disconnect',
 ])
@@ -130,7 +131,7 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
     if (wsClients.size === 0) return
     // 内部管理事件不推送给浏览器
     if (event.type === 'client_connect' || event.type === 'client_disconnect') return
-    if (event.type === 'permission_response') return
+    if (event.type === 'permission_response' || event.type === 'question_response') return
     // Web 端自己发的 user_input 不 echo 回去（Web 端本地已显示）
     if (event.type === 'user_input' && event.source === 'web') return
 
@@ -183,5 +184,16 @@ function handleClientMessage(_clientId: string, msg: { type: string; [key: strin
     case 'abort':
       eventBus.emit({ type: 'user_input', text: '__abort__', source: 'web' })
       break
+    case 'question': {
+      const cancelled = Boolean(msg['cancelled'])
+      const answers = msg['answers'] as Record<string, string | string[]> | undefined
+      eventBus.emit({
+        type: 'question_response',
+        cancelled,
+        ...(answers ? { answers } : {}),
+        source: 'web',
+      })
+      break
+    }
   }
 }
