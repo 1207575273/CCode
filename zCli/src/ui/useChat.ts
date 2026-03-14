@@ -126,6 +126,14 @@ export function useChat(): UseChatReturn {
     return () => { abortRef.current?.abort() }
   }, [])
 
+  // 预创建 session（不等首次 submit），让 Bridge Server 连接时就能拿到 sessionId
+  // ensureSession 幂等：后续 submit 调用不会重复创建
+  useEffect(() => {
+    if (currentProvider && currentModel) {
+      sessionLogger.ensureSession(currentProvider, currentModel)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
 
   /**
    * 处理权限确认结果。

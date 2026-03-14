@@ -147,8 +147,6 @@ if (args.prompt != null) {
       process.on('exit', () => { viteProcess.kill() })
     }
 
-    const webUrl = `http://localhost:${bridge.port}`
-    process.stderr.write(`Web UI: ${webUrl}\n`)
   }
 
   const { unmount } = render(
@@ -160,6 +158,15 @@ if (args.prompt != null) {
     }),
     { exitOnCtrlC: false },
   )
+
+  // render 后 useChat 已 mount，session 已创建，输出 Web UI 地址
+  if (args.web) {
+    setTimeout(() => {
+      const sid = getCurrentSessionId()
+      const sidHint = sid ? ` (session: ${sid.slice(0, 8)})` : ''
+      process.stderr.write(`Web UI: http://localhost:9800${sidHint}\n`)
+    }, 50)
+  }
 
   /** 检测启动方式，生成对应的 resume 命令 */
   function getResumeCommand(sessionId: string): string {
