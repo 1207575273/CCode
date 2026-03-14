@@ -119,7 +119,11 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
   const distDir = join(import.meta.dirname ?? '.', '../../web/dist')
 
   if (isDev) {
-    app.all('*', async (c) => {
+    // Vite 反代：排除 /ws 和 /api（由 Bridge 自己处理）
+    app.all('*', async (c, next) => {
+      const path = new URL(c.req.url).pathname
+      if (path === '/ws' || path.startsWith('/api/')) return next()
+
       const url = new URL(c.req.url)
       const viteUrl = `http://localhost:${VITE_DEV_PORT}${url.pathname}${url.search}`
       try {
