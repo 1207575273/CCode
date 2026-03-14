@@ -1,23 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
 import { TokenMeter } from '@observability/token-meter.js'
 import { createDb } from '@persistence/db.js'
 import type { AgentEvent } from '@core/agent-loop.js'
-import type { Database } from 'better-sqlite3'
+import type { Database } from 'libsql'
 
-let tempDir: string
 let db: Database
 
 beforeEach(() => {
-  tempDir = mkdtempSync(join(tmpdir(), 'token-meter-test-'))
-  db = createDb(join(tempDir, 'test.db'))
+  db = createDb(':memory:')
 })
 
 afterEach(() => {
   db.close()
-  rmSync(tempDir, { recursive: true, force: true })
 })
 
 describe('TokenMeter.consume', () => {

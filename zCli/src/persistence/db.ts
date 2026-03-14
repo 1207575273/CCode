@@ -8,8 +8,8 @@
  * 4. 写入默认计价规则（IF NOT EXISTS 去重）
  */
 
-import Database from 'better-sqlite3'
-import type { Database as DatabaseType } from 'better-sqlite3'
+import Database from 'libsql'
+import type { Database as DatabaseType } from 'libsql'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { mkdirSync } from 'node:fs'

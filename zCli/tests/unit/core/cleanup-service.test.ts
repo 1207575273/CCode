@@ -1,14 +1,10 @@
 // tests/unit/core/cleanup-service.test.ts
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
 import { createDb } from '@persistence/db.js'
-import type { Database } from 'better-sqlite3'
+import type { Database } from 'libsql'
 import { getCleanupStats, executeCleanup } from '@core/cleanup-service.js'
 
-let tempDir: string
 let db: Database
 
 // 向 usage_logs 插入测试记录的辅助函数
@@ -26,13 +22,11 @@ function daysAgo(days: number): string {
 }
 
 beforeEach(() => {
-  tempDir = mkdtempSync(join(tmpdir(), 'cleanup-test-'))
-  db = createDb(join(tempDir, 'test.db'))
+  db = createDb(':memory:')
 })
 
 afterEach(() => {
   db.close()
-  rmSync(tempDir, { recursive: true, force: true })
 })
 
 describe('CleanupService — usage_logs 统计 (dry-run)', () => {

@@ -10,7 +10,7 @@
  * - 提供 getTodayStats / getMonthStats 查询接口
  */
 
-import type { Database as DatabaseType, Statement } from 'better-sqlite3'
+import type { Database as DatabaseType, Statement } from 'libsql'
 import { getDb } from '@persistence/db.js'
 import type { AgentEvent } from '@core/agent-loop.js'
 

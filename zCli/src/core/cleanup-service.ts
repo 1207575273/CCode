@@ -9,7 +9,7 @@
 
 import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import type { Database } from 'better-sqlite3'
+import type { Database } from 'libsql'
 import { sessionStore } from '@persistence/index.js'
 import { getDb } from '@persistence/db.js'
 
