@@ -112,33 +112,25 @@ function seedDefaultPricing(db: DatabaseType): void {
 
   // [provider, pattern, input, output, cacheRead, cacheWrite, currency, effectiveFrom, source, priority]
   const rules: Array<[string, string, number, number, number, number, string, string, string, number]> = [
-    // Anthropic (USD)
-    ['anthropic', 'claude-opus-4-*',   15.0, 75.0, 1.50, 18.75, 'USD', '2025-01-01', '官网 2025-01', 0],
-    ['anthropic', 'claude-sonnet-4-*',  3.0, 15.0, 0.30,  3.75, 'USD', '2025-01-01', '官网 2025-01', 0],
-    ['anthropic', 'claude-haiku-*',     0.8,  4.0, 0.08,  1.00, 'USD', '2025-01-01', '官网 2025-01', 0],
-    // OpenAI (USD)
-    ['openai', 'gpt-4o',               2.5, 10.0, 1.25,  0.0, 'USD', '2025-01-01', '官网 2025-01', 0],
-    ['openai', 'gpt-4o-mini',          0.15, 0.6, 0.075, 0.0, 'USD', '2025-01-01', '官网 2025-01', 0],
-    ['openai', 'o3-mini',              1.1,  4.4, 0.55,  0.0, 'USD', '2025-01-01', '官网 2025-01', 0],
-    // Google (USD)
-    ['google', 'gemini-2.0-flash*',    0.1,  0.4, 0.0,   0.0, 'USD', '2025-01-01', '官网 2025-01', 0],
-    ['google', 'gemini-2.5-pro*',      1.25, 10.0, 0.0,  0.0, 'USD', '2025-01-01', '官网 2025-01', 0],
-    // DeepSeek (CNY — 国内 API)
-    ['deepseek', 'deepseek-r1*',       4.0,  16.0, 1.0,  0.0, 'CNY', '2025-01-01', 'platform.deepseek.com 2025-01', 0],
-    ['deepseek', 'deepseek-v3*',       2.0,   8.0, 0.5,  0.0, 'CNY', '2025-01-01', 'platform.deepseek.com 2025-01', 0],
-    // 智谱 GLM (CNY — 国内 API)
-    ['glm', 'glm-5-code*',             4.0, 18.0,  0.0,  0.0, 'CNY', '2026-02-01', 'bigmodel.cn 2026-02', 0],
-    ['glm', 'glm-5*',                  4.0, 18.0,  0.0,  0.0, 'CNY', '2026-02-01', 'bigmodel.cn 2026-02', 0],
-    ['glm', 'glm-4.7-flash*',          0.0,  0.0,  0.0,  0.0, 'CNY', '2026-02-01', 'bigmodel.cn 2026-02 免费', 0],
-    ['glm', 'glm-4.7*',                5.0,  5.0,  0.0,  0.0, 'CNY', '2026-02-01', 'bigmodel.cn 2026-02', 0],
-    ['glm', 'glm-4.6*',                5.0,  5.0,  0.0,  0.0, 'CNY', '2026-02-01', 'bigmodel.cn 2026-02', 0],
-    ['glm', 'glm-4.5-flash*',          0.0,  0.0,  0.0,  0.0, 'CNY', '2026-02-01', 'bigmodel.cn 2026-02 免费', 0],
-    ['glm', 'glm-4.5-airx*',          10.0, 10.0,  0.0,  0.0, 'CNY', '2026-02-01', 'bigmodel.cn 2026-02', 0],
-    ['glm', 'glm-4.5-air*',            0.5,  0.5,  0.0,  0.0, 'CNY', '2026-02-01', 'bigmodel.cn 2026-02', 0],
-    ['glm', 'glm-4.5-x*',             10.0, 10.0,  0.0,  0.0, 'CNY', '2026-02-01', 'bigmodel.cn 2026-02', 0],
-    ['glm', 'glm-4.5*',                5.0,  5.0,  0.0,  0.0, 'CNY', '2026-02-01', 'bigmodel.cn 2026-02', 0],
-    // Ollama (free)
-    ['ollama', '*',                     0.0,  0.0, 0.0,  0.0, 'USD', '2025-01-01', '本地免费', 0],
+    // Anthropic (USD) — claude.com/docs/pricing 2026-03
+    ['anthropic', 'claude-opus-4-*',    5.0,  25.0, 0.50, 6.25,  'USD', '2026-01-01', 'anthropic 2026-03', 0],
+    ['anthropic', 'claude-sonnet-4-*',  3.0,  15.0, 0.30, 3.75,  'USD', '2026-01-01', 'anthropic 2026-03', 0],
+    ['anthropic', 'claude-haiku-4-*',   1.0,   5.0, 0.10, 1.25,  'USD', '2026-01-01', 'anthropic 2026-03', 0],
+    // Google Gemini (USD) — ai.google.dev/pricing 2026-03
+    ['google', 'gemini-3-pro*',         2.0,  12.0, 0.20, 0.0,   'USD', '2026-01-01', 'google 2026-03 preview', 0],
+    ['google', 'gemini-2.5-pro*',       1.25, 10.0, 0.125, 0.0,  'USD', '2026-01-01', 'google 2026-03', 0],
+    // DeepSeek (CNY) — platform.deepseek.com 2025
+    ['deepseek', 'deepseek-r1*',        4.0,  16.0, 1.0,  0.0,   'CNY', '2025-01-01', 'deepseek 2025', 0],
+    ['deepseek', 'deepseek-v3*',        2.0,   8.0, 0.5,  0.0,   'CNY', '2025-01-01', 'deepseek 2025', 0],
+    // 智谱 GLM (CNY) — bigmodel.cn 2026-02
+    ['glm', 'glm-5*',                   4.0,  18.0, 0.0,  0.0,   'CNY', '2026-02-01', 'bigmodel.cn 2026-02', 0],
+    ['glm', 'glm-4.7-flash*',           0.0,   0.0, 0.0,  0.0,   'CNY', '2026-02-01', 'bigmodel.cn 2026-02 免费', 0],
+    ['glm', 'glm-4.7*',                 5.0,   5.0, 0.0,  0.0,   'CNY', '2026-02-01', 'bigmodel.cn 2026-02', 0],
+    // MiniMax (USD) — minimaxi.com 2026-02
+    ['minimax', 'minimax-m2.5*',         0.3,   2.4, 0.0,  0.0,  'USD', '2026-02-01', 'minimaxi.com 2026-02', 0],
+    ['minimax', 'minimax-m2*',           0.3,   1.2, 0.03, 0.0,  'USD', '2026-02-01', 'minimaxi.com 2026-02', 0],
+    // Ollama / 本地模型 (free)
+    ['ollama', '*',                      0.0,   0.0, 0.0,  0.0,  'USD', '2025-01-01', '本地免费', 0],
   ]
 
   const tx = db.transaction(() => {

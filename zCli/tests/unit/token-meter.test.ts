@@ -44,15 +44,15 @@ describe('TokenMeter.consume', () => {
     meter.consume(event)
 
     const row = db.prepare('SELECT cost_amount FROM usage_logs').get() as { cost_amount: number }
-    // claude-opus-4-* : input $15/M + output $75/M = 15 + 7.5 = 22.5
-    expect(row.cost_amount).toBeCloseTo(22.5, 1)
+    // claude-opus-4-* : input $5/M + output $25/M = 5 + 2.5 = 7.5
+    expect(row.cost_amount).toBeCloseTo(7.5, 1)
   })
 
   it('should_include_cache_tokens_in_cost_calculation', () => {
     const meter = new TokenMeter(db)
     meter.bind('session-1', 'anthropic', 'claude-opus-4-6')
 
-    // claude-opus-4-* 价格: input $15/M, output $75/M, cache_read $1.50/M, cache_write $18.75/M
+    // claude-opus-4-* 价格: input $5/M, output $25/M, cache_read $0.50/M, cache_write $6.25/M
     const event: AgentEvent = {
       type: 'llm_usage', inputTokens: 0, outputTokens: 0,
       cacheReadTokens: 1_000_000, cacheWriteTokens: 1_000_000, stopReason: 'end_turn',
@@ -60,8 +60,8 @@ describe('TokenMeter.consume', () => {
     meter.consume(event)
 
     const row = db.prepare('SELECT cost_amount FROM usage_logs').get() as { cost_amount: number }
-    // cache_read: 1M × $1.50/M = $1.50, cache_write: 1M × $18.75/M = $18.75, total = $20.25
-    expect(row.cost_amount).toBeCloseTo(20.25, 2)
+    // cache_read: 1M × $0.50/M = $0.50, cache_write: 1M × $6.25/M = $6.25, total = $6.75
+    expect(row.cost_amount).toBeCloseTo(6.75, 2)
   })
 
   it('should_calculate_full_four_dimension_cost', () => {
@@ -76,9 +76,9 @@ describe('TokenMeter.consume', () => {
     meter.consume(event)
 
     const row = db.prepare('SELECT cost_amount FROM usage_logs').get() as { cost_amount: number }
-    // input: 1M × 15 = 15, output: 0.1M × 75 = 7.5, cache_read: 0.5M × 1.5 = 0.75, cache_write: 0.2M × 18.75 = 3.75
-    // total = 15 + 7.5 + 0.75 + 3.75 = 27.0
-    expect(row.cost_amount).toBeCloseTo(27.0, 2)
+    // input: 1M × 5 = 5, output: 0.1M × 25 = 2.5, cache_read: 0.5M × 0.5 = 0.25, cache_write: 0.2M × 6.25 = 1.25
+    // total = 5 + 2.5 + 0.25 + 1.25 = 9.0
+    expect(row.cost_amount).toBeCloseTo(9.0, 2)
   })
 
   it('should_set_null_cost_when_no_pricing_rule_matches', () => {
