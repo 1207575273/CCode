@@ -10,17 +10,23 @@
  */
 
 import { Hono } from 'hono'
+import { serveStatic } from '@hono/node-server/serve-static'
 import { serve } from '@hono/node-server'
 import { createNodeWebSocket } from '@hono/node-ws'
 import type { ServerType } from '@hono/node-server'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { eventBus, toSerializableEvent } from '@core/event-bus.js'
 import type { BusEvent } from '@core/event-bus.js'
 import type { AgentEvent } from '@core/agent-loop.js'
 
 const DEFAULT_PORT = 9800
+const VITE_DEV_PORT = 5173
 
 interface BridgeServerOptions {
   port?: number
+  /** dev 模式：根路径重定向到 Vite dev server */
+  dev?: boolean
 }
 
 /** WebSocket 客户端上下文 */
@@ -83,16 +89,29 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
   // 健康检查
   app.get('/api/health', (c) => c.json({ status: 'ok', clients: wsClients.size }))
 
+  // 静态资源托管 / dev 重定向
+  const isDev = options.dev ?? false
+  const distDir = join(import.meta.dirname ?? '.', '../../dashboard-ui/dist')
+
+  if (isDev) {
+    // dev 模式：根路径重定向到 Vite dev server
+    app.get('/', (c) => c.redirect(`http://localhost:${VITE_DEV_PORT}`))
+  } else if (existsSync(distDir)) {
+    // 生产模式：托管 dashboard-ui 构建产物
+    app.use('/*', serveStatic({ root: distDir }))
+    // SPA fallback：未匹配的路径返回 index.html
+    app.get('*', serveStatic({ root: distDir, path: 'index.html' }))
+  }
+
   // 订阅 EventBus，推送事件给所有 WebSocket 客户端
   eventBus.on((event) => {
     if (wsClients.size === 0) return
-    // client_connect / client_disconnect 不推送给浏览器
+    // 内部管理事件不推送给浏览器
     if (event.type === 'client_connect' || event.type === 'client_disconnect') return
+    if (event.type === 'permission_response') return
 
-    // 仅推送 AgentEvent，BridgeEvent（user_input / permission_response）不推送
-    if (!isAgentEvent(event)) return
-
-    const serializable = toSerializableEvent(event)
+    // AgentEvent 需要序列化（去除回调函数），BridgeEvent（user_input）直接序列化
+    const serializable = isAgentEvent(event) ? toSerializableEvent(event) : event
     if (!serializable) return
     const json = JSON.stringify(serializable)
     for (const client of wsClients.values()) {

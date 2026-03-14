@@ -135,8 +135,10 @@ if (args.prompt != null) {
   // 若指定 --web 则启动 Bridge Server，将终端 UI 与 Web UI 桥接
   if (args.web) {
     const { startBridgeServer } = await import('../src/web/index.js')
-    const bridge = startBridgeServer()
-    process.stderr.write(`Web UI: http://localhost:${bridge.port}\n`)
+    const isDevMode = (process.argv[1] ?? '').endsWith('.ts')
+    const bridge = startBridgeServer({ dev: isDevMode })
+    const webUrl = isDevMode ? `http://localhost:5173` : `http://localhost:${bridge.port}`
+    process.stderr.write(`Web UI: ${webUrl}\n`)
   }
 
   const { unmount } = render(
