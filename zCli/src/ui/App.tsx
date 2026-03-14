@@ -633,16 +633,6 @@ export function App({
               </Text>
             </Box>
           )}
-          {webEnabled && (
-            <Box paddingX={2}>
-              <Text dimColor>
-                {'Web UI: '}
-              </Text>
-              <Text color="cyan">
-                {`http://localhost:9800/session/${getCurrentSessionId() ?? ''}`}
-              </Text>
-            </Box>
-          )}
           <WelcomeScreen model={currentModel} provider={currentProvider} cwd={cwd} recentSessions={recentSessions} />
         </>
       )}
@@ -730,6 +720,12 @@ export function App({
           {isStreaming && (
             <Box paddingX={1}>
               <Text dimColor>Esc to interrupt</Text>
+            </Box>
+          )}
+          {webEnabled && (
+            <Box paddingX={1}>
+              <Text dimColor>Web UI: </Text>
+              <Text color="cyan">{`http://localhost:9800/session/${getCurrentSessionId() ?? ''}`}</Text>
             </Box>
           )}
           <InputBar
