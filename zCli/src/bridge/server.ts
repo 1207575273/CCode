@@ -1,4 +1,4 @@
-// src/web/server.ts
+// src/bridge/server.ts
 
 /**
  * Bridge Server — Hono HTTP + WebSocket 服务。
@@ -91,7 +91,7 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
 
   // 静态资源：dev 模式反向代理 Vite，生产模式托管构建产物
   const isDev = options.dev ?? false
-  const distDir = join(import.meta.dirname ?? '.', '../../dashboard-ui/dist')
+  const distDir = join(import.meta.dirname ?? '.', '../../web/dist')
 
   if (isDev) {
     // dev 模式：反向代理到 Vite dev server，9800 一个端口搞定
@@ -119,7 +119,7 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
       }
     })
   } else if (existsSync(distDir)) {
-    // 生产模式：托管 dashboard-ui 构建产物
+    // 生产模式：托管 web/ 构建产物
     app.use('/*', serveStatic({ root: distDir }))
     // SPA fallback：未匹配的路径返回 index.html
     app.get('*', serveStatic({ root: distDir, path: 'index.html' }))

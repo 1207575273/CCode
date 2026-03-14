@@ -134,14 +134,14 @@ if (args.prompt != null) {
 
   // 若指定 --web 则启动 Bridge Server + Vite dev server，将终端 UI 与 Web UI 桥接
   if (args.web) {
-    const { startBridgeServer } = await import('../src/web/index.js')
+    const { startBridgeServer } = await import('../src/bridge/index.js')
     const isDevMode = (process.argv[1] ?? '').endsWith('.ts')
     const bridge = startBridgeServer({ dev: isDevMode })
 
     if (isDevMode) {
       // dev 模式：自动启动 Vite dev server（后台子进程）
       const { execa } = await import('execa')
-      const dashboardDir = new URL('../dashboard-ui', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1')
+      const dashboardDir = new URL('../web', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1')
       const viteProcess = execa('npx', ['vite'], { cwd: dashboardDir, stdio: 'ignore' })
       viteProcess.catch(() => { /* Vite 退出时静默 */ })
       process.on('exit', () => { viteProcess.kill() })
