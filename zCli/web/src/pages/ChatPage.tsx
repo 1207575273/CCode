@@ -206,9 +206,22 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
           {sessionModel && <span className="text-xs text-gray-400 bg-gray-800 px-2 py-0.5 rounded">{sessionModel}</span>}
           {sessionId && <span className="text-xs text-gray-500 font-mono">{sessionId.slice(0, 8)}</span>}
         </div>
-        <span className={`text-xs px-2 py-1 rounded ${connected ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}`}>
-          {connected ? '已连接' : '断开'}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={`text-xs px-2 py-1 rounded ${connected ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}`}>
+            {connected ? '已连接' : '断开'}
+          </span>
+          <button
+            onClick={() => {
+              if (window.confirm('确定关闭 Bridge Server？所有 Web 客户端将断开连接。')) {
+                fetch('/api/bridge/stop', { method: 'POST' }).catch(() => {})
+              }
+            }}
+            className="text-xs px-2 py-1 rounded bg-red-900/50 text-red-400 hover:bg-red-800 transition-colors"
+            title="关闭 Bridge Server"
+          >
+            关闭 Bridge
+          </button>
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto p-4">

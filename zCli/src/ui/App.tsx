@@ -21,6 +21,7 @@ import { ResumeCommand } from '@commands/resume.js'
 import { ForkCommand } from '@commands/fork.js'
 import { UsageCommand } from '@commands/usage.js'
 import { GcCommand } from '@commands/gc.js'
+import { BridgeCommand } from '@commands/bridge.js'
 import { SkillsCommand } from '@commands/skills.js'
 import { getCleanupStats, executeCleanup } from '@core/cleanup-service.js'
 import { McpStatusView } from './McpStatusView.js'
@@ -199,6 +200,7 @@ export function App({
     reg.register(new UsageCommand())
     reg.register(new GcCommand())
     reg.register(new SkillsCommand())
+    reg.register(new BridgeCommand())
     return reg
   }, [currentProvider, currentModel])
 
@@ -492,6 +494,22 @@ export function App({
               }
             })
             return
+          case 'bridge_status': {
+            const running = webEnabled ?? false
+            if (running) {
+              const sid = getCurrentSessionId()
+              appendSystemMessage(`Bridge Server 运行中 (port 9800)\n当前 session: ${sid ?? '未创建'}\nWeb UI: http://localhost:9800/session/${sid ?? ''}`)
+            } else {
+              appendSystemMessage('Bridge Server 未启动。使用 --web 参数启动。')
+            }
+            return
+          }
+          case 'bridge_stop': {
+            fetch('http://localhost:9800/api/bridge/stop', { method: 'POST' })
+              .then(() => appendSystemMessage('Bridge Server 已关闭'))
+              .catch(() => appendSystemMessage('Bridge Server 未运行或关闭失败'))
+            return
+          }
           case 'error':
             appendSystemMessage(action.message)
             return

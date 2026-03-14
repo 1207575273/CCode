@@ -25,6 +25,8 @@ export type CommandAction =
   | { type: 'run_gc'; dryRun: boolean; days: number | null; target: 'sessions' | 'usage' | 'all' }
   | { type: 'list_skills' }
   | { type: 'load_skill'; name: string }
+  | { type: 'bridge_status' }
+  | { type: 'bridge_stop' }
   | { type: 'error'; message: string }
 
 /**
