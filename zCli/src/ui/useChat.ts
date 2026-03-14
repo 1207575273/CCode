@@ -30,6 +30,7 @@ import type { ToolEvent, SubAgentEvent } from './ToolStatusLine.js'
 import type { ServerInfo } from '@mcp/mcp-manager.js'
 import { sessionStore, generateEventId } from '@persistence/index.js'
 import { PermissionManager } from '@config/permissions.js'
+import { eventBus } from '@core/event-bus.js'
 
 // 从 bootstrap 重导出，供 bin/zcli.ts 和 App.tsx 使用
 export { sessionLogger, tokenMeter, getCurrentSessionId }
@@ -183,6 +184,7 @@ export function useChat(): UseChatReturn {
       .map(m => ({ role: m.role, content: m.content }))
 
     setMessages(prev => [...prev, userMsg])
+    eventBus.emit({ type: 'user_input', text, source: 'cli' })
     setStreamingMessage('')
     toolEventsRef.current = []
     setToolEvents([])
@@ -224,6 +226,8 @@ export function useChat(): UseChatReturn {
           sessionLogger.consume(event)
           // F10: token 计量
           tokenMeter.consume(event)
+          // 广播到 EventBus（CLI/Web 共享事件流）
+          eventBus.emit(event)
 
           if (event.type === 'text') {
             accumulated += event.text
