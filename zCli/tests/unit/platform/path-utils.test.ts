@@ -1,5 +1,5 @@
 // tests/unit/platform/path-utils.test.ts
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeAll } from 'vitest'
 
 // mock detectPlatform，按需切换 Windows / Linux
 const mockDetectPlatform = vi.fn()
