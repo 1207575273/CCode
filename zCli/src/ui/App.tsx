@@ -617,10 +617,10 @@ export function App({
         <ChatView messages={messages} streamingMessage={streamingMessage} toolEvents={toolEvents} subAgentEvents={subAgentEvents} />
       ) : (
         <>
-          {isDevMode && bootTimings && (
+          {bootTimings && (
             <Box paddingX={2}>
               <Text dimColor>
-                {'[dev] bootstrap '}
+                {'bootstrap '}
                 {`${bootTimings.total.toFixed(0)}ms`}
                 {' (skills '}{bootTimings.skills.toFixed(0)}
                 {' → hooks '}{bootTimings.hooks.toFixed(0)}

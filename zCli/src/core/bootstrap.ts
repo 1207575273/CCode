@@ -372,7 +372,7 @@ export function bootstrapAll(): Promise<BootstrapResult> {
       skillsReady: true,
       fileIndexReady: true,
       systemPromptReady: true,
-      ...(isDevMode ? { timings: timings as unknown as BootstrapTimings } : {}),
+      timings: timings as unknown as BootstrapTimings,
     }
   })()
 

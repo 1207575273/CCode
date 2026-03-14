@@ -9,7 +9,12 @@ import { PermissionCard } from '../components/PermissionCard.js'
 import { UserQuestionForm } from '../components/UserQuestionForm.js'
 import type { ChatMessage, ToolEvent, ServerEvent, UserQuestion } from '../types.js'
 
-export function ChatPage() {
+interface ChatPageProps {
+  /** URL 路由中的 sessionId，为 null 时连接当前活跃 session */
+  targetSessionId?: string | null
+}
+
+export function ChatPage({ targetSessionId }: ChatPageProps) {
   const { connected, lastEvent, send } = useWebSocket()
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [sessionModel, setSessionModel] = useState<string | null>(null)
@@ -37,6 +42,10 @@ export function ChatPage() {
         // 连接时收到：sessionId + JSONL 历史消息还原
         setSessionId(event.sessionId)
         if (event.model) setSessionModel(event.model)
+        // URL 同步：如果当前路径不含 sessionId，更新 URL（不触发页面刷新）
+        if (!targetSessionId && event.sessionId) {
+          window.history.replaceState(null, '', `/session/${event.sessionId}`)
+        }
         // 还原历史消息
         const restored: ChatMessage[] = event.messages.map(m => ({
           id: m.id,

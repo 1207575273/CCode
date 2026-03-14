@@ -159,12 +159,14 @@ if (args.prompt != null) {
     { exitOnCtrlC: false },
   )
 
-  // render 后 useChat 已 mount，session 已创建，输出 Web UI 地址
+  // render 后 useChat 已 mount，session 已创建，输出 Web UI 地址（bootstrap 信息上方）
   if (args.web) {
     setTimeout(() => {
       const sid = getCurrentSessionId()
-      const sidHint = sid ? ` (session: ${sid.slice(0, 8)})` : ''
-      process.stderr.write(`Web UI: http://localhost:9800${sidHint}\n`)
+      const url = sid
+        ? `http://localhost:9800/session/${sid}`
+        : `http://localhost:9800`
+      process.stderr.write(`Web UI: ${url}\n`)
     }, 50)
   }
 

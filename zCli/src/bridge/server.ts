@@ -55,7 +55,20 @@ function isAgentEvent(event: BusEvent): event is AgentEvent {
   return !BRIDGE_EVENT_TYPES.has(event.type)
 }
 
+/** 已启动的 Bridge Server 端口（幂等：多次调用不重复启动） */
+let activePort: number | null = null
+
+/** Bridge Server 是否已启动 */
+export function isBridgeRunning(): boolean {
+  return server != null && activePort != null
+}
+
 export function startBridgeServer(options: BridgeServerOptions = {}): { port: number; close: () => void } {
+  // 幂等：已启动则直接返回
+  if (server && activePort) {
+    return { port: activePort, close: () => { server?.close(); server = null; activePort = null } }
+  }
+
   const port = options.port ?? DEFAULT_PORT
   const app = new Hono()
   const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
@@ -172,6 +185,7 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
     // 启动成功回调（静默）
   })
   injectWebSocket(server)
+  activePort = port
 
   return {
     port,
@@ -179,6 +193,7 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
       if (server) {
         server.close()
         server = null
+        activePort = null
       }
     },
   }

@@ -1,2 +1,2 @@
 // src/bridge/index.ts
-export { startBridgeServer } from './server.js'
+export { startBridgeServer, isBridgeRunning } from './server.js'
