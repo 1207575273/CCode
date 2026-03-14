@@ -11,6 +11,8 @@ import type { ChatMessage, ToolEvent, ServerEvent, UserQuestion } from '../types
 
 export function ChatPage() {
   const { connected, lastEvent, send } = useWebSocket()
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [sessionModel, setSessionModel] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streaming, setStreaming] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -31,6 +33,20 @@ export function ChatPage() {
 
   function handleServerEvent(event: ServerEvent) {
     switch (event.type) {
+      case 'session_init': {
+        // 连接时收到：sessionId + JSONL 历史消息还原
+        setSessionId(event.sessionId)
+        if (event.model) setSessionModel(event.model)
+        // 还原历史消息
+        const restored: ChatMessage[] = event.messages.map(m => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+        }))
+        setMessages(restored)
+        msgIdCounter.current = restored.length
+        break
+      }
       case 'user_input': {
         // CLI 端的输入同步到 Web 显示
         const msg: ChatMessage = {
@@ -169,7 +185,11 @@ export function ChatPage() {
   return (
     <div className="flex flex-col h-screen">
       <header className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
-        <h1 className="text-lg font-semibold">ZCli Dashboard</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-semibold">ZCli</h1>
+          {sessionModel && <span className="text-xs text-gray-400 bg-gray-800 px-2 py-0.5 rounded">{sessionModel}</span>}
+          {sessionId && <span className="text-xs text-gray-500 font-mono">{sessionId.slice(0, 8)}</span>}
+        </div>
         <span className={`text-xs px-2 py-1 rounded ${connected ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}`}>
           {connected ? '已连接' : '断开'}
         </span>

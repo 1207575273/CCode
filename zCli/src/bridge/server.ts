@@ -19,6 +19,8 @@ import { join } from 'node:path'
 import { eventBus, toSerializableEvent } from '@core/event-bus.js'
 import type { BusEvent } from '@core/event-bus.js'
 import type { AgentEvent } from '@core/agent-loop.js'
+import { getCurrentSessionId } from '@ui/useChat.js'
+import { sessionStore } from '@persistence/index.js'
 
 const DEFAULT_PORT = 9800
 const VITE_DEV_PORT = 5173
@@ -69,6 +71,24 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
         }
         wsClients.set(clientId, client)
         eventBus.emit({ type: 'client_connect', clientId, clientType: 'web' })
+
+        // 连接时推送 session_init：sessionId + JSONL 历史消息还原
+        const sessionId = getCurrentSessionId()
+        if (sessionId) {
+          try {
+            const snapshot = sessionStore.loadMessages(sessionId)
+            ws.send(JSON.stringify({
+              type: 'session_init',
+              sessionId,
+              provider: snapshot.provider,
+              model: snapshot.model,
+              messages: snapshot.messages,
+            }))
+          } catch {
+            // session 未创建或读取失败，发送空 init
+            ws.send(JSON.stringify({ type: 'session_init', sessionId, messages: [] }))
+          }
+        }
       },
 
       onMessage(event) {

@@ -15,8 +15,16 @@ export interface UserQuestion {
   placeholder?: string
 }
 
+/** 历史消息（session JSONL 还原） */
+export interface SessionMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+}
+
 /** 服务端推送的事件 */
 export type ServerEvent =
+  | { type: 'session_init'; sessionId: string; provider?: string; model?: string; messages: SessionMessage[] }
   | { type: 'text'; text: string }
   | { type: 'tool_start'; toolName: string; toolCallId: string; args: Record<string, unknown> }
   | { type: 'tool_done'; toolName: string; toolCallId: string; durationMs: number; success: boolean; resultSummary?: string }
