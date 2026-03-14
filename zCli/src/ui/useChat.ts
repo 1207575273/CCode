@@ -450,6 +450,38 @@ export function useChat(): UseChatReturn {
     }
   }, [appendSystemMessage, currentProvider, currentModel])
 
+  // ── Web 端输入回流：监听 EventBus，将 Web 侧事件桥接到 CLI hook ──
+
+  /** Web 端聊天输入 → 触发 submit（过滤 source=web，避免 CLI submit 循环） */
+  useEffect(() => {
+    const off = eventBus.onType('user_input', (event) => {
+      if (event.source === 'web' && event.text !== '__abort__') {
+        submit(event.text)
+      }
+    })
+    return off
+  }, [submit])
+
+  /** Web 端权限响应 → 触发 resolvePermission */
+  useEffect(() => {
+    const off = eventBus.onType('permission_response', (event) => {
+      if (event.source === 'web' && pendingPermission) {
+        resolvePermission(event.allow)
+      }
+    })
+    return off
+  }, [pendingPermission, resolvePermission])
+
+  /** Web 端中止请求：发送特殊消息 __abort__ → 触发 abort */
+  useEffect(() => {
+    const off = eventBus.onType('user_input', (event) => {
+      if (event.source === 'web' && event.text === '__abort__') {
+        abort()
+      }
+    })
+    return off
+  }, [abort])
+
   return {
     messages,
     streamingMessage,
