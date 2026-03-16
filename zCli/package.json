@@ -11,6 +11,8 @@
     "dev:pipe": "tsx bin/zcli.ts",
     "dev:web": "tsx bin/zcli.ts --web",
     "build": "tsup",
+    "build:web": "cd web && pnpm build",
+    "build:all": "tsup && cd web && pnpm build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

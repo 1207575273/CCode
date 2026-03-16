@@ -116,7 +116,10 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
 
   // 静态资源：dev 模式反向代理 Vite，生产模式托管构建产物
   const isDev = options.dev ?? false
-  const distDir = join(import.meta.dirname ?? '.', '../../web/dist')
+  // web/dist/ 路径：dev 模式从源码目录算，生产模式从 cwd 算
+  const distDir = isDev
+    ? join(import.meta.dirname ?? '.', '../../web/dist')
+    : join(process.cwd(), 'web/dist')
 
   if (isDev) {
     // Vite 反代：排除 /ws 和 /api（由 Bridge 自己处理）
@@ -143,8 +146,10 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
       }
     })
   } else if (existsSync(distDir)) {
-    app.use('/*', serveStatic({ root: distDir }))
-    app.get('*', serveStatic({ root: distDir, path: 'index.html' }))
+    // 生产模式：Hono serveStatic root 相对于 cwd，直接用 web/dist
+    app.use('/*', serveStatic({ root: './web/dist' }))
+    // SPA fallback：未匹配的路径返回 index.html
+    app.get('*', serveStatic({ root: './web/dist', path: '/index.html' }))
   }
 
   server = serve({ fetch: app.fetch, port }, () => { /* 启动成功 */ })
