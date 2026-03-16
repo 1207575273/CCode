@@ -1,6 +1,8 @@
 // src/components/MessageBubble.tsx
+
 import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
+import { ToolHistoryBlock } from './ToolHistoryBlock.js'
 import type { ChatMessage } from '../types.js'
 
 interface Props {
@@ -9,7 +11,26 @@ interface Props {
 
 export function MessageBubble({ message }: Props) {
   const isUser = message.role === 'user'
+  const isSystem = message.role === 'system'
   const sourceTag = message.source === 'web' ? ' (web)' : message.source === 'cli' ? ' (cli)' : ''
+
+  // system 消息：如果有 toolEvents，渲染结构化工具历史块
+  if (isSystem && message.toolEvents && message.toolEvents.length > 0) {
+    return (
+      <div className="mb-3 px-2">
+        <ToolHistoryBlock events={message.toolEvents} />
+      </div>
+    )
+  }
+
+  // system 消息：纯文本（错误、状态通知等）
+  if (isSystem) {
+    return (
+      <div className="mb-3 px-2">
+        <span className="text-xs text-gray-500">{message.content}</span>
+      </div>
+    )
+  }
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>

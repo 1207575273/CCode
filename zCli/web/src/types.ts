@@ -50,6 +50,8 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
   source?: 'cli' | 'web'
+  /** assistant 消息的工具执行记录（结构化，支持折叠渲染） */
+  toolEvents?: ToolEvent[]
 }
 
 /** 工具执行状态 */

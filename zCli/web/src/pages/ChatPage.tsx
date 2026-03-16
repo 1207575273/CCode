@@ -106,19 +106,15 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
           }
           return ''
         })
-        // 将已完成的工具事件写入消息历史（保留展示）
+        // 将已完成的工具事件作为结构化数据附加到 assistant 消息
         setToolEvents(prev => {
           if (prev.length > 0) {
-            const summary = prev.map(e => {
-              const status = e.success ? '✓' : e.success === false ? '✗' : '?'
-              const dur = e.durationMs != null ? ` (${e.durationMs}ms)` : ''
-              const result = e.resultSummary ? `\n  ⎿ ${e.resultSummary}` : ''
-              return `${status} ${e.toolName}${dur}${result}`
-            }).join('\n')
+            // 工具记录作为独立的 system 消息，保留结构化数据
             setMessages(msgs => [...msgs, {
               id: `msg-${++msgIdCounter.current}`,
               role: 'system',
-              content: summary,
+              content: '',
+              toolEvents: [...prev],
             }])
           }
           return []
