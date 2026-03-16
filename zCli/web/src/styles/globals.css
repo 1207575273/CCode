@@ -1,3 +1,35 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* highlight.js 暗色主题 — 代码块语法高亮 */
+@import 'highlight.js/styles/github-dark.css';
+
+/* Markdown 表格优化 — prose 默认表格太宽 */
+.prose table {
+  @apply text-sm;
+}
+.prose th,
+.prose td {
+  @apply px-3 py-1.5 border border-gray-700;
+}
+.prose thead th {
+  @apply bg-gray-800/50 font-medium;
+}
+
+/* 代码块圆角 + 内边距 */
+.prose pre {
+  @apply rounded-lg;
+}
+.prose code {
+  @apply text-sm;
+}
+
+/* 内联代码样式 */
+.prose :not(pre) > code {
+  @apply bg-gray-700/50 px-1.5 py-0.5 rounded text-gray-200;
+}
+.prose :not(pre) > code::before,
+.prose :not(pre) > code::after {
+  content: none;
+}

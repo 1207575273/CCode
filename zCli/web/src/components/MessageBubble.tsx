@@ -43,7 +43,7 @@ export function MessageBubble({ message }: Props) {
         {isUser ? (
           <p className="whitespace-pre-wrap">{message.content}</p>
         ) : (
-          <div className="prose prose-invert prose-sm max-w-none">
+          <div className="prose prose-invert prose-sm max-w-none prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-700">
             <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
               {message.content}
             </ReactMarkdown>
