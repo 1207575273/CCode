@@ -1,2 +1,4 @@
 node_modules/
 dist/
+# TypeScript 编译产物（Vite 直接用 .tsx 源码，不需要 .js）
+src/**/*.js
