@@ -25,6 +25,9 @@ export function PluginsTab() {
   const [claudePlugins, setClaudePlugins] = useState<ClaudePlugin[]>([])
   const [showImport, setShowImport] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // 导入进度
+  const [importing, setImporting] = useState<string | null>(null) // 当前正在导入的插件名
+  const [importDone, setImportDone] = useState<Set<string>>(new Set()) // 已成功导入的
 
   const loadPlugins = useCallback(() => {
     apiGet<{ plugins: PluginInfo[] }>('/api/plugins')
@@ -49,20 +52,34 @@ export function PluginsTab() {
   }, [loadPlugins])
 
   const handleImport = useCallback(async (plugin: ClaudePlugin) => {
+    setImporting(plugin.name)
     try {
       await apiPost('/api/plugins/import-claude', { name: plugin.name, sourcePath: plugin.installPath })
-      loadPlugins()
-      loadClaudePlugins()
-    } catch (e) { setError(String(e)) }
+      setImportDone(prev => new Set([...prev, plugin.name]))
+      // 短暂显示成功状态后刷新
+      setTimeout(() => {
+        loadPlugins()
+        loadClaudePlugins()
+        setImporting(null)
+      }, 800)
+    } catch (e) {
+      setError(String(e))
+      setImporting(null)
+    }
   }, [loadPlugins, loadClaudePlugins])
 
   const handleImportAll = useCallback(async () => {
     const toImport = claudePlugins.filter(p => !p.alreadyImported)
     for (const p of toImport) {
+      setImporting(p.name)
       try {
         await apiPost('/api/plugins/import-claude', { name: p.name, sourcePath: p.installPath })
+        setImportDone(prev => new Set([...prev, p.name]))
+        // 每个导入之间加点延迟让动画可见
+        await new Promise(r => setTimeout(r, 500))
       } catch { /* 单个失败继续 */ }
     }
+    setImporting(null)
     loadPlugins()
     loadClaudePlugins()
   }, [claudePlugins, loadPlugins, loadClaudePlugins])
@@ -92,22 +109,31 @@ export function PluginsTab() {
             <p className="text-gray-500 text-sm">未检测到 Claude Code 已安装的插件</p>
           ) : (
             <div className="space-y-2">
-              {claudePlugins.map(p => (
-                <div key={p.name} className="flex items-center justify-between p-2 bg-gray-900 rounded">
-                  <div>
-                    <span className="text-sm font-mono">{p.name}</span>
-                    <span className="text-xs text-gray-500 ml-2">v{p.version}</span>
-                    <span className="text-xs text-gray-600 ml-2">{p.marketplace}</span>
+              {claudePlugins.map(p => {
+                const isImporting = importing === p.name
+                const isDone = importDone.has(p.name) || p.alreadyImported
+                return (
+                  <div key={p.name} className={`flex items-center justify-between p-2 bg-gray-900 rounded transition-colors ${isImporting ? 'ring-1 ring-blue-500/50' : ''} ${isDone ? 'opacity-70' : ''}`}>
+                    <div className="flex items-center gap-2">
+                      {isImporting && <span className="animate-spin text-blue-400">⟳</span>}
+                      {isDone && !isImporting && <span className="text-green-400">✓</span>}
+                      <span className="text-sm font-mono">{p.name}</span>
+                      <span className="text-xs text-gray-500">v{p.version}</span>
+                      <span className="text-xs text-gray-600">{p.marketplace}</span>
+                    </div>
+                    {isImporting ? (
+                      <span className="text-xs text-blue-400 animate-pulse">导入中...</span>
+                    ) : isDone ? (
+                      <span className="text-xs text-green-400">已导入</span>
+                    ) : (
+                      <button onClick={() => handleImport(p)} disabled={!!importing}
+                        className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-500 disabled:opacity-50">
+                        导入
+                      </button>
+                    )}
                   </div>
-                  {p.alreadyImported ? (
-                    <span className="text-xs text-green-400">已导入</span>
-                  ) : (
-                    <button onClick={() => handleImport(p)} className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-500">
-                      导入
-                    </button>
-                  )}
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

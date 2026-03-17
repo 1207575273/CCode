@@ -3,11 +3,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import { apiGet, apiPost } from '../hooks/useApi'
 
+type McpType = 'stdio' | 'sse' | 'streamable-http' | 'http'
+
 interface McpServerConfig {
   command?: string
   args?: string[]
   type?: string
   url?: string
+  headers?: Record<string, string>
+  env?: Record<string, string>
 }
 
 interface McpServerInfo {
@@ -17,17 +21,25 @@ interface McpServerInfo {
   writable: boolean
 }
 
+const TYPE_OPTIONS: { value: McpType; label: string; desc: string }[] = [
+  { value: 'stdio', label: 'Stdio', desc: '本地命令（如 npx @mcp/server）' },
+  { value: 'sse', label: 'SSE', desc: '远程 Server-Sent Events' },
+  { value: 'streamable-http', label: 'Streamable HTTP', desc: '远程 HTTP 流式传输' },
+  { value: 'http', label: 'HTTP', desc: '远程 HTTP（含自定义请求头）' },
+]
+
 export function McpTab() {
   const [servers, setServers] = useState<McpServerInfo[]>([])
   const [showAdd, setShowAdd] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // 表单状态
   const [newName, setNewName] = useState('')
-  const [newType, setNewType] = useState<'stdio' | 'http'>('stdio')
-  // stdio 字段
+  const [newType, setNewType] = useState<McpType>('stdio')
   const [newCommand, setNewCommand] = useState('')
   const [newArgs, setNewArgs] = useState('')
-  // http 字段
   const [newUrl, setNewUrl] = useState('')
+  const [newHeaders, setNewHeaders] = useState('')
 
   const loadServers = useCallback(() => {
     apiGet<{ servers: McpServerInfo[] }>('/api/mcp/servers')
@@ -45,34 +57,39 @@ export function McpTab() {
     } catch (e) { setError(String(e)) }
   }, [loadServers])
 
+  const resetForm = () => {
+    setNewName(''); setNewCommand(''); setNewArgs(''); setNewUrl(''); setNewHeaders('')
+  }
+
   const handleAdd = useCallback(async () => {
     if (!newName.trim()) return
     try {
-      const config: McpServerConfig = newType === 'stdio'
-        ? { command: newCommand, args: newArgs.split(' ').filter(Boolean) }
-        : { type: 'streamable-http', url: newUrl }
+      let config: McpServerConfig
+      if (newType === 'stdio') {
+        config = { command: newCommand, args: newArgs.split(' ').filter(Boolean) }
+      } else {
+        config = { type: newType, url: newUrl }
+        if (newHeaders.trim()) {
+          try { config.headers = JSON.parse(newHeaders) } catch { /* 忽略无效 JSON */ }
+        }
+      }
 
       await apiPost('/api/mcp/servers/add', { name: newName, config })
       setShowAdd(false)
-      setNewName('')
-      setNewCommand('')
-      setNewArgs('')
-      setNewUrl('')
+      resetForm()
       loadServers()
     } catch (e) { setError(String(e)) }
-  }, [newName, newType, newCommand, newArgs, newUrl, loadServers])
+  }, [newName, newType, newCommand, newArgs, newUrl, newHeaders, loadServers])
 
-  /** 推断传输类型 */
   const getTransport = (config: McpServerConfig): string => {
     if (config.command) return 'stdio'
-    if (config.type) return config.type
-    if (config.url) return 'http'
-    return 'unknown'
+    return config.type ?? 'http'
   }
+
+  const isRemoteType = newType !== 'stdio'
 
   return (
     <div className="space-y-4">
-      {/* 操作栏 */}
       <button onClick={() => setShowAdd(!showAdd)}
         className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-500">
         {showAdd ? '收起' : '+ 添加 MCP Server'}
@@ -89,21 +106,24 @@ export function McpTab() {
                 className="w-full bg-gray-900 text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500" />
             </div>
 
+            {/* 4 种类型选择 */}
             <div>
-              <label className="text-xs text-gray-400 block mb-1">类型</label>
-              <div className="flex gap-2">
-                <button onClick={() => setNewType('stdio')}
-                  className={`px-3 py-1 text-xs rounded ${newType === 'stdio' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'}`}>
-                  Stdio（本地命令）
-                </button>
-                <button onClick={() => setNewType('http')}
-                  className={`px-3 py-1 text-xs rounded ${newType === 'http' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'}`}>
-                  HTTP（远程服务）
-                </button>
+              <label className="text-xs text-gray-400 block mb-1">传输类型</label>
+              <div className="grid grid-cols-4 gap-2">
+                {TYPE_OPTIONS.map(opt => (
+                  <button key={opt.value} onClick={() => setNewType(opt.value)}
+                    className={`px-2 py-2 text-xs rounded text-center transition-colors ${
+                      newType === opt.value ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                    }`}>
+                    <div className="font-medium">{opt.label}</div>
+                    <div className="text-[10px] mt-0.5 opacity-70">{opt.desc}</div>
+                  </button>
+                ))}
               </div>
             </div>
 
-            {newType === 'stdio' ? (
+            {/* Stdio 字段 */}
+            {newType === 'stdio' && (
               <>
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">命令</label>
@@ -116,15 +136,29 @@ export function McpTab() {
                     className="w-full bg-gray-900 text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500" />
                 </div>
               </>
-            ) : (
-              <div>
-                <label className="text-xs text-gray-400 block mb-1">URL</label>
-                <input value={newUrl} onChange={e => setNewUrl(e.target.value)} placeholder="如 https://mcp.deepwiki.com/mcp"
-                  className="w-full bg-gray-900 text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500" />
-              </div>
             )}
 
-            <button onClick={handleAdd} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-500">
+            {/* 远程类型字段（SSE / Streamable HTTP / HTTP） */}
+            {isRemoteType && (
+              <>
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">URL</label>
+                  <input value={newUrl} onChange={e => setNewUrl(e.target.value)} placeholder="如 https://mcp.deepwiki.com/mcp"
+                    className="w-full bg-gray-900 text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+                {newType === 'http' && (
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">请求头（JSON 格式，可选）</label>
+                    <input value={newHeaders} onChange={e => setNewHeaders(e.target.value)}
+                      placeholder='{"Authorization": "Bearer your-token"}'
+                      className="w-full bg-gray-900 text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500" />
+                  </div>
+                )}
+              </>
+            )}
+
+            <button onClick={handleAdd} disabled={!newName.trim()}
+              className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-500 disabled:opacity-50">
               添加
             </button>
           </div>
