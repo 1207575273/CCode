@@ -19,7 +19,7 @@ export function App() {
     <BrowserRouter>
       <div className="flex h-screen bg-gray-950 text-gray-100">
         <Sidebar />
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-y-auto">
           <Routes>
             <Route path="/session/:sessionId" element={<ChatPageWrapper />} />
             <Route path="/session" element={<ChatPageWrapper />} />

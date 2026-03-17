@@ -147,9 +147,16 @@ function ProvidersTab() {
 
 // ═══ 计价规则 Tab ═══
 
+const EMPTY_RULE: Omit<PricingRule, 'id'> = {
+  provider: '', model_pattern: '', input_price: 0, output_price: 0,
+  cache_read_price: 0, cache_write_price: 0, currency: 'USD',
+  effective_from: new Date().toISOString().slice(0, 10), effective_to: null, source: null, priority: 0,
+}
+
 function PricingTab() {
   const [rules, setRules] = useState<PricingRule[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [editing, setEditing] = useState<Partial<PricingRule> & { isNew?: boolean } | null>(null)
 
   const loadRules = useCallback(() => {
     apiGet<{ rules: PricingRule[] }>('/api/pricing')
@@ -164,17 +171,57 @@ function PricingTab() {
     try {
       await apiPost('/api/pricing/delete', { id })
       loadRules()
-    } catch (e) {
-      setError(String(e))
-    }
+    } catch (e) { setError(String(e)) }
   }, [loadRules])
 
-  if (error && rules.length === 0) return <div className="text-red-400">加载失败: {error}</div>
+  const handleSave = useCallback(async () => {
+    if (!editing) return
+    try {
+      if (editing.isNew) {
+        await apiPost('/api/pricing/add', editing)
+      } else {
+        await apiPost('/api/pricing/update', editing)
+      }
+      setEditing(null)
+      loadRules()
+    } catch (e) { setError(String(e)) }
+  }, [editing, loadRules])
 
   const sym = (c: string) => c === 'CNY' ? '¥' : '$'
 
   return (
-    <div>
+    <div className="space-y-4">
+      {/* 新增按钮 */}
+      <button
+        onClick={() => setEditing({ ...EMPTY_RULE, isNew: true })}
+        className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-500"
+      >
+        + 新增规则
+      </button>
+
+      {/* 编辑表单 */}
+      {editing && (
+        <div className="bg-gray-800 rounded-lg p-4 border border-blue-500/30">
+          <h4 className="text-sm font-medium mb-3">{editing.isNew ? '新增计价规则' : '编辑计价规则'}</h4>
+          <div className="grid grid-cols-3 gap-3 text-sm">
+            <Field label="供应商" value={editing.provider ?? ''} onChange={v => setEditing({ ...editing, provider: v })} />
+            <Field label="模型匹配" value={editing.model_pattern ?? ''} onChange={v => setEditing({ ...editing, model_pattern: v })} placeholder="如 claude-opus-4-*" />
+            <Field label="币种" value={editing.currency ?? 'USD'} onChange={v => setEditing({ ...editing, currency: v })} />
+            <Field label="输入价格 (/M tokens)" value={String(editing.input_price ?? 0)} onChange={v => setEditing({ ...editing, input_price: Number(v) })} type="number" />
+            <Field label="输出价格 (/M tokens)" value={String(editing.output_price ?? 0)} onChange={v => setEditing({ ...editing, output_price: Number(v) })} type="number" />
+            <Field label="生效日期" value={editing.effective_from ?? ''} onChange={v => setEditing({ ...editing, effective_from: v })} placeholder="YYYY-MM-DD" />
+            <Field label="Cache Read (/M)" value={String(editing.cache_read_price ?? 0)} onChange={v => setEditing({ ...editing, cache_read_price: Number(v) })} type="number" />
+            <Field label="Cache Write (/M)" value={String(editing.cache_write_price ?? 0)} onChange={v => setEditing({ ...editing, cache_write_price: Number(v) })} type="number" />
+            <Field label="来源说明" value={editing.source ?? ''} onChange={v => setEditing({ ...editing, source: v })} placeholder="如 官网 2026-03" />
+          </div>
+          <div className="flex gap-2 mt-4">
+            <button onClick={handleSave} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-500">保存</button>
+            <button onClick={() => setEditing(null)} className="px-3 py-1.5 bg-gray-700 text-gray-300 text-sm rounded hover:bg-gray-600">取消</button>
+          </div>
+        </div>
+      )}
+
+      {/* 规则列表 */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -197,7 +244,8 @@ function PricingTab() {
                 <td className="px-3 py-2 text-right">{sym(r.currency)}{r.output_price}</td>
                 <td className="px-3 py-2">{r.currency}</td>
                 <td className="px-3 py-2 text-gray-400">{r.effective_from}</td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-2 space-x-2">
+                  <button onClick={() => setEditing(r)} className="text-blue-400 hover:text-blue-300 text-xs">编辑</button>
                   <button onClick={() => handleDelete(r.id)} className="text-red-400 hover:text-red-300 text-xs">删除</button>
                 </td>
               </tr>
@@ -205,7 +253,20 @@ function PricingTab() {
           </tbody>
         </table>
       </div>
-      {rules.length === 0 && <p className="text-gray-500 text-sm mt-4">暂无计价规则</p>}
+      {rules.length === 0 && <p className="text-gray-500 text-sm">暂无计价规则</p>}
+      {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
+    </div>
+  )
+}
+
+function Field({ label, value, onChange, placeholder, type = 'text' }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string
+}) {
+  return (
+    <div>
+      <label className="text-xs text-gray-400 block mb-1">{label}</label>
+      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+        className="w-full bg-gray-900 text-sm rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-blue-500" />
     </div>
   )
 }

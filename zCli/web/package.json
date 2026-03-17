@@ -15,6 +15,7 @@
     "react-dom": "^18.3.0",
     "react-markdown": "^9.0.0",
     "react-router-dom": "^7.13.1",
+    "recharts": "^3.8.0",
     "rehype-highlight": "^7.0.0",
     "remark-gfm": "^4.0.1"
   },

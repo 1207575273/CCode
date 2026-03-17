@@ -30,11 +30,59 @@ export function createApiRoutes(): Hono {
 
   api.get('/overview', (c) => {
     try {
-      const meter = new TokenMeter()
-      const today = meter.getTodayStats()
-      const month = meter.getMonthStats()
+      const db = getDb()
+
+      // 按时间范围和 provider 分组的 token 统计
+      const now = new Date()
+      const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0)
+      const weekStart = new Date(now); weekStart.setDate(weekStart.getDate() - weekStart.getDay()); weekStart.setHours(0, 0, 0, 0)
+      const monthStart = new Date(now); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
+
+      const statsByRange = (since: string) => db.prepare(`
+        SELECT provider, model,
+          COALESCE(SUM(input_tokens), 0) as totalInput,
+          COALESCE(SUM(output_tokens), 0) as totalOutput,
+          COALESCE(SUM(cost_amount), 0) as totalCost,
+          cost_currency as currency,
+          COUNT(*) as callCount
+        FROM usage_logs WHERE timestamp >= ?
+        GROUP BY provider, model, cost_currency
+        ORDER BY totalCost DESC
+      `).all(since)
+
+      // 按 provider 分组的饼图数据
+      const byProvider = (since: string) => db.prepare(`
+        SELECT provider,
+          COALESCE(SUM(input_tokens + output_tokens), 0) as totalTokens,
+          COALESCE(SUM(cost_amount), 0) as totalCost,
+          cost_currency as currency,
+          COUNT(*) as callCount
+        FROM usage_logs WHERE timestamp >= ?
+        GROUP BY provider, cost_currency
+        ORDER BY totalTokens DESC
+      `).all(since)
+
+      // 最近 7 天每日趋势
+      const dailyTrend = db.prepare(`
+        SELECT DATE(timestamp) as date,
+          COALESCE(SUM(input_tokens), 0) as totalInput,
+          COALESCE(SUM(output_tokens), 0) as totalOutput,
+          COALESCE(SUM(cost_amount), 0) as totalCost,
+          COUNT(*) as callCount
+        FROM usage_logs WHERE timestamp >= ?
+        GROUP BY DATE(timestamp)
+        ORDER BY date
+      `).all(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString())
+
       const sessions = sessionStore.list({ limit: 5 })
-      return c.json({ today, month, recentSessions: sessions })
+
+      return c.json({
+        today: { stats: statsByRange(todayStart.toISOString()), byProvider: byProvider(todayStart.toISOString()) },
+        week: { stats: statsByRange(weekStart.toISOString()), byProvider: byProvider(weekStart.toISOString()) },
+        month: { stats: statsByRange(monthStart.toISOString()), byProvider: byProvider(monthStart.toISOString()) },
+        dailyTrend,
+        recentSessions: sessions,
+      })
     } catch (err) {
       return c.json({ error: String(err) }, 500)
     }

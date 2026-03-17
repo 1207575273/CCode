@@ -153,7 +153,7 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
   }, [send, isStreaming])
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-full">
       <header className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold">ZCli</h1>
