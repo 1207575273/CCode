@@ -18,7 +18,7 @@ export class GcCommand implements Command {
         dryRun = true
       } else if (arg === '--days' && args[i + 1]) {
         const n = parseInt(args[i + 1]!, 10)
-        if (!isNaN(n) && n > 0) {
+        if (!isNaN(n) && n >= 0) {
           days = n
           i++
         }
