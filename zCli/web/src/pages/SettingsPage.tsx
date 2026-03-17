@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { apiGet, apiPost } from '../hooks/useApi'
+import { PluginsTab } from '../components/PluginsTab'
+import { McpTab } from '../components/McpTab'
 
 interface ProviderConfig {
   apiKey: string
@@ -31,7 +33,7 @@ interface PricingRule {
   priority: number
 }
 
-type Tab = 'providers' | 'pricing'
+type Tab = 'providers' | 'pricing' | 'plugins' | 'mcp'
 
 export function SettingsPage() {
   const [tab, setTab] = useState<Tab>('providers')
@@ -44,9 +46,14 @@ export function SettingsPage() {
       <div className="flex gap-1 mb-6 border-b border-gray-700">
         <TabButton active={tab === 'providers'} onClick={() => setTab('providers')}>Provider 配置</TabButton>
         <TabButton active={tab === 'pricing'} onClick={() => setTab('pricing')}>计价规则</TabButton>
+        <TabButton active={tab === 'plugins'} onClick={() => setTab('plugins')}>插件管理</TabButton>
+        <TabButton active={tab === 'mcp'} onClick={() => setTab('mcp')}>MCP 管理</TabButton>
       </div>
 
-      {tab === 'providers' ? <ProvidersTab /> : <PricingTab />}
+      {tab === 'providers' && <ProvidersTab />}
+      {tab === 'pricing' && <PricingTab />}
+      {tab === 'plugins' && <PluginsTab />}
+      {tab === 'mcp' && <McpTab />}
     </div>
   )
 }

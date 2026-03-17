@@ -22,6 +22,8 @@ import { sessionStore } from '@persistence/index.js'
 import { getDb } from '@persistence/db.js'
 import { configManager } from '@config/config-manager.js'
 import { TokenMeter } from '@observability/token-meter.js'
+import { createPluginsRoutes } from './plugins-api.js'
+import { createMcpRoutes } from './mcp-api.js'
 
 export function createApiRoutes(): Hono {
   const api = new Hono()
@@ -255,6 +257,10 @@ export function createApiRoutes(): Hono {
       return c.json({ error: String(err) }, 500)
     }
   })
+
+  // Plugins + MCP 管理
+  api.route('/plugins', createPluginsRoutes())
+  api.route('/mcp', createMcpRoutes())
 
   return api
 }
