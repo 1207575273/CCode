@@ -125,7 +125,7 @@ function ConversationDetail({ sessionId }: { sessionId: string }) {
   // 回放状态
   const [visibleCount, setVisibleCount] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [speedIdx, setSpeedIdx] = useState(1) // 默认"中"
+  const [speedIdx, setSpeedIdx] = useState(0) // 默认"慢"
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const bottomRef = useRef<HTMLDivElement>(null)
 
