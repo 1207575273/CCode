@@ -1,15 +1,16 @@
-import { defineConfig } from 'tsup'
+import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ['bin/zcli.ts'],
-  outDir: 'dist/bin',
-  format: ['esm'],
-  target: 'node20',
+  entry: ["bin/zcli.ts"],
+  outDir: "dist/bin",
+  format: ["esm"],
+  target: "node20",
   splitting: false,
-  sourcemap: true,
+  sourcemap: process.env.NODE_ENV !== "production",
   clean: true,
+  minify: process.env.NODE_ENV === "production" && "terser",
   banner: {
-    js: '#!/usr/bin/env node',
+    js: "#!/usr/bin/env node",
   },
-  tsconfig: 'tsconfig.build.json',
-})
+  tsconfig: "tsconfig.build.json",
+});

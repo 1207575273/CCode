@@ -10,14 +10,15 @@
     "dev": "tsx bin/zcli.ts",
     "dev:pipe": "tsx bin/zcli.ts",
     "dev:web": "tsx bin/zcli.ts --web",
-    "build": "tsup",
+    "build": "cross-env NODE_ENV=production tsup",
     "build:web": "cd web && pnpm build",
-    "build:all": "tsup && cd web && pnpm build",
+    "build:all": "cross-env NODE_ENV=production tsup && cd web && pnpm build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "tsc --noEmit",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/bin/zcli.js"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -57,7 +58,9 @@
     "ink-text-input": "^6.0.0",
     "libsql": "^0.5.22",
     "marked": "^17.0.4",
+    "prettier": "^3.8.1",
     "react": "^18.3.1",
+    "terser": "^5.46.1",
     "uuid": "^13.0.0",
     "ws": "^8.19.0",
     "zod": "^4.3.6"
@@ -68,6 +71,7 @@
     "@types/react": "^18.3.28",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^4.0.18",
+    "cross-env": "^10.1.0",
     "ink-testing-library": "^4.0.0",
     "tsup": "^8.5.1",
     "tsx": "^4.21.0",
