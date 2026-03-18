@@ -1,5 +1,12 @@
 // src/components/PluginsTab.tsx
 
+/**
+ * 插件与 Skill 管理 — 三个子 Tab：
+ * 1. 已安装：当前 plugins + skills 列表
+ * 2. Claude Code 导入：从 Claude Code 迁移已安装插件
+ * 3. Skills 市场：从 skills.sh 浏览热门 + 命令行安装
+ */
+
 import { useState, useEffect, useCallback } from 'react'
 import { apiGet, apiPost } from '../hooks/useApi'
 
@@ -20,14 +27,55 @@ interface ClaudePlugin {
   alreadyImported: boolean
 }
 
+type SubTab = 'installed' | 'claude' | 'marketplace'
+
 export function PluginsTab() {
+  const [subTab, setSubTab] = useState<SubTab>('installed')
+
+  return (
+    <div className="space-y-4">
+      {/* 子 Tab 切换 */}
+      <div className="flex gap-1 border-b border-gray-700">
+        <SubTabButton active={subTab === 'installed'} onClick={() => setSubTab('installed')}>
+          已安装
+        </SubTabButton>
+        <SubTabButton active={subTab === 'claude'} onClick={() => setSubTab('claude')}>
+          Claude Code 导入
+        </SubTabButton>
+        <SubTabButton active={subTab === 'marketplace'} onClick={() => setSubTab('marketplace')}>
+          Skills 市场
+        </SubTabButton>
+      </div>
+
+      {subTab === 'installed' && <InstalledPanel />}
+      {subTab === 'claude' && <ClaudeImportPanel />}
+      {subTab === 'marketplace' && <MarketplacePanel />}
+    </div>
+  )
+}
+
+function SubTabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1.5 text-sm border-b-2 transition-colors ${
+        active
+          ? 'border-blue-500 text-blue-400'
+          : 'border-transparent text-gray-500 hover:text-gray-300'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+// ═══════════════════════════════════════════════
+// 已安装面板
+// ═══════════════════════════════════════════════
+
+function InstalledPanel() {
   const [plugins, setPlugins] = useState<PluginInfo[]>([])
-  const [claudePlugins, setClaudePlugins] = useState<ClaudePlugin[]>([])
-  const [showImport, setShowImport] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // 导入进度
-  const [importing, setImporting] = useState<string | null>(null) // 当前正在导入的插件名
-  const [importDone, setImportDone] = useState<Set<string>>(new Set()) // 已成功导入的
 
   const loadPlugins = useCallback(() => {
     apiGet<{ plugins: PluginInfo[] }>('/api/plugins')
@@ -35,30 +83,67 @@ export function PluginsTab() {
       .catch(e => setError(String(e)))
   }, [])
 
-  const loadClaudePlugins = useCallback(() => {
-    apiGet<{ available: ClaudePlugin[] }>('/api/plugins/claude-available')
-      .then(d => setClaudePlugins(d.available))
-      .catch(e => setError(String(e)))
-  }, [])
-
   useEffect(() => { loadPlugins() }, [loadPlugins])
 
   const handleDelete = useCallback(async (name: string) => {
-    if (!window.confirm(`确定删除插件 ${name}？`)) return
+    if (!window.confirm(`确定删除 ${name}？`)) return
     try {
       await apiPost('/api/plugins/delete', { name })
       loadPlugins()
     } catch (e) { setError(String(e)) }
   }, [loadPlugins])
 
+  return (
+    <div className="space-y-2">
+      {plugins.length === 0 ? (
+        <p className="text-gray-500 text-sm">暂无已安装插件。可从 "Claude Code 导入" 或 "Skills 市场" 添加。</p>
+      ) : (
+        plugins.map(p => (
+          <div key={p.name} className="bg-gray-800 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{p.name}</span>
+                <span className="text-xs text-gray-500">v{p.version}</span>
+              </div>
+              <button onClick={() => handleDelete(p.name)} className="text-red-400 hover:text-red-300 text-xs">删除</button>
+            </div>
+            {p.description && <p className="text-sm text-gray-400 mb-2">{p.description}</p>}
+            <div className="flex gap-4 text-xs text-gray-500">
+              <span>Skills: {p.skillCount} 个</span>
+              <span>Hooks: {p.hasHooks ? '有' : '无'}</span>
+            </div>
+          </div>
+        ))
+      )}
+      {error && <p className="text-red-400 text-sm">{error}</p>}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════
+// Claude Code 导入面板
+// ═══════════════════════════════════════════════
+
+function ClaudeImportPanel() {
+  const [claudePlugins, setClaudePlugins] = useState<ClaudePlugin[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [importing, setImporting] = useState<string | null>(null)
+  const [importDone, setImportDone] = useState<Set<string>>(new Set())
+
+  const loadClaudePlugins = useCallback(() => {
+    apiGet<{ available: ClaudePlugin[] }>('/api/plugins/claude-available')
+      .then(d => setClaudePlugins(d.available))
+      .catch(e => setError(String(e)))
+  }, [])
+
+  useEffect(() => { loadClaudePlugins() }, [loadClaudePlugins])
+
   const handleImport = useCallback(async (plugin: ClaudePlugin) => {
     setImporting(plugin.name)
     try {
       await apiPost('/api/plugins/import-claude', { name: plugin.name, sourcePath: plugin.installPath })
       setImportDone(prev => new Set([...prev, plugin.name]))
-      // 短暂显示成功状态后刷新
       setTimeout(() => {
-        loadPlugins()
         loadClaudePlugins()
         setImporting(null)
       }, 800)
@@ -66,7 +151,7 @@ export function PluginsTab() {
       setError(String(e))
       setImporting(null)
     }
-  }, [loadPlugins, loadClaudePlugins])
+  }, [loadClaudePlugins])
 
   const handleImportAll = useCallback(async () => {
     const toImport = claudePlugins.filter(p => !p.alreadyImported)
@@ -75,96 +160,217 @@ export function PluginsTab() {
       try {
         await apiPost('/api/plugins/import-claude', { name: p.name, sourcePath: p.installPath })
         setImportDone(prev => new Set([...prev, p.name]))
-        // 每个导入之间加点延迟让动画可见
         await new Promise(r => setTimeout(r, 500))
       } catch { /* 单个失败继续 */ }
     }
     setImporting(null)
-    loadPlugins()
     loadClaudePlugins()
-  }, [claudePlugins, loadPlugins, loadClaudePlugins])
+  }, [claudePlugins, loadClaudePlugins])
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-gray-400">检测本机 Claude Code 已安装的插件，一键导入到 ZCli。</p>
+
+      {claudePlugins.some(p => !p.alreadyImported) && (
+        <button onClick={handleImportAll} disabled={!!importing}
+          className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-500 disabled:opacity-50">
+          全部导入
+        </button>
+      )}
+
+      {claudePlugins.length === 0 ? (
+        <p className="text-gray-500 text-sm">未检测到 Claude Code 已安装的插件</p>
+      ) : (
+        <div className="space-y-2">
+          {claudePlugins.map(p => {
+            const isImporting = importing === p.name
+            const isDone = importDone.has(p.name) || p.alreadyImported
+            return (
+              <div key={p.name} className={`flex items-center justify-between p-3 bg-gray-800 rounded-lg transition-colors ${isImporting ? 'ring-1 ring-blue-500/50' : ''} ${isDone ? 'opacity-70' : ''}`}>
+                <div className="flex items-center gap-2">
+                  {isImporting && <span className="animate-spin text-blue-400">⟳</span>}
+                  {isDone && !isImporting && <span className="text-green-400">✓</span>}
+                  <span className="text-sm font-mono">{p.name}</span>
+                  <span className="text-xs text-gray-500">v{p.version}</span>
+                  <span className="text-xs text-gray-600">{p.marketplace}</span>
+                </div>
+                {isImporting ? (
+                  <span className="text-xs text-blue-400 animate-pulse">导入中...</span>
+                ) : isDone ? (
+                  <span className="text-xs text-green-400">已导入</span>
+                ) : (
+                  <button onClick={() => handleImport(p)} disabled={!!importing}
+                    className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-500 disabled:opacity-50">
+                    导入
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {error && <p className="text-red-400 text-sm">{error}</p>}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════
+// Skills 市场面板
+// ═══════════════════════════════════════════════
+
+/** 热门 Skills 推荐（静态数据，后续可从 skills.sh API 动态拉取） */
+const FEATURED_SKILLS = [
+  { source: 'vercel-labs/agent-skills', skill: 'find-skills', name: 'find-skills', desc: '搜索 skills.sh 上的所有 skill', installs: '599K' },
+  { source: 'vercel-labs/agent-skills', skill: 'vercel-react-best-practices', name: 'react-best-practices', desc: 'React + Next.js 性能优化 40+ 规则', installs: '221K' },
+  { source: 'vercel-labs/agent-skills', skill: 'web-design-guidelines', name: 'web-design-guidelines', desc: '可访问性 + 性能 100+ 设计规则', installs: '175K' },
+  { source: 'vercel-labs/agent-skills', skill: 'frontend-design', name: 'frontend-design', desc: '前端界面设计最佳实践', installs: '169K' },
+  { source: 'anthropics/skills', skill: 'claude-api', name: 'claude-api', desc: 'Claude API / Anthropic SDK 使用指南', installs: '87K' },
+  { source: 'vercel-labs/agent-skills', skill: 'ai-sdk-best-practices', name: 'ai-sdk-best-practices', desc: 'Vercel AI SDK 最佳实践', installs: '95K' },
+]
+
+function MarketplacePanel() {
+  const [command, setCommand] = useState('')
+  const [installing, setInstalling] = useState(false)
+  const [installResult, setInstallResult] = useState<{ success: boolean; message: string } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  /** 解析用户输入的命令或 URL */
+  function parseInput(input: string): { source: string; skill?: string } | null {
+    const trimmed = input.trim()
+    if (!trimmed) return null
+
+    // 格式1: npx skills add <source> --skill <name>
+    const npxMatch = trimmed.match(/npx\s+skills\s+add\s+(\S+)(?:\s+--skill\s+(\S+))?/)
+    if (npxMatch) {
+      return { source: npxMatch[1]!, skill: npxMatch[2] }
+    }
+
+    // 格式2: owner/repo --skill name
+    const shortMatch = trimmed.match(/^(\S+\/\S+)(?:\s+--skill\s+(\S+))?$/)
+    if (shortMatch) {
+      return { source: shortMatch[1]!, skill: shortMatch[2] }
+    }
+
+    // 格式3: https://github.com/... URL
+    if (trimmed.startsWith('http')) {
+      return { source: trimmed }
+    }
+
+    return null
+  }
+
+  const handleInstall = useCallback(async (source: string, skill?: string) => {
+    setInstalling(true)
+    setInstallResult(null)
+    setError(null)
+    try {
+      const res = await apiPost<{ success: boolean; output: string; error?: string }>(
+        '/api/plugins/install-skill',
+        { source, skill },
+      )
+      if (res.success) {
+        setInstallResult({ success: true, message: `安装成功！${skill ? `skill: ${skill}` : `source: ${source}`}` })
+        setCommand('')
+      } else {
+        setInstallResult({ success: false, message: res.error ?? '安装失败' })
+      }
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setInstalling(false)
+    }
+  }, [])
+
+  const handleSubmit = useCallback(() => {
+    const parsed = parseInput(command)
+    if (!parsed) {
+      setError('无法解析命令。支持格式：owner/repo、npx skills add <source> --skill <name>、GitHub URL')
+      return
+    }
+    handleInstall(parsed.source, parsed.skill)
+  }, [command, handleInstall])
 
   return (
     <div className="space-y-4">
-      {/* 操作栏 */}
-      <div className="flex gap-2">
-        <button onClick={() => { setShowImport(!showImport); if (!showImport) loadClaudePlugins() }}
-          className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-500">
-          {showImport ? '收起导入' : '+ 导入插件'}
-        </button>
+      {/* 说明 */}
+      <div className="text-sm text-gray-400">
+        <p>
+          从{' '}
+          <a href="https://skills.sh/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+            skills.sh
+          </a>
+          {' '}生态安装 skill，扩展 ZCli 的能力。
+        </p>
       </div>
 
-      {/* Claude Code 导入面板 */}
-      {showImport && (
-        <div className="bg-gray-800 rounded-lg p-4 border border-blue-500/30">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-sm font-medium">从 Claude Code CLI 导入</h4>
-            {claudePlugins.some(p => !p.alreadyImported) && (
-              <button onClick={handleImportAll} className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-500">
-                全部导入
-              </button>
-            )}
-          </div>
-          {claudePlugins.length === 0 ? (
-            <p className="text-gray-500 text-sm">未检测到 Claude Code 已安装的插件</p>
-          ) : (
-            <div className="space-y-2">
-              {claudePlugins.map(p => {
-                const isImporting = importing === p.name
-                const isDone = importDone.has(p.name) || p.alreadyImported
-                return (
-                  <div key={p.name} className={`flex items-center justify-between p-2 bg-gray-900 rounded transition-colors ${isImporting ? 'ring-1 ring-blue-500/50' : ''} ${isDone ? 'opacity-70' : ''}`}>
-                    <div className="flex items-center gap-2">
-                      {isImporting && <span className="animate-spin text-blue-400">⟳</span>}
-                      {isDone && !isImporting && <span className="text-green-400">✓</span>}
-                      <span className="text-sm font-mono">{p.name}</span>
-                      <span className="text-xs text-gray-500">v{p.version}</span>
-                      <span className="text-xs text-gray-600">{p.marketplace}</span>
-                    </div>
-                    {isImporting ? (
-                      <span className="text-xs text-blue-400 animate-pulse">导入中...</span>
-                    ) : isDone ? (
-                      <span className="text-xs text-green-400">已导入</span>
-                    ) : (
-                      <button onClick={() => handleImport(p)} disabled={!!importing}
-                        className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-500 disabled:opacity-50">
-                        导入
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
+      {/* 命令输入框 */}
+      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+        <label className="text-sm text-gray-300 mb-2 block">安装 Skill</label>
+        <div className="flex gap-2">
+          <input
+            value={command}
+            onChange={e => { setCommand(e.target.value); setError(null); setInstallResult(null) }}
+            onKeyDown={e => { if (e.key === 'Enter' && !installing) handleSubmit() }}
+            placeholder="vercel-labs/agent-skills --skill find-skills"
+            className="flex-1 bg-gray-900 text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-600 font-mono"
+            disabled={installing}
+          />
+          <button
+            onClick={handleSubmit}
+            disabled={installing || !command.trim()}
+            className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-500 disabled:opacity-50 transition-colors whitespace-nowrap"
+          >
+            {installing ? '安装中...' : '安装'}
+          </button>
         </div>
-      )}
+        <p className="text-xs text-gray-600 mt-1.5">
+          支持格式：<code className="text-gray-500">owner/repo</code>、
+          <code className="text-gray-500">npx skills add ...</code>、
+          <code className="text-gray-500">GitHub URL</code>
+        </p>
 
-      {/* 已安装列表 */}
-      {plugins.length === 0 ? (
-        <p className="text-gray-500 text-sm">暂无已安装插件</p>
-      ) : (
-        <div className="space-y-2">
-          {plugins.map(p => (
-            <div key={p.name} className="bg-gray-800 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
+        {/* 安装结果 */}
+        {installResult && (
+          <div className={`mt-2 text-sm ${installResult.success ? 'text-green-400' : 'text-red-400'}`}>
+            {installResult.success ? '✓' : '✗'} {installResult.message}
+          </div>
+        )}
+        {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+      </div>
+
+      {/* 热门推荐 */}
+      <div>
+        <h4 className="text-sm font-medium text-gray-300 mb-2">热门 Skills</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {FEATURED_SKILLS.map(s => (
+            <div key={s.name} className="bg-gray-800 rounded-lg p-3 flex items-start justify-between group hover:bg-gray-750 transition-colors">
+              <div className="min-w-0 flex-1 mr-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-lg">🔌</span>
-                  <span className="font-medium">{p.name}</span>
-                  <span className="text-xs text-gray-500">v{p.version}</span>
+                  <span className="text-sm font-medium text-gray-200">{s.name}</span>
+                  <span className="text-xs text-gray-600">{s.installs}</span>
                 </div>
-                <button onClick={() => handleDelete(p.name)} className="text-red-400 hover:text-red-300 text-xs">删除</button>
+                <p className="text-xs text-gray-500 mt-0.5">{s.desc}</p>
               </div>
-              {p.description && <p className="text-sm text-gray-400 mb-2">{p.description}</p>}
-              <div className="flex gap-4 text-xs text-gray-500">
-                <span>Skills: {p.skillCount} 个</span>
-                <span>Hooks: {p.hasHooks ? '有' : '无'}</span>
-              </div>
+              <button
+                onClick={() => handleInstall(s.source, s.skill)}
+                disabled={installing}
+                className="px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded hover:bg-blue-600 hover:text-white transition-colors disabled:opacity-50 shrink-0"
+              >
+                安装
+              </button>
             </div>
           ))}
         </div>
-      )}
+      </div>
 
-      {error && <p className="text-red-400 text-sm">{error}</p>}
+      {/* 更多提示 */}
+      <p className="text-xs text-gray-600">
+        浏览更多：
+        <a href="https://skills.sh/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline ml-1">
+          skills.sh
+        </a>
+        {' '}| 275+ skills 可用
+      </p>
     </div>
   )
 }

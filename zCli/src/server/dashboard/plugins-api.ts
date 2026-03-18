@@ -1,16 +1,17 @@
 // src/server/dashboard/plugins-api.ts
 
 /**
- * Plugins 管理 API
+ * 插件与 Skill 管理 API
  *
  * GET  /api/plugins                  — 已安装插件列表
  * GET  /api/plugins/claude-available — 从 Claude Code 可导入的插件
  * POST /api/plugins/import-claude    — 从 Claude Code 导入（复制目录）
  * POST /api/plugins/delete           — 删除插件
+ * POST /api/plugins/install-skill    — 从 skills.sh 安装 skill（npx skills add）
  */
 
 import { Hono } from 'hono'
-import { existsSync, readFileSync, mkdirSync, rmSync, cpSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, mkdirSync, rmSync, cpSync, readdirSync, writeFileSync } from 'node:fs'
 import { join, basename } from 'node:path'
 import { homedir } from 'node:os'
 import fg from 'fast-glob'
@@ -96,6 +97,54 @@ export function createPluginsRoutes(): Hono {
 
       rmSync(targetDir, { recursive: true, force: true })
       return c.json({ success: true })
+    } catch (err) {
+      return c.json({ error: String(err) }, 500)
+    }
+  })
+
+  // ═══ 从 skills.sh 安装 skill ═══
+  api.post('/install-skill', async (c) => {
+    try {
+      const body = await c.req.json() as { source: string; skill?: string }
+      const source = body.source?.trim()
+      if (!source) {
+        return c.json({ error: 'source 不能为空' }, 400)
+      }
+
+      // 构建 npx skills add 命令
+      // 安装到 ZCli 插件目录，指定 agent 为 zcli
+      const pluginsDir = zcliPluginsDir()
+      mkdirSync(pluginsDir, { recursive: true })
+
+      const args = ['skills', 'add', source, '--yes', '--copy']
+      if (body.skill) {
+        args.push('--skill', body.skill)
+      }
+
+      // 执行 npx skills add
+      const { execa } = await import('execa')
+      const result = await execa('npx', args, {
+        cwd: pluginsDir,
+        timeout: 60_000,
+        reject: false,
+        env: { ...process.env, HOME: homedir(), USERPROFILE: homedir() },
+      })
+
+      if (result.exitCode !== 0) {
+        const errMsg = result.stderr || result.stdout || `exit code ${result.exitCode}`
+        return c.json({ error: `安装失败: ${errMsg}` }, 500)
+      }
+
+      // npx skills add 默认安装到 .zcli/skills/ 或当前目录
+      // 需要把安装的 skill 移到 plugins 目录结构下
+      // 先尝试扫描新增的 SKILL.md
+      const installed = scanInstalledPlugins()
+
+      return c.json({
+        success: true,
+        output: result.stdout,
+        plugins: installed,
+      })
     } catch (err) {
       return c.json({ error: String(err) }, 500)
     }

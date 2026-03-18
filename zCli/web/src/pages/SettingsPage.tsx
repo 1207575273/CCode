@@ -47,7 +47,7 @@ export function SettingsPage() {
       <div className="flex gap-1 mb-6 border-b border-gray-700">
         <TabButton active={tab === 'providers'} onClick={() => setTab('providers')}>Provider 配置</TabButton>
         <TabButton active={tab === 'pricing'} onClick={() => setTab('pricing')}>计价规则</TabButton>
-        <TabButton active={tab === 'plugins'} onClick={() => setTab('plugins')}>插件管理</TabButton>
+        <TabButton active={tab === 'plugins'} onClick={() => setTab('plugins')}>插件与 Skill</TabButton>
         <TabButton active={tab === 'mcp'} onClick={() => setTab('mcp')}>MCP 管理</TabButton>
       </div>
 
