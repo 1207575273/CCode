@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
-import { DispatchAgentTool } from '@tools/dispatch-agent.js'
-import type { ToolContext, ToolResult } from '@tools/types.js'
+import { DispatchAgentTool } from '@tools/ext/dispatch-agent.js'
+import type { ToolContext, ToolResult } from '@tools/core/types.js'
 import type { AgentEvent } from '@core/agent-loop.js'
-import { ToolRegistry } from '@tools/registry.js'
+import { ToolRegistry } from '@tools/core/registry.js'
 import type { LLMProvider } from '@providers/provider.js'
-import type { Tool } from '@tools/types.js'
+import type { Tool } from '@tools/core/types.js'
 
 // ═══════════════════════════════════════════════
 // Mock 工具

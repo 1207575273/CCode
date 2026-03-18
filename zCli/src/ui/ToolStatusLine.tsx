@@ -19,7 +19,7 @@ import { Box, Text } from 'ink'
 import Spinner from 'ink-spinner'
 import { formatDuration, truncate } from './format-utils.js'
 import type { CompletedToolCall } from './ChatView.js'
-import type { ToolResultMeta } from '@tools/types.js'
+import type { ToolResultMeta } from '@tools/core/types.js'
 
 // ═══════════════════════════════════════════════
 // 类型

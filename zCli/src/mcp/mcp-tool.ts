@@ -1,7 +1,7 @@
 // src/mcp/mcp-tool.ts
 
 import type { Client } from '@modelcontextprotocol/sdk/client'
-import type { Tool, ToolContext, ToolResult } from '@tools/types.js'
+import type { Tool, ToolContext, ToolResult } from '@tools/core/types.js'
 
 export interface McpToolDefinition {
   name: string

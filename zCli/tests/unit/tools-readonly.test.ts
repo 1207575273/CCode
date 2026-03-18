@@ -21,7 +21,7 @@ afterEach(() => {
 // ---- read_file ----
 describe('ReadFileTool', () => {
   it('读取文件内容', async () => {
-    const { ReadFileTool } = await import('@tools/read-file.js')
+    const { ReadFileTool } = await import('@tools/core/read-file.js')
     const tool = new ReadFileTool()
     const result = await tool.execute({ path: join(testDir, 'hello.ts') }, { cwd: testDir })
     expect(result.success).toBe(true)
@@ -29,7 +29,7 @@ describe('ReadFileTool', () => {
   })
 
   it('文件不存在返回错误', async () => {
-    const { ReadFileTool } = await import('@tools/read-file.js')
+    const { ReadFileTool } = await import('@tools/core/read-file.js')
     const tool = new ReadFileTool()
     const result = await tool.execute({ path: join(testDir, 'nope.ts') }, { cwd: testDir })
     expect(result.success).toBe(false)
@@ -37,7 +37,7 @@ describe('ReadFileTool', () => {
   })
 
   it('dangerous 为 false', async () => {
-    const { ReadFileTool } = await import('@tools/read-file.js')
+    const { ReadFileTool } = await import('@tools/core/read-file.js')
     expect(new ReadFileTool().dangerous).toBe(false)
   })
 })
@@ -45,7 +45,7 @@ describe('ReadFileTool', () => {
 // ---- glob ----
 describe('GlobTool', () => {
   it('匹配 *.ts 返回文件列表', async () => {
-    const { GlobTool } = await import('@tools/glob.js')
+    const { GlobTool } = await import('@tools/core/glob.js')
     const tool = new GlobTool()
     const result = await tool.execute({ pattern: '**/*.ts', cwd: testDir }, { cwd: testDir })
     expect(result.success).toBe(true)
@@ -54,7 +54,7 @@ describe('GlobTool', () => {
   })
 
   it('无匹配时返回空列表提示', async () => {
-    const { GlobTool } = await import('@tools/glob.js')
+    const { GlobTool } = await import('@tools/core/glob.js')
     const tool = new GlobTool()
     const result = await tool.execute({ pattern: '*.py', cwd: testDir }, { cwd: testDir })
     expect(result.success).toBe(true)
@@ -65,7 +65,7 @@ describe('GlobTool', () => {
 // ---- grep ----
 describe('GrepTool', () => {
   it('搜索内容返回匹配行', async () => {
-    const { GrepTool } = await import('@tools/grep.js')
+    const { GrepTool } = await import('@tools/core/grep.js')
     const tool = new GrepTool()
     const result = await tool.execute(
       { pattern: 'greeting', path: testDir, recursive: true },
@@ -76,7 +76,7 @@ describe('GrepTool', () => {
   })
 
   it('无匹配时返回提示', async () => {
-    const { GrepTool } = await import('@tools/grep.js')
+    const { GrepTool } = await import('@tools/core/grep.js')
     const tool = new GrepTool()
     const result = await tool.execute(
       { pattern: 'nonexistent_xyz', path: testDir, recursive: true },

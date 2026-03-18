@@ -17,6 +17,8 @@
       "@core/*": ["src/core/*"],
       "@providers/*": ["src/providers/*"],
       "@tools/*": ["src/tools/*"],
+      "@tools/core/*": ["src/tools/core/*"],
+      "@tools/ext/*": ["src/tools/ext/*"],
       "@ui/*": ["src/ui/*"],
       "@platform/*": ["src/platform/*"],
       "@commands/*": ["src/commands/*"],

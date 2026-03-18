@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { BashTool } from '@tools/bash.js'
-import type { ToolContext } from '@tools/types.js'
+import { BashTool } from '@tools/core/bash.js'
+import type { ToolContext } from '@tools/core/types.js'
 
 const CTX: ToolContext = { cwd: process.cwd() }
 

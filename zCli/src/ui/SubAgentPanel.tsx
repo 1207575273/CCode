@@ -13,8 +13,8 @@
 import React, { useState, useCallback } from 'react'
 import { Box, Text, useInput } from 'ink'
 import Spinner from 'ink-spinner'
-import { listSubAgents, getSubAgent } from '@tools/subagent-store.js'
-import type { SubAgentState, SubAgentDetailEvent } from '@tools/subagent-store.js'
+import { listSubAgents, getSubAgent } from '@tools/ext/subagent-store.js'
+import type { SubAgentState, SubAgentDetailEvent } from '@tools/ext/subagent-store.js'
 import { formatDuration } from './format-utils.js'
 
 interface SubAgentPanelProps {

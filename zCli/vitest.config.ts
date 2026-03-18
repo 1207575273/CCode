@@ -17,6 +17,8 @@ export default defineConfig({
       '@core': new URL('./src/core', import.meta.url).pathname,
       '@providers': new URL('./src/providers', import.meta.url).pathname,
       '@tools': new URL('./src/tools', import.meta.url).pathname,
+      '@tools/core': new URL('./src/tools/core', import.meta.url).pathname,
+      '@tools/ext': new URL('./src/tools/ext', import.meta.url).pathname,
       '@ui': new URL('./src/ui', import.meta.url).pathname,
       '@platform': new URL('./src/platform', import.meta.url).pathname,
       '@commands': new URL('./src/commands', import.meta.url).pathname,

@@ -10,7 +10,7 @@
  * 非交互模式（pipe）下直接返回 error，不 yield 事件。
  */
 
-import type { ToolContext, ToolResult, StreamableTool } from './types.js'
+import type { ToolContext, ToolResult, StreamableTool } from '../core/types.js'
 import type { AgentEvent, UserQuestion, UserQuestionResult } from '@core/agent-loop.js'
 
 export class AskUserQuestionTool implements StreamableTool {

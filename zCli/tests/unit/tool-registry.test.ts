@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { ToolRegistry } from '@tools/registry.js'
-import type { Tool, ToolContext, ToolResult } from '@tools/types.js'
+import { ToolRegistry } from '@tools/core/registry.js'
+import type { Tool, ToolContext, ToolResult } from '@tools/core/types.js'
 
 const mockTool = (name: string, dangerous = false): Tool => ({
   name,

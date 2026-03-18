@@ -15,7 +15,7 @@ import React from 'react'
 import { Box, Static, Text } from 'ink'
 import Spinner from 'ink-spinner'
 import { ToolStatusLine, ToolHistoryBlock, SubAgentStatusLine, type ToolEvent, type SubAgentEvent } from './ToolStatusLine.js'
-import type { ToolResultMeta } from '@tools/types.js'
+import type { ToolResultMeta } from '@tools/core/types.js'
 
 /** 已完成的工具调用记录，持久化到 messages 历史中 */
 export interface CompletedToolCall {

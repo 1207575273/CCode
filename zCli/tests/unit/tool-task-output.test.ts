@@ -1,21 +1,21 @@
 // tests/unit/tool-task-output.test.ts
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import { TaskOutputTool } from '../../src/tools/task-output.js'
+import { TaskOutputTool } from '../../src/tools/core/task-output.js'
 import {
   registerProcess,
   unregisterProcess,
   appendOutput,
   markDone,
   getProcess,
-} from '../../src/tools/process-tracker.js'
+} from '../../src/tools/core/process-tracker.js'
 import {
   registerSubAgent,
   appendSubAgentEvent,
   markSubAgentDone,
   clearSubAgents,
-} from '../../src/tools/subagent-store.js'
-import type { ToolContext } from '../../src/tools/types.js'
+} from '../../src/tools/ext/subagent-store.js'
+import type { ToolContext } from '../../src/tools/core/types.js'
 
 const ctx: ToolContext = { cwd: '/tmp' }
 

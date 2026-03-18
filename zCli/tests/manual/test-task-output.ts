@@ -2,9 +2,9 @@
 // 手动集成测试：验证 bash 后台运行 + task_output 读取输出
 // 运行: npx tsx tests/manual/test-task-output.ts
 
-import { BashTool } from '../../src/tools/bash.js'
-import { TaskOutputTool } from '../../src/tools/task-output.js'
-import type { ToolContext } from '../../src/tools/types.js'
+import { BashTool } from '../../src/tools/core/bash.js'
+import { TaskOutputTool } from '../../src/tools/core/task-output.js'
+import type { ToolContext } from '../../src/tools/core/types.js'
 
 const ctx: ToolContext = { cwd: process.cwd() }
 const bash = new BashTool()

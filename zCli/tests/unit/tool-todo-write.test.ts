@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { TodoWriteTool } from '@tools/todo-write.js'
-import { getTodos, setTodos, resetTodos } from '@tools/todo-store.js'
-import type { ToolContext } from '@tools/types.js'
+import { TodoWriteTool } from '@tools/ext/todo-write.js'
+import { getTodos, setTodos, resetTodos } from '@tools/ext/todo-store.js'
+import type { ToolContext } from '@tools/core/types.js'
 
 const ctx: ToolContext = { cwd: process.cwd() }
 const tool = new TodoWriteTool()

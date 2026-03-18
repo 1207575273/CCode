@@ -13,9 +13,9 @@
  */
 
 import type { LLMProvider } from '@providers/provider.js'
-import type { ToolRegistry } from '@tools/registry.js'
-import type { ToolResult, ToolResultMeta } from '@tools/types.js'
-import { isStreamableTool } from '@tools/types.js'
+import type { ToolRegistry } from '@tools/core/registry.js'
+import type { ToolResult, ToolResultMeta } from '@tools/core/types.js'
+import { isStreamableTool } from '@tools/core/types.js'
 import type { Message, ToolCallContent, StreamChunk } from './types.js'
 import { classifyToolCalls, executeSafeToolsInParallel } from './parallel-executor.js'
 import type { HookManager } from '@hooks/hook-manager.js'

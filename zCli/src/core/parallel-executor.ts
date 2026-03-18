@@ -9,9 +9,9 @@
  */
 
 import type { ToolCallContent } from './types.js'
-import type { ToolRegistry } from '@tools/registry.js'
-import type { ToolContext } from '@tools/types.js'
-import { isStreamableTool } from '@tools/types.js'
+import type { ToolRegistry } from '@tools/core/registry.js'
+import type { ToolContext } from '@tools/core/types.js'
+import { isStreamableTool } from '@tools/core/types.js'
 import type { AgentEvent } from './agent-loop.js'
 
 // ═══════════════════════════════════════════════

@@ -16,7 +16,7 @@ afterEach(() => {
 
 describe('WriteFileTool', () => {
   it('写入新文件', async () => {
-    const { WriteFileTool } = await import('@tools/write-file.js')
+    const { WriteFileTool } = await import('@tools/core/write-file.js')
     const tool = new WriteFileTool()
     const filePath = join(testDir, 'new.ts')
     const result = await tool.execute({ path: filePath, content: 'hello' }, { cwd: testDir })
@@ -25,7 +25,7 @@ describe('WriteFileTool', () => {
   })
 
   it('覆盖已有文件', async () => {
-    const { WriteFileTool } = await import('@tools/write-file.js')
+    const { WriteFileTool } = await import('@tools/core/write-file.js')
     const tool = new WriteFileTool()
     const filePath = join(testDir, 'exist.ts')
     await tool.execute({ path: filePath, content: 'old' }, { cwd: testDir })
@@ -34,7 +34,7 @@ describe('WriteFileTool', () => {
   })
 
   it('自动创建父目录', async () => {
-    const { WriteFileTool } = await import('@tools/write-file.js')
+    const { WriteFileTool } = await import('@tools/core/write-file.js')
     const tool = new WriteFileTool()
     const filePath = join(testDir, 'a', 'b', 'c.ts')
     const result = await tool.execute({ path: filePath, content: 'deep' }, { cwd: testDir })
@@ -43,15 +43,15 @@ describe('WriteFileTool', () => {
   })
 
   it('dangerous 为 true', async () => {
-    const { WriteFileTool } = await import('@tools/write-file.js')
+    const { WriteFileTool } = await import('@tools/core/write-file.js')
     expect(new WriteFileTool().dangerous).toBe(true)
   })
 })
 
 describe('EditFileTool', () => {
   it('替换文件中的字符串', async () => {
-    const { WriteFileTool } = await import('@tools/write-file.js')
-    const { EditFileTool } = await import('@tools/edit-file.js')
+    const { WriteFileTool } = await import('@tools/core/write-file.js')
+    const { EditFileTool } = await import('@tools/core/edit-file.js')
     const filePath = join(testDir, 'edit.ts')
     await new WriteFileTool().execute({ path: filePath, content: 'const x = 1\nconst y = 2\n' }, { cwd: testDir })
     const result = await new EditFileTool().execute(
@@ -63,8 +63,8 @@ describe('EditFileTool', () => {
   })
 
   it('old_str 不存在时返回错误', async () => {
-    const { WriteFileTool } = await import('@tools/write-file.js')
-    const { EditFileTool } = await import('@tools/edit-file.js')
+    const { WriteFileTool } = await import('@tools/core/write-file.js')
+    const { EditFileTool } = await import('@tools/core/edit-file.js')
     const filePath = join(testDir, 'edit2.ts')
     await new WriteFileTool().execute({ path: filePath, content: 'hello' }, { cwd: testDir })
     const result = await new EditFileTool().execute(
@@ -76,7 +76,7 @@ describe('EditFileTool', () => {
   })
 
   it('dangerous 为 true', async () => {
-    const { EditFileTool } = await import('@tools/edit-file.js')
+    const { EditFileTool } = await import('@tools/core/edit-file.js')
     expect(new EditFileTool().dangerous).toBe(true)
   })
 })

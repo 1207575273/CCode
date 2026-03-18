@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { AgentLoop } from '@core/agent-loop.js'
 import type { AgentEvent } from '@core/agent-loop.js'
-import { ToolRegistry } from '@tools/registry.js'
+import { ToolRegistry } from '@tools/core/registry.js'
 import type { LLMProvider } from '@providers/provider.js'
 import type { StreamChunk } from '@core/types.js'
 

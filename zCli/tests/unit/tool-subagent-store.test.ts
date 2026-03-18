@@ -12,7 +12,7 @@ import {
   listRunningSubAgents,
   clearSubAgents,
   consumeAgentEvent,
-} from '../../src/tools/subagent-store.js'
+} from '../../src/tools/ext/subagent-store.js'
 import type { AgentEvent } from '../../src/core/agent-loop.js'
 
 describe('subagent-store', () => {

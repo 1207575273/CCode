@@ -7,7 +7,7 @@
  * 调用 skill({ name: "commit" }) → 返回 SKILL.md 的完整正文。
  */
 
-import type { Tool, ToolContext, ToolResult } from '@tools/types.js'
+import type { Tool, ToolContext, ToolResult } from '@tools/core/types.js'
 import type { SkillStore } from './store.js'
 
 export class SkillTool implements Tool {

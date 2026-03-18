@@ -14,7 +14,7 @@
  *   <sessions>/<projectSlug>/subagents/agent-<agentId>.jsonl
  */
 
-import type { ToolContext, ToolResult, StreamableTool } from './types.js'
+import type { ToolContext, ToolResult, StreamableTool } from '../core/types.js'
 import { AgentLoop } from '@core/agent-loop.js'
 import type { AgentEvent } from '@core/agent-loop.js'
 import { sessionStore } from '@persistence/index.js'

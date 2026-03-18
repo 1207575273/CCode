@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
 import { classifyToolCalls, executeSafeToolsInParallel } from '@core/parallel-executor.js'
-import { ToolRegistry } from '@tools/registry.js'
+import { ToolRegistry } from '@tools/core/registry.js'
 import type { ToolCallContent } from '@core/types.js'
 import type { AgentEvent } from '@core/agent-loop.js'
-import type { Tool, ToolContext } from '@tools/types.js'
+import type { Tool, ToolContext } from '@tools/core/types.js'
 
 // ═══════════════════════════════════════════════
 // 辅助工厂

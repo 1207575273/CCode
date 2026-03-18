@@ -8,7 +8,7 @@
  * 不依赖 dispatch_agent — TodoWrite 是 Planning 可视化，Agent 是执行。
  */
 
-import type { Tool, ToolResult, ToolContext } from './types.js'
+import type { Tool, ToolResult, ToolContext } from '../core/types.js'
 import { setTodos, getTodos } from './todo-store.js'
 
 export class TodoWriteTool implements Tool {

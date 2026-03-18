@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { AskUserQuestionTool } from '@tools/ask-user-question.js'
-import type { ToolContext, ToolResult } from '@tools/types.js'
+import { AskUserQuestionTool } from '@tools/ext/ask-user-question.js'
+import type { ToolContext, ToolResult } from '@tools/core/types.js'
 import type { AgentEvent } from '@core/agent-loop.js'
 
 const baseCx: ToolContext = { cwd: '/tmp' }

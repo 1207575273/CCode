@@ -1,10 +1,10 @@
 // tests/unit/tool-kill-shell.test.ts
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { KillShellTool } from '@tools/kill-shell.js'
-import { BashTool } from '@tools/bash.js'
-import { listProcesses, killAllProcesses } from '@tools/process-tracker.js'
-import type { ToolContext } from '@tools/types.js'
+import { KillShellTool } from '@tools/core/kill-shell.js'
+import { BashTool } from '@tools/core/bash.js'
+import { listProcesses, killAllProcesses } from '@tools/core/process-tracker.js'
+import type { ToolContext } from '@tools/core/types.js'
 
 const ctx: ToolContext = { cwd: process.cwd() }
 const killTool = new KillShellTool()

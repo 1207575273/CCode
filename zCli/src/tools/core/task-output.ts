@@ -13,7 +13,7 @@
  */
 
 import { getProcess, getOutput } from './process-tracker.js'
-import { getSubAgent } from './subagent-store.js'
+import { getSubAgent } from '../ext/subagent-store.js'
 import type { Tool, ToolContext, ToolResult } from './types.js'
 
 /** 默认阻塞超时 10 秒 */

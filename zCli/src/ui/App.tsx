@@ -39,7 +39,7 @@ import { AtSuggestion, createSearchItem, createBrowseItem } from './AtSuggestion
 import type { AtSuggestionItem } from './AtSuggestion.js'
 import { TodoPanel } from './TodoPanel.js'
 import { SubAgentPanel } from './SubAgentPanel.js'
-import { listSubAgents } from '@tools/subagent-store.js'
+import { listSubAgents } from '@tools/ext/subagent-store.js'
 
 /**
  * App — ZCli 根组件
