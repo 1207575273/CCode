@@ -17,6 +17,20 @@ import type { SessionEvent, SessionEventType } from '@persistence/session-types.
 import type { AgentEvent } from '@core/agent-loop.js'
 import type { McpConnectEvent } from '@mcp/mcp-manager.js'
 
+/** assistant 消息的附加元数据 */
+interface AssistantMeta {
+  usage?: {
+    inputTokens: number
+    outputTokens: number
+    cacheReadTokens: number
+    cacheWriteTokens: number
+  }
+  stopReason?: string
+  llmCallCount?: number
+  toolCallCount?: number
+  thinking?: string
+}
+
 interface TurnStats {
   totalInputTokens: number
   totalOutputTokens: number
@@ -150,9 +164,19 @@ export class SessionLogger {
   }
 
   /** 记录助手回复 */
-  logAssistantMessage(content: string, model?: string, provider?: string): void {
+  logAssistantMessage(content: string, model?: string, provider?: string, meta?: AssistantMeta): void {
     this.#appendEvent('assistant', {
-      message: { role: 'assistant', content, model: model ?? '', provider: provider ?? '' },
+      message: {
+        role: 'assistant',
+        content,
+        ...(model ? { model } : {}),
+        ...(provider ? { provider } : {}),
+        ...(meta?.usage ? { assistantUsage: meta.usage } : {}),
+        ...(meta?.stopReason ? { stopReason: meta.stopReason } : {}),
+        ...(meta?.llmCallCount ? { llmCallCount: meta.llmCallCount } : {}),
+        ...(meta?.toolCallCount ? { toolCallCount: meta.toolCallCount } : {}),
+        ...(meta?.thinking ? { thinking: meta.thinking } : {}),
+      },
     })
   }
 

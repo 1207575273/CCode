@@ -38,8 +38,10 @@ export interface TokenUsage {
 }
 
 export interface StreamChunk {
-  type: 'text' | 'tool_call' | 'usage' | 'done' | 'error'
+  type: 'text' | 'tool_call' | 'usage' | 'done' | 'error' | 'thinking'
   text?: string
+  /** 思考过程内容（thinking 类型时有值） */
+  thinking?: string
   toolCall?: ToolCallContent
   usage?: TokenUsage
   error?: string

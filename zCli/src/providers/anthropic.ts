@@ -143,6 +143,10 @@ export class AnthropicProvider implements LLMProvider {
         if (event.type === 'content_block_delta') {
           if (event.delta.type === 'text_delta') {
             yield { type: 'text', text: event.delta.text }
+          } else if ((event.delta as { type: string; thinking?: string }).type === 'thinking_delta') {
+            // extended thinking 支持（SDK 版本可能无类型定义，用类型断言兼容）
+            const thinkingDelta = (event.delta as { type: string; thinking?: string }).thinking ?? ''
+            if (thinkingDelta) yield { type: 'thinking', thinking: thinkingDelta }
           }
           // input_json_delta 由 finalMessage 统一处理 tool_call
         }

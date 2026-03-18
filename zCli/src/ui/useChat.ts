@@ -211,6 +211,15 @@ export function useChat(): UseChatReturn {
 
     ;(async () => {
       let accumulated = ''
+      // 本轮统计变量
+      let thinkingAccumulated = ''
+      let turnInputTokens = 0
+      let turnOutputTokens = 0
+      let turnCacheReadTokens = 0
+      let turnCacheWriteTokens = 0
+      let turnToolCallCount = 0
+      let turnLlmCallCount = 0
+      let lastStopReason = ''
       try {
         // 确保 session 已创建，记录用户消息
         const sid = sessionLogger.ensureSession(currentProvider, currentModel)
@@ -240,7 +249,17 @@ export function useChat(): UseChatReturn {
           // 广播到 EventBus（CLI/Web 共享事件流）
           eventBus.emit(event)
 
-          if (event.type === 'text') {
+          if (event.type === 'thinking') {
+            thinkingAccumulated += event.text
+          } else if (event.type === 'llm_done') {
+            // 累积本轮 token 统计
+            turnInputTokens += event.inputTokens
+            turnOutputTokens += event.outputTokens
+            turnCacheReadTokens += event.cacheReadTokens
+            turnCacheWriteTokens += event.cacheWriteTokens
+            turnLlmCallCount++
+            lastStopReason = event.stopReason
+          } else if (event.type === 'text') {
             accumulated += event.text
             setStreamingMessage(accumulated)
           } else if (event.type === 'tool_start') {
@@ -250,6 +269,7 @@ export function useChat(): UseChatReturn {
             toolEventsRef.current = [...toolEventsRef.current, newEvent]
             setToolEvents(toolEventsRef.current)
           } else if (event.type === 'tool_done') {
+            turnToolCallCount++
             const matchId = pendingToolIds.get(event.toolCallId)
             if (matchId) pendingToolIds.delete(event.toolCallId)
 
@@ -316,18 +336,44 @@ export function useChat(): UseChatReturn {
         }
 
         if (accumulated) {
-          const assistantMsg: ChatMessage = { id: randomUUID(), role: 'assistant', content: accumulated, model: currentModel, provider: currentProvider }
+          const assistantMsg: ChatMessage = {
+            id: randomUUID(),
+            role: 'assistant',
+            content: accumulated,
+            model: currentModel,
+            provider: currentProvider,
+            ...(thinkingAccumulated ? { thinking: thinkingAccumulated } : {}),
+          }
           setMessages(prev => [...prev, assistantMsg])
-          // F9: 记录助手回复
-          sessionLogger.logAssistantMessage(accumulated, currentModel, currentProvider)
+          // F9: 记录助手回复（携带本轮统计元数据）
+          sessionLogger.logAssistantMessage(accumulated, currentModel, currentProvider, {
+            ...(turnInputTokens > 0 ? { usage: { inputTokens: turnInputTokens, outputTokens: turnOutputTokens, cacheReadTokens: turnCacheReadTokens, cacheWriteTokens: turnCacheWriteTokens } } : {}),
+            ...(lastStopReason ? { stopReason: lastStopReason } : {}),
+            ...(turnLlmCallCount > 0 ? { llmCallCount: turnLlmCallCount } : {}),
+            ...(turnToolCallCount > 0 ? { toolCallCount: turnToolCallCount } : {}),
+            ...(thinkingAccumulated ? { thinking: thinkingAccumulated } : {}),
+          })
         }
       } catch (err) {
         if (isAbortError(err)) {
           // 用户中断：保存已累积的部分回复
           if (accumulated) {
-            const partialMsg: ChatMessage = { id: randomUUID(), role: 'assistant', content: accumulated, model: currentModel, provider: currentProvider }
+            const partialMsg: ChatMessage = {
+              id: randomUUID(),
+              role: 'assistant',
+              content: accumulated,
+              model: currentModel,
+              provider: currentProvider,
+              ...(thinkingAccumulated ? { thinking: thinkingAccumulated } : {}),
+            }
             setMessages(prev => [...prev, partialMsg])
-            sessionLogger.logAssistantMessage(accumulated, currentModel, currentProvider)
+            sessionLogger.logAssistantMessage(accumulated, currentModel, currentProvider, {
+              ...(turnInputTokens > 0 ? { usage: { inputTokens: turnInputTokens, outputTokens: turnOutputTokens, cacheReadTokens: turnCacheReadTokens, cacheWriteTokens: turnCacheWriteTokens } } : {}),
+              ...(lastStopReason ? { stopReason: lastStopReason } : {}),
+              ...(turnLlmCallCount > 0 ? { llmCallCount: turnLlmCallCount } : {}),
+              ...(turnToolCallCount > 0 ? { toolCallCount: turnToolCallCount } : {}),
+              ...(thinkingAccumulated ? { thinking: thinkingAccumulated } : {}),
+            })
           }
           // 按 Claude Code 模式记录中断消息
           sessionLogger.logUserMessage('[Request interrupted by user]')

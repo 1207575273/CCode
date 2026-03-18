@@ -151,6 +151,16 @@ export class SessionStore {
         const assistantMsg: SessionSnapshot['messages'][number] = { id: event.uuid, role: 'assistant', content: event.message.content }
         if (event.message.model) assistantMsg.model = String(event.message.model)
         if (event.message.provider) assistantMsg.provider = String(event.message.provider)
+        // 提取新增的统计字段
+        const rawMsg = event.message as Record<string, unknown>
+        if (rawMsg['assistantUsage']) {
+          const u = rawMsg['assistantUsage'] as { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number }
+          assistantMsg.usage = u
+        }
+        if (rawMsg['stopReason']) assistantMsg.stopReason = String(rawMsg['stopReason'])
+        if (rawMsg['llmCallCount']) assistantMsg.llmCallCount = Number(rawMsg['llmCallCount'])
+        if (rawMsg['toolCallCount']) assistantMsg.toolCallCount = Number(rawMsg['toolCallCount'])
+        if (rawMsg['thinking']) assistantMsg.thinking = String(rawMsg['thinking'])
         messages.push(assistantMsg)
       }
     }

@@ -23,6 +23,19 @@ export interface SessionMessage {
   toolEvents?: ToolEvent[]
   model?: string
   provider?: string
+  /** 思考过程（extended thinking） */
+  thinking?: string
+  /** 本轮 token 用量 */
+  usage?: {
+    inputTokens: number
+    outputTokens: number
+    cacheReadTokens: number
+    cacheWriteTokens: number
+  }
+  /** 本轮 LLM 调用次数 */
+  llmCallCount?: number
+  /** 本轮工具调用次数 */
+  toolCallCount?: number
 }
 
 /** 服务端推送的事件 */
@@ -59,6 +72,19 @@ export interface ChatMessage {
   model?: string
   /** assistant 消息的供应商名 */
   provider?: string
+  /** 思考过程（extended thinking） */
+  thinking?: string
+  /** 本轮 token 用量 */
+  usage?: {
+    inputTokens: number
+    outputTokens: number
+    cacheReadTokens: number
+    cacheWriteTokens: number
+  }
+  /** 本轮 LLM 调用次数 */
+  llmCallCount?: number
+  /** 本轮工具调用次数 */
+  toolCallCount?: number
 }
 
 /** 工具执行状态 */

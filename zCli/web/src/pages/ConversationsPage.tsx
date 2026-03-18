@@ -23,6 +23,17 @@ interface SessionDetail {
     id: string
     role: 'user' | 'assistant' | 'system'
     content: string
+    model?: string
+    provider?: string
+    thinking?: string
+    usage?: {
+      inputTokens: number
+      outputTokens: number
+      cacheReadTokens: number
+      cacheWriteTokens: number
+    }
+    llmCallCount?: number
+    toolCallCount?: number
     toolEvents?: Array<{
       toolCallId: string
       toolName: string
@@ -147,6 +158,12 @@ function ConversationDetail({ sessionId }: { sessionId: string }) {
       id: m.id,
       role: m.role,
       content: m.content,
+      ...(m.model ? { model: m.model } : {}),
+      ...(m.provider ? { provider: m.provider } : {}),
+      ...(m.thinking ? { thinking: m.thinking } : {}),
+      ...(m.usage ? { usage: m.usage } : {}),
+      ...(m.llmCallCount ? { llmCallCount: m.llmCallCount } : {}),
+      ...(m.toolCallCount ? { toolCallCount: m.toolCallCount } : {}),
       ...(m.toolEvents && m.toolEvents.length > 0 ? {
         toolEvents: m.toolEvents.map(t => ({ ...t, status: 'done' as const }))
       } : {}),

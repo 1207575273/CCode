@@ -39,6 +39,24 @@ export interface ChatMessage {
   model?: string
   /** assistant 消息的供应商名 */
   provider?: string
+  /** 思考过程（extended thinking） */
+  thinking?: string
+  /** 本轮 token 用量 */
+  usage?: {
+    inputTokens: number
+    outputTokens: number
+    cacheReadTokens: number
+    cacheWriteTokens: number
+  }
+  /** 本轮 LLM 调用次数 */
+  llmCallCount?: number
+  /** 本轮工具调用次数 */
+  toolCallCount?: number
+}
+
+/** 截断字符串，超出部分加省略号 */
+function truncate(str: string, maxLen: number): string {
+  return str.length > maxLen ? str.slice(0, maxLen) + '…' : str
 }
 
 /** user/assistant 角色的颜色和标签配置，system 走独立渲染分支。 */
@@ -79,6 +97,11 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
           <Text dimColor> ({msg.provider ?? ''}{msg.provider && msg.model ? '/' : ''}{msg.model ?? ''})</Text>
         )}
       </Box>
+      {msg.role === 'assistant' && msg.thinking && (
+        <Box paddingLeft={2} borderStyle="single" borderLeft={true} borderColor="yellow" borderRight={false} borderTop={false} borderBottom={false}>
+          <Text dimColor>💭 {truncate(msg.thinking, 200)}</Text>
+        </Box>
+      )}
       <Text>{msg.content}</Text>
     </>
   )

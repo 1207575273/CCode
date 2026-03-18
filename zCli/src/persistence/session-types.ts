@@ -38,6 +38,21 @@ export interface SessionEvent {
     model?: string
     provider?: string
     usage?: TokenUsage
+    /** assistant 消息本轮累计 token 用量 */
+    assistantUsage?: {
+      inputTokens: number
+      outputTokens: number
+      cacheReadTokens: number
+      cacheWriteTokens: number
+    }
+    /** LLM 停止原因 */
+    stopReason?: string
+    /** 本轮 LLM 调用次数 */
+    llmCallCount?: number
+    /** 本轮工具调用次数 */
+    toolCallCount?: number
+    /** 思考过程（extended thinking） */
+    thinking?: string
   }
   provider?: string
   model?: string
@@ -117,6 +132,21 @@ export interface SessionSnapshot {
     model?: string
     /** assistant 消息的供应商名 */
     provider?: string
+    /** assistant 消息本轮累计 token 用量 */
+    usage?: {
+      inputTokens: number
+      outputTokens: number
+      cacheReadTokens: number
+      cacheWriteTokens: number
+    }
+    /** LLM 停止原因 */
+    stopReason?: string
+    /** 本轮 LLM 调用次数 */
+    llmCallCount?: number
+    /** 本轮工具调用次数 */
+    toolCallCount?: number
+    /** 思考过程 */
+    thinking?: string
   }>
   /** 当前分支的叶节点 UUID */
   leafEventUuid: string | null

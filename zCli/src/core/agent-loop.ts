@@ -64,6 +64,7 @@ export interface UserQuestionResult {
 export type AgentEvent =
   // 业务事件
   | { type: 'text';               text: string }
+  | { type: 'thinking';           text: string }
   | { type: 'tool_start';         toolName: string; toolCallId: string; args: Record<string, unknown> }
   | { type: 'tool_done';          toolName: string; toolCallId: string; durationMs: number; success: boolean; resultSummary?: string; meta?: ToolResultMeta }
   | { type: 'permission_request'; toolName: string; args: Record<string, unknown>; resolve: (allow: boolean) => void }
@@ -243,10 +244,11 @@ export class AgentLoop {
   /** StreamChunk → AgentEvent 映射，null 表示不产生事件 */
   #mapChunk(chunk: StreamChunk, pendingToolCalls: ToolCallContent[]): AgentEvent | null {
     switch (chunk.type) {
-      case 'text':   return chunk.text ? { type: 'text', text: chunk.text } : null
+      case 'text':     return chunk.text ? { type: 'text', text: chunk.text } : null
+      case 'thinking': return { type: 'thinking', text: chunk.thinking ?? '' }
       case 'tool_call': { if (chunk.toolCall) pendingToolCalls.push(chunk.toolCall); return null }
-      case 'error':  return { type: 'error', error: chunk.error ?? 'unknown error' }
-      default:       return null // usage / done 不产生业务事件
+      case 'error':    return { type: 'error', error: chunk.error ?? 'unknown error' }
+      default:         return null // usage / done 不产生业务事件
     }
   }
 

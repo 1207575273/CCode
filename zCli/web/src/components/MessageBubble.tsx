@@ -6,6 +6,10 @@ import rehypeHighlight from 'rehype-highlight'
 import { ToolStatus } from './ToolStatus'
 import type { ChatMessage } from '../types'
 
+/** 格式化 token 数量：>1M 显示 M，>1K 显示 K，否则原始数字 */
+const fmtTokens = (n: number) =>
+  n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n)
+
 interface Props {
   message: ChatMessage
 }
@@ -50,6 +54,17 @@ export function MessageBubble({ message }: Props) {
             {message.model && <span>{message.model}</span>}
           </span>
         )}
+        {/* 思考过程折叠展示（仅 assistant） */}
+        {!isUser && message.thinking && (
+          <details className="mb-2">
+            <summary className="text-xs text-yellow-400/70 cursor-pointer select-none">
+              💭 思考过程 ({message.thinking.length} 字)
+            </summary>
+            <div className="mt-1 p-2 bg-gray-900 rounded text-xs text-gray-500 whitespace-pre-wrap max-h-[200px] overflow-y-auto">
+              {message.thinking}
+            </div>
+          </details>
+        )}
         {isUser ? (
           <p className="whitespace-pre-wrap">{message.content}</p>
         ) : (
@@ -57,6 +72,14 @@ export function MessageBubble({ message }: Props) {
             <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
               {message.content}
             </ReactMarkdown>
+          </div>
+        )}
+        {/* token 统计底栏（仅 assistant 且有 usage 数据） */}
+        {!isUser && message.usage && (
+          <div className="mt-2 pt-2 border-t border-gray-700/50 text-xs text-gray-500 flex gap-3">
+            <span>{fmtTokens(message.usage.inputTokens)} in / {fmtTokens(message.usage.outputTokens)} out</span>
+            {message.llmCallCount && message.llmCallCount > 1 && <span>{message.llmCallCount} 次调用</span>}
+            {message.toolCallCount && message.toolCallCount > 0 && <span>{message.toolCallCount} 次工具</span>}
           </div>
         )}
       </div>
