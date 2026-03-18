@@ -19,6 +19,8 @@ import { AgentLoop } from '@core/agent-loop.js'
 import type { AgentEvent } from '@core/agent-loop.js'
 import { sessionStore } from '@persistence/index.js'
 import { SessionLogger } from '@observability/session-logger.js'
+import { configManager } from '@config/config-manager.js'
+import { createProvider } from '@providers/registry.js'
 
 // ═══════════════════════════════════════════════
 // 常量
@@ -61,7 +63,8 @@ export class DispatchAgentTool implements StreamableTool {
         type: 'string',
         description: 'Complete instructions for the sub-agent.',
       },
-      // 二期预留：子 Agent 类型，映射到预设工具集
+      // 内部预留，暂不开放给 LLM：
+      // model: { type: 'string', description: '子 Agent 使用的模型（不同于主 Agent）' }
       // type: { type: 'string', enum: ['general', 'explore', 'plan'] }
     },
     required: ['description', 'prompt'],
@@ -104,8 +107,13 @@ export class DispatchAgentTool implements StreamableTool {
     }
 
     const agentId = generateAgentId()
-    const providerName = ctx.providerName ?? 'unknown'
-    const modelName = ctx.model ?? 'unknown'
+
+    // 解析子 Agent 使用的 provider + model
+    // 优先使用显式指定的 model，否则继承父 Agent
+    const { provider: subProvider, providerName, modelName } = resolveSubAgentProvider(
+      args['model'] as string | undefined,
+      ctx,
+    )
 
     // 创建子 Agent 独立 JSONL（完整审计记录）
     const subLogger = createSubagentLogger(agentId, ctx.cwd, providerName, modelName, ctx.sessionId)
@@ -115,7 +123,7 @@ export class DispatchAgentTool implements StreamableTool {
     const subRegistry = ctx.registry.cloneWithout('dispatch_agent', 'ask_user_question')
 
     // 创建子 AgentLoop
-    const subLoop = new AgentLoop(ctx.provider, subRegistry, {
+    const subLoop = new AgentLoop(subProvider, subRegistry, {
       model: modelName,
       provider: providerName,
       signal: ctx.signal,
@@ -246,6 +254,47 @@ function wrapSubagentResult(finalText: string, description: string): string {
     '[INSTRUCTION: The sub-agent has already executed all steps and verified the result.',
     'Do NOT repeat any of the above actions. Simply relay this result to the user.]',
   ].join('\n')
+}
+
+/**
+ * 解析子 Agent 使用的 provider + model。
+ *
+ * 优先级：
+ * 1. 显式指定 model → 从 config 中查找包含该模型的 provider，创建新实例
+ * 2. 未指定 → 继承父 Agent 的 provider + model
+ */
+function resolveSubAgentProvider(
+  modelArg: string | undefined,
+  ctx: ToolContext,
+): { provider: import('@providers/provider.js').LLMProvider; providerName: string; modelName: string } {
+  // 未指定 model，继承父 Agent
+  if (!modelArg?.trim()) {
+    return {
+      provider: ctx.provider!,
+      providerName: ctx.providerName ?? 'unknown',
+      modelName: ctx.model ?? 'unknown',
+    }
+  }
+
+  const model = modelArg.trim()
+  const config = configManager.load()
+
+  // 遍历 config.providers，找到包含该模型的 provider
+  for (const [name, providerCfg] of Object.entries(config.providers)) {
+    if (!providerCfg) continue
+    if (providerCfg.models.includes(model)) {
+      const provider = createProvider(name, config)
+      return { provider, providerName: name, modelName: model }
+    }
+  }
+
+  // 找不到匹配的 provider，回退到父 Agent 但使用指定的 model
+  // （可能是父 provider 支持但未在 models 列表中显式声明的模型）
+  return {
+    provider: ctx.provider!,
+    providerName: ctx.providerName ?? 'unknown',
+    modelName: model,
+  }
 }
 
 /** 生成 17 位 hex ID（与 Claude Code 子 Agent ID 格式对齐） */
