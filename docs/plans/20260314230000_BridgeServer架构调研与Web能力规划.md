@@ -1,3 +1,5 @@
+> 备注：项目原名 ZCli，2026-03-20 更名为 cCli（品牌名 CCode），详见 01_需求与项目管理核心文档/20260320030000_项目改名_ZCli到CCode.md
+
 # Bridge Server 架构调研与 Web 能力规划
 
 > 日期: 2026-03-14
@@ -147,7 +149,7 @@ pnpm dev:web
 ## 四、项目目录结构（最终）
 
 ```
-zCli/
+cCli/
 ├── src/
 │   ├── bridge/                    ← Bridge Server 后端（纯路由器）
 │   │   ├── server.ts                  Hono HTTP + WebSocket 路由器

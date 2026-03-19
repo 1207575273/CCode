@@ -1,3 +1,5 @@
+> 备注：项目原名 ZCli，2026-03-20 更名为 cCli（品牌名 CCode），详见 01_需求与项目管理核心文档/20260320030000_项目改名_ZCli到CCode.md
+
 # AskUserQuestion 工具实现计划
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -15,8 +17,8 @@
 ### Task 1: 扩展类型定义
 
 **Files:**
-- Modify: `zCli/src/tools/types.ts` — 新增 ToolResultMeta 联合分支
-- Modify: `zCli/src/core/agent-loop.ts` — 新增 AgentEvent 类型
+- Modify: `cCli/src/tools/types.ts` — 新增 ToolResultMeta 联合分支
+- Modify: `cCli/src/core/agent-loop.ts` — 新增 AgentEvent 类型
 
 - [ ] **Step 1: 在 ToolResultMeta 添加 ask_user 分支**
 
@@ -89,7 +91,7 @@ if (config.nonInteractive) { ctx.nonInteractive = config.nonInteractive }
 
 - [ ] **Step 5: 确认类型检查通过**
 
-Run: `cd zCli && npx tsc --noEmit 2>&1 | head -20`
+Run: `cd cCli && npx tsc --noEmit 2>&1 | head -20`
 Expected: 无新增错误
 
 ---
@@ -97,8 +99,8 @@ Expected: 无新增错误
 ### Task 2: 实现 AskUserQuestionTool
 
 **Files:**
-- Create: `zCli/src/tools/ask-user-question.ts`
-- Test: `zCli/tests/unit/ask-user-question.test.ts`
+- Create: `cCli/src/tools/ask-user-question.ts`
+- Test: `cCli/tests/unit/ask-user-question.test.ts`
 
 - [ ] **Step 1: 编写测试**
 
@@ -178,7 +180,7 @@ describe('AskUserQuestionTool', () => {
 
 - [ ] **Step 2: 运行测试确认红灯**
 
-Run: `cd zCli && pnpm vitest run tests/unit/ask-user-question.test.ts`
+Run: `cd cCli && pnpm vitest run tests/unit/ask-user-question.test.ts`
 Expected: FAIL（模块不存在）
 
 - [ ] **Step 3: 实现 AskUserQuestionTool**
@@ -308,7 +310,7 @@ export class AskUserQuestionTool implements StreamableTool {
 
 - [ ] **Step 4: 运行测试确认绿灯**
 
-Run: `cd zCli && pnpm vitest run tests/unit/ask-user-question.test.ts`
+Run: `cd cCli && pnpm vitest run tests/unit/ask-user-question.test.ts`
 Expected: 4 tests PASS
 
 - [ ] **Step 5: 提交**
@@ -323,9 +325,9 @@ git commit -m "feat(tool): AskUserQuestion 工具核心 — StreamableTool + 事
 ### Task 3: 注册工具 + pipe 模式适配 + 子 Agent 排除
 
 **Files:**
-- Modify: `zCli/src/core/bootstrap.ts` — 注册 AskUserQuestionTool
-- Modify: `zCli/src/tools/dispatch-agent.ts` — cloneWithout 排除
-- Modify: `zCli/src/core/pipe-runner.ts` — 传递 nonInteractive
+- Modify: `cCli/src/core/bootstrap.ts` — 注册 AskUserQuestionTool
+- Modify: `cCli/src/tools/dispatch-agent.ts` — cloneWithout 排除
+- Modify: `cCli/src/core/pipe-runner.ts` — 传递 nonInteractive
 
 - [ ] **Step 1: 在 bootstrap.ts 注册工具**
 
@@ -365,7 +367,7 @@ const loop = new AgentLoop(provider, options.noTools ? buildRegistry() : registr
 
 - [ ] **Step 4: 类型检查 + 全量测试**
 
-Run: `cd zCli && npx tsc --noEmit && pnpm test`
+Run: `cd cCli && npx tsc --noEmit && pnpm test`
 Expected: 类型检查通过，全部测试通过
 
 - [ ] **Step 5: 提交**
@@ -382,8 +384,8 @@ git commit -m "feat(tool): 注册 AskUserQuestion + pipe 模式拒绝 + 子 Agen
 ### Task 4: UserQuestionForm 组件
 
 **Files:**
-- Create: `zCli/src/ui/UserQuestionForm.tsx`
-- Test: `zCli/tests/unit/ui/user-question-form.test.ts`（可选，组件测试较重，优先手动验证）
+- Create: `cCli/src/ui/UserQuestionForm.tsx`
+- Test: `cCli/tests/unit/ui/user-question-form.test.ts`（可选，组件测试较重，优先手动验证）
 
 - [ ] **Step 1: 创建 UserQuestionForm 组件**
 
@@ -760,7 +762,7 @@ export function UserQuestionForm({ questions, onResolve }: UserQuestionFormProps
 
 - [ ] **Step 2: 类型检查**
 
-Run: `cd zCli && npx tsc --noEmit 2>&1 | head -20`
+Run: `cd cCli && npx tsc --noEmit 2>&1 | head -20`
 Expected: 无新增错误
 
 - [ ] **Step 3: 提交**
@@ -775,8 +777,8 @@ git commit -m "feat(ui): UserQuestionForm 多步表单组件 — 单选/多选/�
 ### Task 5: useChat 集成 + App 渲染
 
 **Files:**
-- Modify: `zCli/src/ui/useChat.ts` — 处理 user_question_request 事件
-- Modify: `zCli/src/ui/App.tsx` — 渲染 UserQuestionForm
+- Modify: `cCli/src/ui/useChat.ts` — 处理 user_question_request 事件
+- Modify: `cCli/src/ui/App.tsx` — 渲染 UserQuestionForm
 
 - [ ] **Step 1: 在 useChat 中添加 pendingQuestion 状态**
 
@@ -858,7 +860,7 @@ const { ..., pendingQuestion, resolveQuestion } = useChat()
 
 - [ ] **Step 3: 类型检查 + 全量测试**
 
-Run: `cd zCli && npx tsc --noEmit && pnpm test`
+Run: `cd cCli && npx tsc --noEmit && pnpm test`
 Expected: 通过
 
 - [ ] **Step 4: 提交**
@@ -873,7 +875,7 @@ git commit -m "feat(ui): useChat + App 集成 AskUserQuestion 表单渲染"
 ### Task 6: ToolStatusLine 展示 ask_user meta
 
 **Files:**
-- Modify: `zCli/src/ui/ToolStatusLine.tsx` — 处理 ask_user meta 类型
+- Modify: `cCli/src/ui/ToolStatusLine.tsx` — 处理 ask_user meta 类型
 
 - [ ] **Step 1: 在 ToolStatusLine 的 meta 展示逻辑中添加 ask_user**
 
@@ -893,7 +895,7 @@ if (toolName === 'ask_user_question') return '等待用户回答...'
 
 - [ ] **Step 2: 全量测试**
 
-Run: `cd zCli && pnpm test`
+Run: `cd cCli && pnpm test`
 Expected: 通过
 
 - [ ] **Step 3: 提交**
@@ -911,17 +913,17 @@ git commit -m "feat(ui): ToolStatusLine 支持 ask_user meta 展示"
 
 - [ ] **Step 1: 类型检查**
 
-Run: `cd zCli && npx tsc --noEmit`
+Run: `cd cCli && npx tsc --noEmit`
 Expected: 无错误（已知 CommandSuggestion.tsx 除外）
 
 - [ ] **Step 2: 全量测试**
 
-Run: `cd zCli && pnpm test`
+Run: `cd cCli && pnpm test`
 Expected: 全部通过
 
 - [ ] **Step 3: 手动集成验证**
 
-Run: `cd zCli && pnpm dev`
+Run: `cd cCli && pnpm dev`
 
 测试场景：
 1. 在对话中让 LLM 使用 ask_user_question 工具（如发送"帮我做一个产品需求分析"）

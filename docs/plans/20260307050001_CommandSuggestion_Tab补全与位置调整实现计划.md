@@ -1,3 +1,5 @@
+> 备注：项目原名 ZCli，2026-03-20 更名为 cCli（品牌名 CCode），详见 01_需求与项目管理核心文档/20260320030000_项目改名_ZCli到CCode.md
+
 # CommandSuggestion Tab 补全 + 位置调整 — 实现计划
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
@@ -13,8 +15,8 @@
 ### Task 1: 修改 App.tsx — Tab/Enter 补全逻辑 + 浮层位置
 
 **Files:**
-- Modify: `zCli/src/ui/App.tsx:170-197`（useInput 块）
-- Modify: `zCli/src/ui/App.tsx:199-244`（JSX return 块）
+- Modify: `cCli/src/ui/App.tsx:170-197`（useInput 块）
+- Modify: `cCli/src/ui/App.tsx:199-244`（JSX return 块）
 
 ---
 
@@ -140,7 +142,7 @@ if (key.tab || key.return) {
 **Step 3: 运行 typecheck 和测试**
 
 ```bash
-cd zCli && pnpm typecheck && pnpm test
+cd cCli && pnpm typecheck && pnpm test
 ```
 
 预期：0 typecheck 错误，78 tests passed。
@@ -150,7 +152,7 @@ cd zCli && pnpm typecheck && pnpm test
 **Step 4: Commit**
 
 ```bash
-git add zCli/src/ui/App.tsx
+git add cCli/src/ui/App.tsx
 git commit -m "feat: CommandSuggestion 移至输入框下方 + Tab/Enter 改为补全模式"
 ```
 

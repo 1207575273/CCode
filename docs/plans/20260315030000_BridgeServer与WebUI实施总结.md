@@ -1,3 +1,5 @@
+> 备注：项目原名 ZCli，2026-03-20 更名为 cCli（品牌名 CCode），详见 01_需求与项目管理核心文档/20260320030000_项目改名_ZCli到CCode.md
+
 # Bridge Server 与 Web UI 实施总结
 
 > 日期: 2026-03-15
@@ -342,7 +344,7 @@ useEffect(() => {
 **首次准备**：
 
 ```bash
-cd zCli
+cd cCli
 pnpm install          # CLI 依赖
 cd web && pnpm install # Web 前端依赖
 cd ..
@@ -383,7 +385,7 @@ pnpm dev:web
 **构建命令**：
 
 ```bash
-cd zCli
+cd cCli
 
 # 只构建 CLI
 pnpm build             # → dist/
@@ -398,7 +400,7 @@ pnpm build:all         # → dist/ + web/dist/
 **构建产物目录结构**：
 
 ```
-zCli/
+cCli/
 ├── dist/                      ← CLI 构建产物 (tsup)
 │   └── bin/
 │       └── zcli.js                入口文件
@@ -415,7 +417,7 @@ zCli/
 
 ```bash
 # 构建
-cd zCli && pnpm build:all
+cd cCli && pnpm build:all
 
 # 启动（纯 CLI）
 node dist/bin/zcli.js
