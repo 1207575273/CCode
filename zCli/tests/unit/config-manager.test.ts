@@ -3,11 +3,11 @@ import { mkdirSync, rmSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-// 用临时目录隔离测试，不污染真实 ~/.zcli
+// 用临时目录隔离测试，不污染真实 ~/.ccode
 let testDir: string
 
 beforeEach(() => {
-  testDir = join(tmpdir(), `zcli-test-${Date.now()}`)
+  testDir = join(tmpdir(), `ccode-test-${Date.now()}`)
   mkdirSync(testDir, { recursive: true })
 })
 

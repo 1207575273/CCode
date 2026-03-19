@@ -37,7 +37,7 @@ import type { ContextWindowState } from '@core/context-tracker.js'
 import { contextManager } from '@core/context-manager.js'
 import { updateBridgeSession, isBridgeConnected } from '@server/bridge/client.js'
 
-// 从 bootstrap 重导出，供 bin/zcli.ts 和 App.tsx 使用
+// 从 bootstrap 重导出，供 bin/ccode.ts 和 App.tsx 使用
 export { sessionLogger, tokenMeter, getCurrentSessionId }
 
 /** 待用户确认的权限请求，暂停 AgentLoop 直到 resolve 被调用 */

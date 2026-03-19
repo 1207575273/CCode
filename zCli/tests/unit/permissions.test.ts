@@ -94,8 +94,8 @@ describe('PermissionManager', () => {
   })
 
   describe('fromProjectDir', () => {
-    const testDir = join(tmpdir(), `zcli-perm-test-${Date.now()}`)
-    const zcliDir = join(testDir, '.zcli')
+    const testDir = join(tmpdir(), `ccode-perm-test-${Date.now()}`)
+    const zcliDir = join(testDir, '.ccode')
     const settingsPath = join(zcliDir, 'settings.local.json')
 
     beforeEach(() => {

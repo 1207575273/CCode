@@ -18,7 +18,7 @@ function resolveProtocol(providerName: string, protocol?: 'anthropic' | 'openai'
 export function createProvider(providerName: string, config: ZCliConfig): LLMProvider {
   const providerCfg = config.providers[providerName]
   if (!providerCfg) {
-    throw new Error(`Provider "${providerName}" 未在 ~/.zcli/config.json 中配置`)
+    throw new Error(`Provider "${providerName}" 未在 ~/.ccode/config.json 中配置`)
   }
 
   const protocol = resolveProtocol(providerName, providerCfg.protocol)

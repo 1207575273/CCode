@@ -1,15 +1,21 @@
 {
-  "name": "zcli",
-  "version": "0.1.0",
-  "description": "多模型 AI 编程 CLI 助手",
+  "name": "ccode-cli",
+  "version": "0.0.1",
+  "description": "开源多模型 AI 编程 CLI 助手 — 支持 Claude/OpenAI/GLM/DeepSeek/Ollama",
   "type": "module",
   "bin": {
-    "zcli": "./dist/bin/zcli.js"
+    "ccode": "./dist/bin/ccode.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/1207575273/CCode.git"
+  },
+  "homepage": "https://github.com/1207575273/CCode#readme",
+  "author": "codeYang",
   "scripts": {
-    "dev": "tsx bin/zcli.ts",
-    "dev:pipe": "tsx bin/zcli.ts",
-    "dev:web": "node scripts/ensure-web.cjs && tsx bin/zcli.ts --web",
+    "dev": "tsx bin/ccode.ts",
+    "dev:pipe": "tsx bin/ccode.ts",
+    "dev:web": "node scripts/ensure-web.cjs && tsx bin/ccode.ts --web",
     "build": "tsup",
     "build:web": "node scripts/ensure-web.cjs && cd web && pnpm build",
     "build:all": "tsup && node scripts/ensure-web.cjs && cd web && pnpm build",
@@ -26,8 +32,14 @@
     "ai",
     "cli",
     "llm",
+    "agent",
     "claude",
-    "openai"
+    "openai",
+    "glm",
+    "deepseek",
+    "coding-assistant",
+    "mcp",
+    "multi-model"
   ],
   "license": "MIT",
   "pnpm": {

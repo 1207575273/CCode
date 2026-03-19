@@ -2,8 +2,8 @@
  * SQLite 懒加载单例 — 提供 usage_logs 和 pricing_rules 表。
  *
  * 首次 getDb() 调用时：
- * 1. 创建 ~/.zcli/data/ 目录
- * 2. 打开 zcli.db
+ * 1. 创建 ~/.ccode/data/ 目录
+ * 2. 打开 ccode.db
  * 3. 建表（IF NOT EXISTS）
  * 4. 写入默认计价规则（IF NOT EXISTS 去重）
  */
@@ -86,9 +86,9 @@ export function createDb(dbPath: string): DatabaseType {
 /** 获取全局单例（懒加载） */
 export function getDb(): DatabaseType {
   if (_db) return _db
-  const dataDir = join(homedir(), '.zcli', 'data')
+  const dataDir = join(homedir(), '.ccode', 'data')
   mkdirSync(dataDir, { recursive: true })
-  _db = createDb(join(dataDir, 'zcli.db'))
+  _db = createDb(join(dataDir, 'ccode.db'))
   return _db
 }
 

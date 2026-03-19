@@ -19,14 +19,14 @@ export interface McpConfig {
 
 /**
  * MCP 配置文件搜索路径（按优先级从高到低）：
- * 1. ~/.zcli/mcp.json   — ZCli 专属配置，优先级最高
+ * 1. ~/.ccode/mcp.json   — ZCli 专属配置，优先级最高
  * 2. ~/.claude.json      — Claude Code 用户配置（含 mcpServers 字段）
  * 3. ~/.mcp.json         — 用户全局配置（通用 MCP 配置格式）
  *
  * 同名 server 出现在多个文件时，高优先级文件覆盖低优先级。
  */
 export const MCP_CONFIG_PATHS = [
-  join(homedir(), '.zcli', '.mcp.json'),
+  join(homedir(), '.ccode', '.mcp.json'),
   join(homedir(), '.claude.json'),
   join(homedir(), '.mcp.json'),
 ]

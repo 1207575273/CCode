@@ -72,7 +72,7 @@ export class HookManager {
       const env: Record<string, string> = { ...ctx.env }
       if (entry.pluginName) {
         // cwd 即 hooks.json 所在目录，就是插件根目录
-        env['ZCLI_PLUGIN_ROOT'] = entry.cwd
+        env['CCODE_PLUGIN_ROOT'] = entry.cwd
       }
       const runOpts: import('./hook-runner.js').RunOptions = {
         command: entry.action.command,

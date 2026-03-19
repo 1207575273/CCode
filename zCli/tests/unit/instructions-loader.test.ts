@@ -48,20 +48,20 @@ describe('findGitRoot', () => {
 })
 
 describe('discoverInstructionFiles', () => {
-  it('发现全局 ZCLI.md（优先于 CLAUDE.md）', () => {
+  it('发现全局 CCODE.md（优先于 CLAUDE.md）', () => {
     mockExecSync.mockReturnValue(FAKE_GIT_ROOT + '\n')
     mockExistsSync.mockImplementation((p: string) => {
-      return p === join(FAKE_HOME, '.zcli', 'ZCLI.md')
+      return p === join(FAKE_HOME, '.ccode', 'CCODE.md')
     })
 
     const files = discoverInstructionFiles(FAKE_CWD)
     expect(files).toContainEqual({
-      path: normalize(resolve(join(FAKE_HOME, '.zcli', 'ZCLI.md'))),
+      path: normalize(resolve(join(FAKE_HOME, '.ccode', 'CCODE.md'))),
       level: 'global',
     })
   })
 
-  it('全局层 ZCLI.md 不存在时 fallback 到 CLAUDE.md', () => {
+  it('全局层 CCODE.md 不存在时 fallback 到 CLAUDE.md', () => {
     mockExecSync.mockReturnValue(FAKE_GIT_ROOT + '\n')
     mockExistsSync.mockImplementation((p: string) => {
       return p === join(FAKE_HOME, '.claude', 'CLAUDE.md')
@@ -74,15 +74,15 @@ describe('discoverInstructionFiles', () => {
     })
   })
 
-  it('发现项目根 ZCLI.md', () => {
+  it('发现项目根 CCODE.md', () => {
     mockExecSync.mockReturnValue(FAKE_GIT_ROOT + '\n')
     mockExistsSync.mockImplementation((p: string) => {
-      return p === join(FAKE_GIT_ROOT, 'ZCLI.md')
+      return p === join(FAKE_GIT_ROOT, 'CCODE.md')
     })
 
     const files = discoverInstructionFiles(FAKE_CWD)
     expect(files).toContainEqual({
-      path: normalize(resolve(join(FAKE_GIT_ROOT, 'ZCLI.md'))),
+      path: normalize(resolve(join(FAKE_GIT_ROOT, 'CCODE.md'))),
       level: 'project',
     })
   })
@@ -90,7 +90,7 @@ describe('discoverInstructionFiles', () => {
   it('cwd == git-root 时不重复扫描层级 4', () => {
     mockExecSync.mockReturnValue(FAKE_GIT_ROOT + '\n')
     mockExistsSync.mockImplementation((p: string) => {
-      return p === join(FAKE_GIT_ROOT, 'ZCLI.md')
+      return p === join(FAKE_GIT_ROOT, 'CCODE.md')
     })
 
     const files = discoverInstructionFiles(FAKE_CWD)
@@ -103,12 +103,12 @@ describe('discoverInstructionFiles', () => {
     const subCwd = normalize(resolve('/fake/project/packages/web'))
     mockExecSync.mockReturnValue(FAKE_GIT_ROOT + '\n')
     mockExistsSync.mockImplementation((p: string) => {
-      return p === join(subCwd, 'ZCLI.md')
+      return p === join(subCwd, 'CCODE.md')
     })
 
     const files = discoverInstructionFiles(subCwd)
     expect(files).toContainEqual({
-      path: normalize(resolve(join(subCwd, 'ZCLI.md'))),
+      path: normalize(resolve(join(subCwd, 'CCODE.md'))),
       level: 'cwd',
     })
   })
@@ -116,7 +116,7 @@ describe('discoverInstructionFiles', () => {
   it('同一文件路径不重复加载', () => {
     mockExecSync.mockReturnValue(FAKE_GIT_ROOT + '\n')
     // 全局和项目根恰好是同一个文件（不太可能但测试去重逻辑）
-    const samePath = join(FAKE_GIT_ROOT, 'ZCLI.md')
+    const samePath = join(FAKE_GIT_ROOT, 'CCODE.md')
     mockExistsSync.mockImplementation((p: string) => p === samePath)
 
     const files = discoverInstructionFiles(FAKE_CWD)
@@ -128,12 +128,12 @@ describe('discoverInstructionFiles', () => {
   it('不在 git 仓库中时以 cwd 作为项目根', () => {
     mockExecSync.mockImplementation(() => { throw new Error('not a git repo') })
     mockExistsSync.mockImplementation((p: string) => {
-      return p === join(FAKE_CWD, 'ZCLI.md')
+      return p === join(FAKE_CWD, 'CCODE.md')
     })
 
     const files = discoverInstructionFiles(FAKE_CWD)
     expect(files).toContainEqual({
-      path: normalize(resolve(join(FAKE_CWD, 'ZCLI.md'))),
+      path: normalize(resolve(join(FAKE_CWD, 'CCODE.md'))),
       level: 'project',
     })
   })
@@ -142,7 +142,7 @@ describe('discoverInstructionFiles', () => {
 describe('loadInstructions', () => {
   it('加载文件内容', () => {
     mockExecSync.mockReturnValue(FAKE_GIT_ROOT + '\n')
-    const filePath = join(FAKE_GIT_ROOT, 'ZCLI.md')
+    const filePath = join(FAKE_GIT_ROOT, 'CCODE.md')
     mockExistsSync.mockImplementation((p: string) => p === filePath)
     mockReadFileSync.mockReturnValue('# 项目指令\n使用 TypeScript')
 
@@ -154,7 +154,7 @@ describe('loadInstructions', () => {
 
   it('空文件不加载', () => {
     mockExecSync.mockReturnValue(FAKE_GIT_ROOT + '\n')
-    mockExistsSync.mockImplementation((p: string) => p === join(FAKE_GIT_ROOT, 'ZCLI.md'))
+    mockExistsSync.mockImplementation((p: string) => p === join(FAKE_GIT_ROOT, 'CCODE.md'))
     mockReadFileSync.mockReturnValue('   \n  ')
 
     const loaded = loadInstructions(FAKE_CWD)
@@ -163,7 +163,7 @@ describe('loadInstructions', () => {
 
   it('读取失败静默跳过', () => {
     mockExecSync.mockReturnValue(FAKE_GIT_ROOT + '\n')
-    mockExistsSync.mockImplementation((p: string) => p === join(FAKE_GIT_ROOT, 'ZCLI.md'))
+    mockExistsSync.mockImplementation((p: string) => p === join(FAKE_GIT_ROOT, 'CCODE.md'))
     mockReadFileSync.mockImplementation(() => { throw new Error('EACCES') })
 
     const loaded = loadInstructions(FAKE_CWD)
@@ -178,15 +178,15 @@ describe('formatInstructionsPrompt', () => {
 
   it('格式化为 <instructions> 标签', () => {
     const instructions: LoadedInstruction[] = [
-      { source: '/home/.zcli/ZCLI.md', level: 'global', content: '全局指令' },
-      { source: '/project/ZCLI.md', level: 'project', content: '项目指令' },
+      { source: '/home/.ccode/CCODE.md', level: 'global', content: '全局指令' },
+      { source: '/project/CCODE.md', level: 'project', content: '项目指令' },
     ]
 
     const result = formatInstructionsPrompt(instructions)
-    expect(result).toContain('<instructions source="/home/.zcli/ZCLI.md" level="global">')
+    expect(result).toContain('<instructions source="/home/.ccode/CCODE.md" level="global">')
     expect(result).toContain('全局指令')
     expect(result).toContain('</instructions>')
-    expect(result).toContain('<instructions source="/project/ZCLI.md" level="project">')
+    expect(result).toContain('<instructions source="/project/CCODE.md" level="project">')
     expect(result).toContain('项目指令')
   })
 

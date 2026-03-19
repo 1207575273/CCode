@@ -22,7 +22,7 @@ import { serve } from '@hono/node-server'
 import { createNodeWebSocket } from '@hono/node-ws'
 import type { ServerType } from '@hono/node-server'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { sessionStore } from '@persistence/index.js'
 import { createApiRoutes } from '../dashboard/api.js'
 
@@ -131,10 +131,17 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
 
   // 静态资源：dev 模式反向代理 Vite，生产模式托管构建产物
   const isDev = options.dev ?? false
-  // web/dist/ 路径：dev 模式从源码目录算，生产模式从 cwd 算
+  // distDir 路径解析：
+  //   dev 模式：从源码目录回溯到 web/dist（兼容旧路径）
+  //   生产模式：从 ccode.js 位置（dist/bin/）相对定位到 dist/web/
+  //            即 import.meta.dirname/../web（打包后 dist/bin/ → dist/web/）
+  //            回退到 cwd/web/dist（兼容未打包场景）
+  const scriptDir = import.meta.dirname ?? '.'
   const distDir = isDev
-    ? join(import.meta.dirname ?? '.', '../../web/dist')
-    : join(process.cwd(), 'web/dist')
+    ? join(scriptDir, '../../web/dist')
+    : existsSync(join(scriptDir, '../web/index.html'))
+      ? join(scriptDir, '../web')         // 打包产物：dist/bin/ → dist/web/
+      : join(process.cwd(), 'web/dist')   // 回退：开发环境直接跑编译产物
 
   if (isDev) {
     // Vite 反代：排除 /ws 和 /api（由 Bridge 自己处理）
@@ -161,10 +168,12 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
       }
     })
   } else if (existsSync(distDir)) {
-    // 生产模式：Hono serveStatic root 相对于 cwd，直接用 web/dist
-    app.use('/*', serveStatic({ root: './web/dist' }))
+    // 生产模式：用绝对路径托管，不依赖 cwd
+    // serveStatic 的 root 是相对 cwd 的，需要转为相对路径
+    const relativeDistDir = relative(process.cwd(), distDir).replace(/\\/g, '/')
+    app.use('/*', serveStatic({ root: `./${relativeDistDir}` }))
     // SPA fallback：未匹配的路径返回 index.html
-    app.get('*', serveStatic({ root: './web/dist', path: '/index.html' }))
+    app.get('*', serveStatic({ root: `./${relativeDistDir}`, path: '/index.html' }))
   }
 
   server = serve({ fetch: app.fetch, port }, () => { /* 启动成功 */ })

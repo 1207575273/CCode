@@ -40,7 +40,7 @@ const DEFAULT_CONFIG: ZCliConfig = {
 export class ConfigManager {
   readonly #configPath: string
 
-  constructor(baseDir: string = join(homedir(), '.zcli')) {
+  constructor(baseDir: string = join(homedir(), '.ccode')) {
     this.#configPath = join(baseDir, 'config.json')
   }
 
@@ -73,5 +73,5 @@ export class ConfigManager {
   }
 }
 
-// 全局单例，使用默认路径 ~/.zcli/config.json
+// 全局单例，使用默认路径 ~/.ccode/config.json
 export const configManager = new ConfigManager()

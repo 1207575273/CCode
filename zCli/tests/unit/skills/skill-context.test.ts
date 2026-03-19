@@ -16,7 +16,7 @@ import { join } from 'node:path'
 const mockedFg = vi.mocked(fg)
 const mockedReadFile = vi.mocked(readFile)
 
-const SKILL_DIR = join(homedir(), '.zcli', 'skills', 'code-review')
+const SKILL_DIR = join(homedir(), '.ccode', 'skills', 'code-review')
 const SKILL_FILE = join(SKILL_DIR, 'SKILL.md')
 const SKILL_MD_CONTENT = `---
 name: code-review
@@ -43,7 +43,7 @@ function setupMocks(supportingFiles: string[]): void {
     // skills 目录扫描（发现 SKILL.md）
     if (p.endsWith('/*/SKILL.md')) {
       // 只有 user skills 目录会返回文件
-      if (p.includes('.zcli/skills')) {
+      if (p.includes('.ccode/skills')) {
         return [SKILL_FILE]
       }
       return []

@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup'
 
 export default defineConfig({
-  entry: ['bin/zcli.ts'],
+  entry: ['bin/ccode.ts'],
   outDir: 'dist/bin',
   format: ['esm'],
   target: 'node20',

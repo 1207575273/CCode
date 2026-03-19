@@ -4,10 +4,10 @@
  * 启动初始化器 — 在 CLI 入口最早期执行，确保运行环境就绪。
  *
  * 职责：
- * 1. 确保 ~/.zcli/ 目录存在（全局配置）
+ * 1. 确保 ~/.ccode/ 目录存在（全局配置）
  * 2. 确保 config.json 存在且关键字段完整
  * 3. 确保 .mcp.json 存在（空模板）
- * 4. 确保项目级 .zcli/ 目录和 settings.local.json 存在（项目权限配置）
+ * 4. 确保项目级 .ccode/ 目录和 settings.local.json 存在（项目权限配置）
  * 5. 启动诊断：当前 provider 是否配了 apiKey
  */
 
@@ -16,9 +16,9 @@ import { join } from 'node:path'
 import { homedir } from 'node:os'
 
 /** 初始化基础目录路径 */
-const ZCLI_HOME = join(homedir(), '.zcli')
-const CONFIG_PATH = join(ZCLI_HOME, 'config.json')
-const MCP_CONFIG_PATH = join(ZCLI_HOME, '.mcp.json')
+const CCODE_HOME = join(homedir(), '.ccode')
+const CONFIG_PATH = join(CCODE_HOME, 'config.json')
+const MCP_CONFIG_PATH = join(CCODE_HOME, '.mcp.json')
 
 /** config.json 默认模板 */
 const DEFAULT_CONFIG = {
@@ -68,9 +68,9 @@ export function initialize(): InitDiagnostic {
   const warnings: string[] = []
   const created: string[] = []
 
-  // 1. 确保 ~/.zcli/ 目录存在
-  if (!existsSync(ZCLI_HOME)) {
-    mkdirSync(ZCLI_HOME, { recursive: true })
+  // 1. 确保 ~/.ccode/ 目录存在
+  if (!existsSync(CCODE_HOME)) {
+    mkdirSync(CCODE_HOME, { recursive: true })
   }
 
   // 2. 确保 config.json 存在且结构完整
@@ -119,8 +119,8 @@ export function initialize(): InitDiagnostic {
     created.push(MCP_CONFIG_PATH)
   }
 
-  // 4. 确保项目级 .zcli/settings.local.json 存在
-  const projectZcliDir = join(process.cwd(), '.zcli')
+  // 4. 确保项目级 .ccode/settings.local.json 存在
+  const projectZcliDir = join(process.cwd(), '.ccode')
   const localSettingsPath = join(projectZcliDir, 'settings.local.json')
   if (!existsSync(localSettingsPath)) {
     if (!existsSync(projectZcliDir)) {
@@ -143,7 +143,7 @@ export function initialize(): InitDiagnostic {
       if (!providerCfg) {
         warnings.push(`当前 provider "${providerName}" 未在 providers 中配置`)
       } else if (!providerCfg.apiKey) {
-        warnings.push(`当前 provider "${providerName}" 的 apiKey 为空，请在 ~/.zcli/config.json 中配置`)
+        warnings.push(`当前 provider "${providerName}" 的 apiKey 为空，请在 ~/.ccode/config.json 中配置`)
       }
     }
   } catch { /* 诊断失败不阻塞启动 */ }

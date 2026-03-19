@@ -10,7 +10,7 @@ export interface PlatformInfo {
   isMac: boolean
   arch: string
   homeDir: string
-  zcliDir: string
+  ccodeDir: string
 }
 
 const SUPPORTED_PLATFORMS = new Set<string>(['win32', 'linux', 'darwin'])
@@ -25,6 +25,6 @@ export function detectPlatform(): PlatformInfo {
     isMac: platform === 'darwin',
     arch: os.arch(),
     homeDir: os.homedir(),
-    zcliDir: `${os.homedir()}/.zcli`,
+    ccodeDir: `${os.homedir()}/.ccode`,
   }
 }

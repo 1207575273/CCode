@@ -17,14 +17,14 @@ import { homedir } from 'node:os'
 import fg from 'fast-glob'
 
 /** ZCli 插件根目录 */
-const zcliPluginsDir = () => join(homedir(), '.zcli', 'plugins')
+const ccodePluginsDir = () => join(homedir(), '.ccode', 'plugins')
 /** Claude Code 插件注册表 */
 const claudeInstalledPath = () => join(homedir(), '.claude', 'plugins', 'installed_plugins.json')
 
 interface PluginInfo {
   name: string
   installPath: string
-  source: 'zcli' | 'claude-code' | 'manual'
+  source: 'ccode' | 'claude-code' | 'manual'
   version: string
   skillCount: number
   hasHooks: boolean
@@ -66,7 +66,7 @@ export function createPluginsRoutes(): Hono {
   api.post('/import-claude', async (c) => {
     try {
       const body = await c.req.json() as { name: string; sourcePath: string }
-      const targetDir = join(zcliPluginsDir(), body.name)
+      const targetDir = join(ccodePluginsDir(), body.name)
 
       if (existsSync(targetDir)) {
         return c.json({ error: `插件 ${body.name} 已存在` }, 400)
@@ -76,7 +76,7 @@ export function createPluginsRoutes(): Hono {
         return c.json({ error: `源路径不存在: ${body.sourcePath}` }, 400)
       }
 
-      mkdirSync(zcliPluginsDir(), { recursive: true })
+      mkdirSync(ccodePluginsDir(), { recursive: true })
       cpSync(body.sourcePath, targetDir, { recursive: true })
 
       return c.json({ success: true, installPath: targetDir })
@@ -89,7 +89,7 @@ export function createPluginsRoutes(): Hono {
   api.post('/delete', async (c) => {
     try {
       const body = await c.req.json() as { name: string }
-      const targetDir = join(zcliPluginsDir(), body.name)
+      const targetDir = join(ccodePluginsDir(), body.name)
 
       if (!existsSync(targetDir)) {
         return c.json({ error: `插件 ${body.name} 不存在` }, 400)
@@ -112,10 +112,10 @@ export function createPluginsRoutes(): Hono {
       }
 
       // npx skills add 安装到 cwd/.claude/skills/ 下
-      // 用临时目录执行，然后把 skill 搬到 ~/.zcli/plugins/ 下
+      // 用临时目录执行，然后把 skill 搬到 ~/.ccode/plugins/ 下
       const { mkdtempSync } = await import('node:fs')
       const { tmpdir } = await import('node:os')
-      const tempDir = mkdtempSync(join(tmpdir(), 'zcli-skill-'))
+      const tempDir = mkdtempSync(join(tmpdir(), 'ccode-skill-'))
 
       const args = ['skills', 'add', source, '--yes', '--copy']
       if (body.skill) {
@@ -152,9 +152,9 @@ export function createPluginsRoutes(): Hono {
         return c.json({ error: `安装完成但未找到 SKILL.md。输出:\n${output}` }, 400)
       }
 
-      // 搬到 ~/.zcli/plugins/<repoName>/skills/<skillName>/
+      // 搬到 ~/.ccode/plugins/<repoName>/skills/<skillName>/
       const repoName = source.replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/\//g, '--')
-      const targetPluginDir = join(zcliPluginsDir(), repoName)
+      const targetPluginDir = join(ccodePluginsDir(), repoName)
       const targetSkillsDir = join(targetPluginDir, 'skills')
       mkdirSync(targetSkillsDir, { recursive: true })
 
@@ -204,7 +204,7 @@ export function createPluginsRoutes(): Hono {
 
 /** 扫描已安装的 ZCli 插件 */
 function scanInstalledPlugins(): PluginInfo[] {
-  const dir = zcliPluginsDir()
+  const dir = ccodePluginsDir()
   if (!existsSync(dir)) return []
 
   const plugins: PluginInfo[] = []
@@ -245,8 +245,8 @@ function analyzePlugin(name: string, pluginDir: string): PluginInfo | null {
     // Claude Code 格式
     const claudePlugin = join(pluginDir, '.claude-plugin', 'plugin.json')
     // ZCli 格式
-    const zcliPlugin = join(pluginDir, 'plugin.json')
-    const metaPath = existsSync(claudePlugin) ? claudePlugin : existsSync(zcliPlugin) ? zcliPlugin : null
+    const ccodePlugin = join(pluginDir, 'plugin.json')
+    const metaPath = existsSync(claudePlugin) ? claudePlugin : existsSync(ccodePlugin) ? ccodePlugin : null
     if (metaPath) {
       const meta = JSON.parse(readFileSync(metaPath, 'utf-8'))
       description = meta.description ?? ''
@@ -257,7 +257,7 @@ function analyzePlugin(name: string, pluginDir: string): PluginInfo | null {
   return {
     name,
     installPath: pluginDir,
-    source: 'zcli',
+    source: 'ccode',
     version,
     skillCount,
     hasHooks,

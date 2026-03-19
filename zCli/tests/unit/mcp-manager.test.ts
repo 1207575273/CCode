@@ -21,12 +21,12 @@ describe('McpManager', () => {
     const config: McpConfigWithSources = {
       mcpServers: {
         broken: {
-          command: 'zcli_nonexistent_binary_that_does_not_exist_12345',
+          command: 'ccode_nonexistent_binary_that_does_not_exist_12345',
           args: ['--foo'],
         },
       },
       serverSources: {
-        broken: '/home/user/.zcli/mcp.json',
+        broken: '/home/user/.ccode/mcp.json',
       },
     }
     const manager = new McpManager(config)
@@ -41,7 +41,7 @@ describe('McpManager', () => {
     expect(status).toHaveLength(1)
     expect(status[0]!.name).toBe('broken')
     expect(status[0]!.status).toBe('failed')
-    expect(status[0]!.source).toBe('/home/user/.zcli/mcp.json')
+    expect(status[0]!.source).toBe('/home/user/.ccode/mcp.json')
     expect(status[0]!.error).toBeDefined()
 
     await manager.disconnectAll()

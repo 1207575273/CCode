@@ -6,7 +6,7 @@ describe('detectPlatform', () => {
     const info = detectPlatform()
     expect(['win32', 'linux', 'darwin']).toContain(info.platform)
     expect(info.homeDir).toBeTruthy()
-    expect(info.zcliDir).toContain('.zcli')
+    expect(info.ccodeDir).toContain('.ccode')
   })
 
   it('isWindows / isLinux / isMac 三选一', () => {

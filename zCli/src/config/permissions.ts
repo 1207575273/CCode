@@ -1,7 +1,7 @@
 // src/config/permissions.ts
 
 /**
- * 项目级权限管理 — 读取 .zcli/settings.local.json 的 permissions.allow 白名单，
+ * 项目级权限管理 — 读取 .ccode/settings.local.json 的 permissions.allow 白名单，
  * 判断工具调用是否预授权（免确认直接执行）。
  *
  * 规则格式：
@@ -79,7 +79,7 @@ export class PermissionManager {
    * @param registeredTools 当前已注册的工具名列表，用于解析友好名
    */
   static fromProjectDir(projectDir: string = process.cwd(), registeredTools: string[] = []): PermissionManager {
-    const settingsPath = join(projectDir, '.zcli', 'settings.local.json')
+    const settingsPath = join(projectDir, '.ccode', 'settings.local.json')
 
     if (!existsSync(settingsPath)) {
       return new PermissionManager([], registeredTools)

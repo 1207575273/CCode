@@ -160,11 +160,22 @@ if (args.prompt != null) {
     }
 
     // 所有 CLI（包括第一个）都作为 WS 客户端连接 Bridge
-    // render 后才有 sessionId（useChat mount 时创建），用 setTimeout 等待
-    setTimeout(() => {
-      const sid = getCurrentSessionId()
-      if (sid) connectBridge(9800, sid)
-    }, 100)
+    // render 后才有 sessionId（useChat mount 时创建），轮询等待而非固定延迟
+    // 生产模式下 bootstrapAll 耗时可能超过 100ms，固定延迟会导致 sid 为 null
+    const waitAndConnect = () => {
+      let attempts = 0
+      const maxAttempts = 50 // 最多等 5 秒
+      const poll = () => {
+        const sid = getCurrentSessionId()
+        if (sid) {
+          connectBridge(9800, sid)
+        } else if (++attempts < maxAttempts) {
+          setTimeout(poll, 100)
+        }
+      }
+      setTimeout(poll, 100)
+    }
+    waitAndConnect()
 
     process.on('exit', disconnectBridge)
   }

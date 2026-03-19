@@ -109,10 +109,10 @@ export async function ensureHooksDiscovered(): Promise<void> {
   }
 
   // 2. 项目级
-  await hookManager.discoverFromFile(join(process.cwd(), '.zcli', 'hooks.json'), 'project')
+  await hookManager.discoverFromFile(join(process.cwd(), '.ccode', 'hooks.json'), 'project')
 
   // 3. 用户级
-  await hookManager.discoverFromFile(join(homedir(), '.zcli', 'hooks.json'), 'user')
+  await hookManager.discoverFromFile(join(homedir(), '.ccode', 'hooks.json'), 'user')
 }
 
 /**
@@ -123,8 +123,8 @@ export async function runSessionStartHooks(trigger: string): Promise<string> {
   const results = await hookManager.run('SessionStart', {
     trigger,
     env: {
-      ZCLI_CWD: process.cwd(),
-      ZCLI_TRIGGER: trigger,
+      CCODE_CWD: process.cwd(),
+      CCODE_TRIGGER: trigger,
     },
   })
 
@@ -173,7 +173,7 @@ export function stopFileWatcher(): void {
   fileWatcher?.stop()
 }
 
-// ═══ 指令文件（ZCLI.md / CLAUDE.md） ═══
+// ═══ 指令文件（CCODE.md / CLAUDE.md） ═══
 
 let cachedInstructions: LoadedInstruction[] | null = null
 

@@ -3,11 +3,11 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-// 直接测试 initializer 内部逻辑，通过临时目录模拟 ~/.zcli/
+// 直接测试 initializer 内部逻辑，通过临时目录模拟 ~/.ccode/
 // 由于 initializer 硬编码了 homedir，这里用集成方式测试核心逻辑
 
 describe('initializer 核心逻辑', () => {
-  const testDir = join(tmpdir(), `zcli-init-test-${Date.now()}`)
+  const testDir = join(tmpdir(), `ccode-init-test-${Date.now()}`)
   const configPath = join(testDir, 'config.json')
   const mcpPath = join(testDir, '.mcp.json')
 

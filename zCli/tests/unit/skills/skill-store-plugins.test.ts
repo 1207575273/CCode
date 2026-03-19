@@ -26,7 +26,7 @@ function makeSkillMd(name: string, description: string): string {
  * - 包含 'builtin' → 内置 skills
  * - 包含 'plugins' + onlyDirectories → 插件目录发现
  * - 包含 'plugins' + 'SKILL.md' → 插件内 skill 文件
- * - 包含 '.zcli/skills' → user/project skills
+ * - 包含 '.ccode/skills' → user/project skills
  */
 function setupFgMock(config: {
   builtinFiles?: string[]
@@ -64,12 +64,12 @@ function setupFgMock(config: {
     }
 
     // 用户级 skills
-    if (p.includes('.zcli/skills') && p.includes(homedir().replace(/\\/g, '/'))) {
+    if (p.includes('.ccode/skills') && p.includes(homedir().replace(/\\/g, '/'))) {
       return config.userSkillFiles ?? []
     }
 
     // 项目级 skills
-    if (p.includes('.zcli/skills')) {
+    if (p.includes('.ccode/skills')) {
       return config.projectSkillFiles ?? []
     }
 
@@ -83,7 +83,7 @@ describe('SkillStore 插件扫描', () => {
   })
 
   it('should_discover_plugin_skills_with_namespace', async () => {
-    const pluginDir = join(homedir(), '.zcli', 'plugins', 'superpowers')
+    const pluginDir = join(homedir(), '.ccode', 'plugins', 'superpowers')
     const skillFile = join(pluginDir, 'skills', 'brainstorming', 'SKILL.md')
 
     setupFgMock({
@@ -111,8 +111,8 @@ describe('SkillStore 插件扫描', () => {
   })
 
   it('should_support_multiple_plugins_with_independent_namespaces', async () => {
-    const plugin1Dir = join(homedir(), '.zcli', 'plugins', 'alpha')
-    const plugin2Dir = join(homedir(), '.zcli', 'plugins', 'beta')
+    const plugin1Dir = join(homedir(), '.ccode', 'plugins', 'alpha')
+    const plugin2Dir = join(homedir(), '.ccode', 'plugins', 'beta')
     const skill1File = join(plugin1Dir, 'skills', 'task-a', 'SKILL.md')
     const skill2File = join(plugin2Dir, 'skills', 'task-b', 'SKILL.md')
 
@@ -141,9 +141,9 @@ describe('SkillStore 插件扫描', () => {
   })
 
   it('should_not_conflict_between_plugin_and_user_skills_with_same_base_name', async () => {
-    const pluginDir = join(homedir(), '.zcli', 'plugins', 'myplugin')
+    const pluginDir = join(homedir(), '.ccode', 'plugins', 'myplugin')
     const pluginSkillFile = join(pluginDir, 'skills', 'deploy', 'SKILL.md')
-    const userSkillFile = join(homedir(), '.zcli', 'skills', 'deploy', 'SKILL.md')
+    const userSkillFile = join(homedir(), '.ccode', 'skills', 'deploy', 'SKILL.md')
 
     setupFgMock({
       userPluginDirs: [pluginDir],
@@ -174,7 +174,7 @@ describe('SkillStore 插件扫描', () => {
   })
 
   it('should_handle_empty_plugin_directory_gracefully', async () => {
-    const pluginDir = join(homedir(), '.zcli', 'plugins', 'empty-plugin')
+    const pluginDir = join(homedir(), '.ccode', 'plugins', 'empty-plugin')
 
     setupFgMock({
       userPluginDirs: [pluginDir],
@@ -191,8 +191,8 @@ describe('SkillStore 插件扫描', () => {
   })
 
   it('should_return_correct_plugin_dirs_from_getPluginDirs', async () => {
-    const plugin1 = join(homedir(), '.zcli', 'plugins', 'plugin-a')
-    const plugin2 = join(homedir(), '.zcli', 'plugins', 'plugin-b')
+    const plugin1 = join(homedir(), '.ccode', 'plugins', 'plugin-a')
+    const plugin2 = join(homedir(), '.ccode', 'plugins', 'plugin-b')
 
     setupFgMock({
       userPluginDirs: [plugin1, plugin2],
@@ -212,7 +212,7 @@ describe('SkillStore 插件扫描', () => {
   })
 
   it('should_get_single_skill_by_name', async () => {
-    const pluginDir = join(homedir(), '.zcli', 'plugins', 'test-plugin')
+    const pluginDir = join(homedir(), '.ccode', 'plugins', 'test-plugin')
     const skillFile = join(pluginDir, 'skills', 'my-skill', 'SKILL.md')
 
     setupFgMock({

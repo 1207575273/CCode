@@ -16,7 +16,7 @@ export {
   getGitBranch,
 } from './session-utils.js'
 
-/** 全局单例，存储路径 ~/.zcli/sessions/ */
-export const sessionStore = new SessionStore(join(homedir(), '.zcli', 'sessions'))
+/** 全局单例，存储路径 ~/.ccode/sessions/ */
+export const sessionStore = new SessionStore(join(homedir(), '.ccode', 'sessions'))
 
 export { getDb, createDb, closeDb } from './db.js'

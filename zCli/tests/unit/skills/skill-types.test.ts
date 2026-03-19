@@ -46,7 +46,7 @@ describe('SkillMetadata 类型', () => {
     const meta: SkillMetadata = {
       name: 'my-plugin:my-skill',
       description: '插件 skill',
-      filePath: '/home/.zcli/plugins/my-plugin/skills/my-skill/SKILL.md',
+      filePath: '/home/.ccode/plugins/my-plugin/skills/my-skill/SKILL.md',
       source: 'plugin',
       pluginName: 'my-plugin',
     }

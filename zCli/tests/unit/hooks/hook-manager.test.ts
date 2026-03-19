@@ -166,7 +166,7 @@ describe('HookManager', () => {
     expect(mockRunner.run).toHaveBeenCalledOnce()
   })
 
-  it('should set ZCLI_PLUGIN_ROOT env when running plugin hooks', async () => {
+  it('should set CCODE_PLUGIN_ROOT env when running plugin hooks', async () => {
     const json = makeHooksJson({
       PreToolUse: [
         { matcher: '.*', hooks: [{ type: 'command', command: 'check' }] },
@@ -181,6 +181,6 @@ describe('HookManager', () => {
     await manager.run('PreToolUse', { trigger: 'Bash' })
 
     const callArgs = (mockRunner.run as ReturnType<typeof vi.fn>).mock.calls[0]![0] as RunOptions
-    expect(callArgs.env['ZCLI_PLUGIN_ROOT']).toBe('/plugins/my-plugin')
+    expect(callArgs.env['CCODE_PLUGIN_ROOT']).toBe('/plugins/my-plugin')
   })
 })

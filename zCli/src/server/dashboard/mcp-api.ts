@@ -4,7 +4,7 @@
  * MCP Server 管理 API
  *
  * GET  /api/mcp/servers      — 已配置的 MCP Server 列表（合并多层来源）
- * POST /api/mcp/servers/add  — 添加 MCP Server（写入 ~/.zcli/.mcp.json）
+ * POST /api/mcp/servers/add  — 添加 MCP Server（写入 ~/.ccode/.mcp.json）
  * POST /api/mcp/servers/delete — 删除 MCP Server
  */
 
@@ -15,7 +15,7 @@ import { homedir } from 'node:os'
 
 /** MCP 配置文件搜索路径（按优先级从高到低） */
 const MCP_CONFIG_PATHS = [
-  { path: () => join(homedir(), '.zcli', '.mcp.json'), label: '~/.zcli/.mcp.json', writable: true },
+  { path: () => join(homedir(), '.ccode', '.mcp.json'), label: '~/.ccode/.mcp.json', writable: true },
   { path: () => join(homedir(), '.claude.json'), label: '~/.claude.json', writable: false },
   { path: () => join(homedir(), '.mcp.json'), label: '~/.mcp.json', writable: false },
 ]
@@ -53,12 +53,12 @@ export function createMcpRoutes(): Hono {
   api.post('/servers/add', async (c) => {
     try {
       const body = await c.req.json() as { name: string; config: McpServerConfig }
-      const zcliMcpPath = MCP_CONFIG_PATHS[0]!.path()
+      const ccodeMcpPath = MCP_CONFIG_PATHS[0]!.path()
 
       // 读取现有配置
       let data: { mcpServers: Record<string, McpServerConfig> } = { mcpServers: {} }
-      if (existsSync(zcliMcpPath)) {
-        data = JSON.parse(readFileSync(zcliMcpPath, 'utf-8'))
+      if (existsSync(ccodeMcpPath)) {
+        data = JSON.parse(readFileSync(ccodeMcpPath, 'utf-8'))
       }
 
       if (data.mcpServers[body.name]) {
@@ -66,8 +66,8 @@ export function createMcpRoutes(): Hono {
       }
 
       data.mcpServers[body.name] = body.config
-      mkdirSync(join(homedir(), '.zcli'), { recursive: true })
-      writeFileSync(zcliMcpPath, JSON.stringify(data, null, 2), 'utf-8')
+      mkdirSync(join(homedir(), '.ccode'), { recursive: true })
+      writeFileSync(ccodeMcpPath, JSON.stringify(data, null, 2), 'utf-8')
 
       return c.json({ success: true })
     } catch (err) {
@@ -79,19 +79,19 @@ export function createMcpRoutes(): Hono {
   api.post('/servers/delete', async (c) => {
     try {
       const body = await c.req.json() as { name: string }
-      const zcliMcpPath = MCP_CONFIG_PATHS[0]!.path()
+      const ccodeMcpPath = MCP_CONFIG_PATHS[0]!.path()
 
-      if (!existsSync(zcliMcpPath)) {
-        return c.json({ error: '~/.zcli/.mcp.json 不存在' }, 400)
+      if (!existsSync(ccodeMcpPath)) {
+        return c.json({ error: '~/.ccode/.mcp.json 不存在' }, 400)
       }
 
-      const data = JSON.parse(readFileSync(zcliMcpPath, 'utf-8'))
+      const data = JSON.parse(readFileSync(ccodeMcpPath, 'utf-8'))
       if (!data.mcpServers?.[body.name]) {
-        return c.json({ error: `只能删除 ~/.zcli/.mcp.json 中的 Server（其他来源的配置请手动编辑）` }, 400)
+        return c.json({ error: `只能删除 ~/.ccode/.mcp.json 中的 Server（其他来源的配置请手动编辑）` }, 400)
       }
 
       delete data.mcpServers[body.name]
-      writeFileSync(zcliMcpPath, JSON.stringify(data, null, 2), 'utf-8')
+      writeFileSync(ccodeMcpPath, JSON.stringify(data, null, 2), 'utf-8')
 
       return c.json({ success: true })
     } catch (err) {

@@ -71,7 +71,7 @@ export class McpManager {
         this.onConnect?.({ phase: 'start', serverName, transport: transportType })
 
         try {
-          const client = new Client({ name: 'zcli', version: '0.1.0' })
+          const client = new Client({ name: 'ccode', version: '0.1.0' })
           const transport = this.#createTransport(serverConfig)
 
           await client.connect(transport)

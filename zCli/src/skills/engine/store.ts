@@ -25,22 +25,22 @@ function builtinSkillsDir(): string {
 
 /** 用户级 skills 目录 */
 function userSkillsDir(): string {
-  return join(homedir(), '.zcli', 'skills')
+  return join(homedir(), '.ccode', 'skills')
 }
 
 /** 项目级 skills 目录 */
 function projectSkillsDir(): string {
-  return join(process.cwd(), '.zcli', 'skills')
+  return join(process.cwd(), '.ccode', 'skills')
 }
 
 /** 用户级插件目录 */
 export function userPluginsDir(): string {
-  return join(homedir(), '.zcli', 'plugins')
+  return join(homedir(), '.ccode', 'plugins')
 }
 
 /** 项目级插件目录 */
 export function projectPluginsDir(): string {
-  return join(process.cwd(), '.zcli', 'plugins')
+  return join(process.cwd(), '.ccode', 'plugins')
 }
 
 export class SkillStore {

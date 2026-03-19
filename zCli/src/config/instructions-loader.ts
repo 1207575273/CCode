@@ -1,18 +1,18 @@
 // src/config/instructions-loader.ts
 
 /**
- * InstructionsLoader — 多层级指令文件（ZCLI.md / CLAUDE.md）发现与加载。
+ * InstructionsLoader — 多层级指令文件（CCODE.md / CLAUDE.md）发现与加载。
  *
  * 兼容 Claude Code 的 CLAUDE.md 生态：
- * - 每层优先查找 ZCLI.md，没有则 fallback 到 CLAUDE.md
+ * - 每层优先查找 CCODE.md，没有则 fallback 到 CLAUDE.md
  * - 同层只取一个文件，不会同时加载两个
  * - 一期为静态加载（启动时扫描），不做子目录懒加载
  *
  * 发现层级（优先级从高到低）：
- * 1. 全局用户级：~/.zcli/ZCLI.md → ~/.claude/CLAUDE.md
- * 2. 项目根：<git-root>/ZCLI.md → <git-root>/CLAUDE.md
- * 3. 项目配置目录：<git-root>/.zcli/ZCLI.md → <git-root>/.claude/CLAUDE.md
- * 4. 当前工作目录（若 ≠ git-root）：<cwd>/ZCLI.md → <cwd>/CLAUDE.md
+ * 1. 全局用户级：~/.ccode/CCODE.md → ~/.claude/CLAUDE.md
+ * 2. 项目根：<git-root>/CCODE.md → <git-root>/CLAUDE.md
+ * 3. 项目配置目录：<git-root>/.ccode/CCODE.md → <git-root>/.claude/CLAUDE.md
+ * 4. 当前工作目录（若 ≠ git-root）：<cwd>/CCODE.md → <cwd>/CLAUDE.md
  */
 
 import { existsSync, readFileSync } from 'node:fs'
@@ -30,8 +30,8 @@ export interface LoadedInstruction {
   content: string
 }
 
-/** 每层尝试的文件名（优先 ZCLI.md） */
-const CANDIDATE_NAMES = ['ZCLI.md', 'CLAUDE.md'] as const
+/** 每层尝试的文件名（优先 CCODE.md） */
+const CANDIDATE_NAMES = ['CCODE.md', 'CLAUDE.md'] as const
 
 /**
  * 获取 git 仓库根目录。
@@ -53,7 +53,7 @@ export function findGitRoot(cwd: string): string | null {
 }
 
 /**
- * 在指定目录下查找指令文件（ZCLI.md 优先，fallback CLAUDE.md）。
+ * 在指定目录下查找指令文件（CCODE.md 优先，fallback CLAUDE.md）。
  * 返回找到的文件绝对路径，没找到返回 null。
  */
 function findInstructionFile(dir: string): string | null {
@@ -84,7 +84,7 @@ export function discoverInstructionFiles(cwd: string): Array<{ path: string; lev
   }
 
   // 层级 1：全局用户级
-  addIfFound(join(homedir(), '.zcli'), 'global')
+  addIfFound(join(homedir(), '.ccode'), 'global')
   addIfFound(join(homedir(), '.claude'), 'global')
 
   // 获取 git root
@@ -97,7 +97,7 @@ export function discoverInstructionFiles(cwd: string): Array<{ path: string; lev
     addIfFound(normalizedGitRoot, 'project')
 
     // 层级 3：项目配置目录
-    addIfFound(join(normalizedGitRoot, '.zcli'), 'project-config')
+    addIfFound(join(normalizedGitRoot, '.ccode'), 'project-config')
     addIfFound(join(normalizedGitRoot, '.claude'), 'project-config')
 
     // 层级 4：当前工作目录（仅当 cwd ≠ git-root）
@@ -107,7 +107,7 @@ export function discoverInstructionFiles(cwd: string): Array<{ path: string; lev
   } else {
     // 不在 git 仓库中：cwd 作为项目根
     addIfFound(normalizedCwd, 'project')
-    addIfFound(join(normalizedCwd, '.zcli'), 'project-config')
+    addIfFound(join(normalizedCwd, '.ccode'), 'project-config')
     addIfFound(join(normalizedCwd, '.claude'), 'project-config')
   }
 

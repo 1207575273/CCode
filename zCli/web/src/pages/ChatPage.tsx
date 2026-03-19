@@ -8,7 +8,6 @@ import { ToolStatus } from '../components/ToolStatus'
 import { PermissionCard } from '../components/PermissionCard'
 import { UserQuestionForm } from '../components/UserQuestionForm'
 import { TodoPanel } from '../components/TodoPanel'
-import { SubAgentCard } from '../components/SubAgentCard'
 import type { SubAgentInfo, SubAgentDetailEvent } from '../components/SubAgentCard'
 import type { ChatMessage, ToolEvent, ServerEvent, UserQuestion } from '../types'
 

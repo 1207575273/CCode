@@ -333,7 +333,7 @@ export class AgentLoop {
     if (this.#config.hookManager) {
       const preResults = await this.#config.hookManager.run('PreToolUse', {
         trigger: tc.toolName,
-        env: { ZCLI_TOOL_NAME: tc.toolName, ZCLI_TOOL_CALL_ID: tc.toolCallId },
+        env: { CCODE_TOOL_NAME: tc.toolName, CCODE_TOOL_CALL_ID: tc.toolCallId },
         stdin: JSON.stringify({ toolName: tc.toolName, args: tc.args }),
       })
       for (const r of preResults) {
@@ -371,7 +371,7 @@ export class AgentLoop {
     if (this.#config.hookManager) {
       await this.#config.hookManager.run('PostToolUse', {
         trigger: tc.toolName,
-        env: { ZCLI_TOOL_NAME: tc.toolName, ZCLI_TOOL_CALL_ID: tc.toolCallId },
+        env: { CCODE_TOOL_NAME: tc.toolName, CCODE_TOOL_CALL_ID: tc.toolCallId },
         stdin: JSON.stringify({ toolName: tc.toolName, result: { success: result.success, output: truncate(result.output, 1000) } }),
       })
     }

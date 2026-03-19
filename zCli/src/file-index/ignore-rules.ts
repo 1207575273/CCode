@@ -16,7 +16,7 @@ const BUILTIN_IGNORE_PATTERNS: string[] = [
   'dist',
   'build',
   '__pycache__',
-  '.zcli',
+  '.ccode',
 
   // 锁文件 & 压缩产物
   '*.lock',
@@ -93,7 +93,7 @@ function readFileSafe(filePath: string): string {
 /**
  * 创建忽略规则过滤器
  *
- * 合并三层规则：内置硬编码 → .gitignore → .zcliignore
+ * 合并三层规则：内置硬编码 → .gitignore → .ccodeignore
  * 优先级：后添加的规则覆盖先添加的
  *
  * @param cwd - 项目根目录
@@ -111,10 +111,10 @@ export function createIgnoreFilter(cwd: string): Ignore {
     ig.add(gitignoreContent)
   }
 
-  // 第三层：.zcliignore（不存在则跳过）
-  const zcliignoreContent = readFileSafe(join(cwd, '.zcliignore'))
-  if (zcliignoreContent) {
-    ig.add(zcliignoreContent)
+  // 第三层：.ccodeignore（不存在则跳过）
+  const ccodeIgnoreContent = readFileSafe(join(cwd, '.ccodeignore'))
+  if (ccodeIgnoreContent) {
+    ig.add(ccodeIgnoreContent)
   }
 
   return ig

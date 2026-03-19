@@ -136,14 +136,14 @@ describe('loadMcpConfig', () => {
       },
     }))
 
-    // 高优先级文件（模拟 ~/.zcli/mcp.json）
-    const highPriority = writeJsonFile('zcli-mcp.json', JSON.stringify({
+    // 高优先级文件（模拟 ~/.ccode/mcp.json）
+    const highPriority = writeJsonFile('ccode-mcp.json', JSON.stringify({
       mcpServers: {
         'shared-server': {
           command: 'python',
-          args: ['zcli-server.py'],
+          args: ['ccode-server.py'],
         },
-        'zcli-only': {
+        'ccode-only': {
           command: 'deno',
           args: ['run', 'server.ts'],
         },
@@ -155,11 +155,11 @@ describe('loadMcpConfig', () => {
 
     // 同名 server 使用高优先级版本
     expect(config.mcpServers['shared-server']!.command).toBe('python')
-    expect(config.mcpServers['shared-server']!.args).toEqual(['zcli-server.py'])
+    expect(config.mcpServers['shared-server']!.args).toEqual(['ccode-server.py'])
 
     // 各自独有的 server 都保留
     expect(config.mcpServers['global-only']!.url).toBe('http://localhost:4000/sse')
-    expect(config.mcpServers['zcli-only']!.command).toBe('deno')
+    expect(config.mcpServers['ccode-only']!.command).toBe('deno')
   })
 
   it('多文件合并：部分文件不存在时正常加载存在的文件', async () => {
