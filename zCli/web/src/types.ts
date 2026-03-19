@@ -52,6 +52,8 @@ export type ServerEvent =
   | { type: 'llm_start'; provider: string; model: string }
   | { type: 'llm_done'; inputTokens: number; outputTokens: number; stopReason?: string }
   | { type: 'bridge_stop' }
+  | { type: 'context_update'; usedPercentage: number; lastInputTokens: number; effectiveWindow: number; level: string }
+  | { type: 'compact_status'; status: 'start' | 'done' | 'error'; strategy?: string; message?: string }
   | { type: 'cli_status'; connected: boolean; sessionId: string }
   | { type: 'todo_update'; todos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' }> }
   | { type: 'subagent_progress'; agentId: string; description: string; turn: number; maxTurns: number; currentTool?: string }

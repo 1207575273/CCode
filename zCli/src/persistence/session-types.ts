@@ -22,6 +22,7 @@ export type SessionEventType =
   | 'tool_fallback'
   | 'permission_grant'
   | 'error'
+  | 'compact'
   | 'session_end'
 
 export interface SessionEvent {
@@ -96,6 +97,12 @@ export interface SessionEvent {
   isSidechain?: boolean       // 标记为子 Agent 会话
   agentId?: string            // 子 Agent 唯一 ID
   parentSessionId?: string    // 父会话 ID（关联追踪）
+
+  /** compact 事件 */
+  compactSummary?: string          // 压缩摘要文本
+  compactedMessageCount?: number   // 被压缩的消息数
+  tokensBefore?: number            // 压缩前 token 数
+  compactStrategy?: string         // 使用的策略名称
 
   /** 会话汇总 (session_end) */
   totalInputTokens?: number

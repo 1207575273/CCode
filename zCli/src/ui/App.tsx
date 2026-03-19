@@ -23,6 +23,10 @@ import { UsageCommand } from '@commands/usage.js'
 import { GcCommand } from '@commands/gc.js'
 import { BridgeCommand } from '@commands/bridge.js'
 import { SkillsCommand } from '@commands/skills.js'
+import { CompactCommand } from '@commands/compact.js'
+import { ContextCommand } from '@commands/context.js'
+import { contextManager } from '@core/context-manager.js'
+import { contextTracker } from '@core/context-tracker.js'
 import { getCleanupStats, executeCleanup } from '@core/cleanup-service.js'
 import { McpStatusView } from './McpStatusView.js'
 import { ResumePanel } from './ResumePanel.js'
@@ -88,12 +92,14 @@ export function App({
     currentProvider,
     currentModel,
     todos,
+    contextState,
     clearMessages,
     appendSystemMessage,
     switchModel,
     getMcpInfo,
     loadSession,
     forkFromEvent,
+    compactMessages,
   } = useChat()
 
   const [showModelPicker, setShowModelPicker] = useState(false)
@@ -207,6 +213,8 @@ export function App({
     reg.register(new GcCommand())
     reg.register(new SkillsCommand())
     reg.register(new BridgeCommand())
+    reg.register(new CompactCommand())
+    reg.register(new ContextCommand())
     return reg
   }, [currentProvider, currentModel])
 
@@ -516,6 +524,27 @@ export function App({
               .catch(() => appendSystemMessage('Bridge Server 未运行或关闭失败'))
             return
           }
+          case 'run_compact': {
+            compactMessages({ strategy: action.strategy, focus: action.focus })
+            return
+          }
+          case 'show_context': {
+            const s = contextTracker.getState()
+            const fmt = (n: number) => n >= 1000 ? (n / 1000).toFixed(1) + 'K' : String(n)
+            const lines = [
+              `── Context Window (${fmt(s.totalWindow)}) ──`,
+              '',
+              `Used:       ${fmt(s.lastInputTokens)} tokens  (${(s.usedPercentage * 100).toFixed(1)}%)`,
+              `Available:  ${fmt(s.remaining)} tokens`,
+              `Level:      ${s.level === 'normal' ? '✓ normal' : s.level === 'warning' ? '⚠ warning' : s.level === 'critical' ? '⚠ critical' : '✗ overflow'}`,
+              '',
+              `Window:     ${fmt(s.totalWindow)} total, ${fmt(s.outputReserve)} reserved for output`,
+              `Effective:  ${fmt(s.effectiveWindow)}`,
+              `Strategy:   ${contextManager.getStrategyName()}`,
+            ]
+            appendSystemMessage(lines.join('\n'))
+            return
+          }
           case 'error':
             appendSystemMessage(action.message)
             return
@@ -747,9 +776,21 @@ export function App({
             const sym = (c: string) => c === 'CNY' ? '¥' : '$'
             const costParts = Object.entries(s.costByCurrency).filter(([, v]) => v > 0).map(([c, v]) => `${sym(c)}${v.toFixed(4)}`)
             const cost = costParts.length > 0 ? ` | ${costParts.join(' + ')}` : ''
+            const ctxInfo = contextState
+              ? ` | Context: ${(contextState.usedPercentage * 100).toFixed(0)}%`
+              : ''
+            const ctxColor = contextState?.level === 'overflow' ? 'red'
+              : contextState?.level === 'critical' ? 'red'
+              : contextState?.level === 'warning' ? 'yellow'
+              : undefined
             return (
               <Box paddingX={1}>
                 <Text dimColor>{fmt(s.totalInputTokens)} in / {fmt(s.totalOutputTokens)} out{cost}</Text>
+                {contextState && (
+                  <Text color={ctxColor} dimColor={!ctxColor}>
+                    {ctxInfo}
+                  </Text>
+                )}
               </Box>
             )
           })()}

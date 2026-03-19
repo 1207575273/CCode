@@ -30,6 +30,10 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
   const [cliConnected, setCliConnected] = useState(true)
   /** 当前活跃的 CLI session（不同于本页 session 时显示切换提示） */
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
+  /** 上下文窗口使用率 */
+  const [contextInfo, setContextInfo] = useState<{ usedPercentage: number; level: string } | null>(null)
+  /** compact 状态 */
+  const [compacting, setCompacting] = useState<{ strategy: string; message: string } | null>(null)
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const msgIdCounter = useRef(0)
@@ -240,6 +244,16 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
       case 'cli_status':
         setCliConnected(event.connected)
         break
+      case 'context_update':
+        setContextInfo({ usedPercentage: event.usedPercentage, level: event.level })
+        break
+      case 'compact_status':
+        if (event.status === 'start') {
+          setCompacting({ strategy: event.strategy ?? 'unknown', message: event.message ?? 'Compacting...' })
+        } else {
+          setCompacting(null)
+        }
+        break
       case 'bridge_stop':
         setMessages(prev => [...prev, { id: nextId(), role: 'system', content: 'Bridge Server 已关闭' }])
         break
@@ -281,6 +295,17 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
           {connected && !cliConnected && (
             <span className="text-xs px-2 py-1 rounded bg-yellow-900 text-yellow-300">
               CLI 离线
+            </span>
+          )}
+          {contextInfo && (
+            <span className={`text-xs px-2 py-1 rounded ${
+              contextInfo.level === 'overflow' || contextInfo.level === 'critical'
+                ? 'bg-red-900 text-red-300'
+                : contextInfo.level === 'warning'
+                  ? 'bg-yellow-900 text-yellow-300'
+                  : 'bg-gray-700 text-gray-400'
+            }`}>
+              Context: {(contextInfo.usedPercentage * 100).toFixed(0)}%
             </span>
           )}
           <button
@@ -329,6 +354,21 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
           </div>
         )}
 
+        {/* Compact 进行中动效 */}
+        {compacting && (
+          <div className="flex justify-start mb-3">
+            <div className="max-w-[80%] rounded-lg px-4 py-3 bg-gray-800 border border-blue-500/30">
+              <div className="flex items-center gap-2 text-sm text-blue-300">
+                <span className="animate-spin">⟳</span>
+                <span>{compacting.message}</span>
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                Strategy: <span className="text-blue-400">{compacting.strategy}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 工具执行进度（实时） */}
         <ToolStatus events={toolEvents} subAgents={subAgents} />
 
@@ -352,7 +392,7 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
         <div ref={bottomRef} />
       </div>
 
-      <InputBar onSubmit={handleSubmit} disabled={!connected} />
+      <InputBar onSubmit={handleSubmit} disabled={!connected || !!compacting} />
     </div>
   )
 }

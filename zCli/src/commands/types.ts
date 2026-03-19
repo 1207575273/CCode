@@ -27,6 +27,8 @@ export type CommandAction =
   | { type: 'load_skill'; name: string }
   | { type: 'bridge_status' }
   | { type: 'bridge_stop' }
+  | { type: 'run_compact'; strategy?: string; focus?: string }
+  | { type: 'show_context' }
   | { type: 'error'; message: string }
 
 /**

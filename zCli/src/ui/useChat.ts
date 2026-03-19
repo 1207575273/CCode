@@ -32,6 +32,9 @@ import { sessionStore, generateEventId } from '@persistence/index.js'
 import { getTodos } from '@tools/ext/todo-store.js'
 import { PermissionManager } from '@config/permissions.js'
 import { eventBus } from '@core/event-bus.js'
+import { contextTracker } from '@core/context-tracker.js'
+import type { ContextWindowState } from '@core/context-tracker.js'
+import { contextManager } from '@core/context-manager.js'
 import { updateBridgeSession, isBridgeConnected } from '@server/bridge/client.js'
 
 // 从 bootstrap 重导出，供 bin/zcli.ts 和 App.tsx 使用
@@ -70,6 +73,8 @@ export interface UseChatReturn {
   currentModel: string
   /** 当前任务计划列表（todo_write 工具写入，session 级） */
   todos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' }>
+  /** 上下文窗口状态（每次 LLM 调用后更新） */
+  contextState: ContextWindowState | null
   /** 发送用户消息，启动 AgentLoop */
   submit: (text: string) => void
   /** 中止当前流式请求 */
@@ -96,6 +101,8 @@ export interface UseChatReturn {
   loadSession: (sessionId: string, leafEventUuid?: string) => void
   /** 从指定消息处分叉（message.id = event uuid） */
   forkFromEvent: (messageId: string) => void
+  /** 压缩对话上下文 */
+  compactMessages: (options?: { strategy?: string; focus?: string }) => Promise<void>
 }
 
 
@@ -116,7 +123,7 @@ export function useChat(): UseChatReturn {
   const [currentProvider, setCurrentProvider] = useState<string>(() => configManager.load().defaultProvider ?? '')
   const [currentModel, setCurrentModel] = useState<string>(() => configManager.load().defaultModel ?? '')
   const [todos, setTodosState] = useState<Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' }>>([])
-
+  const [contextState, setContextState] = useState<ContextWindowState | null>(null)
 
   // useRef 双轨：xxxRef 供 async 回调读取最新值（避免闭包捕获陈旧 state）；
   // 对应的 state 驱动 UI 重渲染
@@ -272,6 +279,20 @@ export function useChat(): UseChatReturn {
         registerMcpTools(registry)
         const systemPrompt = getSystemPrompt()
 
+        // 上下文管理：auto-compact 检查 + tool 结果裁剪
+        const { history: optimizedHistory, compacted } = await contextManager.prepare(
+          history, provider, { model: currentModel, systemPrompt },
+        )
+        if (compacted) {
+          // auto-compact 触发，更新 messages state（UI 同步）
+          const compactedMsgs: ChatMessage[] = optimizedHistory.map(m => ({
+            id: randomUUID(),
+            role: m.role as 'user' | 'assistant',
+            content: m.content,
+          }))
+          setMessages(compactedMsgs)
+        }
+
         const loop = new AgentLoop(provider, registry, {
           model: currentModel,
           provider: currentProvider,
@@ -281,7 +302,7 @@ export function useChat(): UseChatReturn {
           ...(sid ? { sessionId: sid } : {}),
         })
 
-        for await (const event of loop.run(history)) {
+        for await (const event of loop.run(optimizedHistory)) {
           // F9: 观测日志记录
           sessionLogger.consume(event)
           // F10: token 计量
@@ -299,6 +320,16 @@ export function useChat(): UseChatReturn {
             turnCacheWriteTokens += event.cacheWriteTokens
             turnLlmCallCount++
             lastStopReason = event.stopReason
+            // 广播上下文窗口状态（context-tracker 已在 agent-loop 中更新）
+            const ctxState = contextTracker.getState()
+            setContextState(ctxState)
+            eventBus.emit({
+              type: 'context_update',
+              usedPercentage: ctxState.usedPercentage,
+              lastInputTokens: ctxState.lastInputTokens,
+              effectiveWindow: ctxState.effectiveWindow,
+              level: ctxState.level,
+            })
           } else if (event.type === 'text') {
             accumulated += event.text
             setStreamingMessage(accumulated)
@@ -559,6 +590,79 @@ export function useChat(): UseChatReturn {
     }
   }, [appendSystemMessage, currentProvider, currentModel])
 
+  /** 压缩对话上下文 */
+  const compactMessages = useCallback(async (options?: { strategy?: string; focus?: string }) => {
+    if (isStreaming) return
+
+    const config = configManager.load()
+    const provider = createProvider(currentProvider, config)
+
+    // 构建当前 history
+    const llmMsgs = messages.filter(m => m.role === 'user' || m.role === 'assistant')
+    const history: Message[] = llmMsgs.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+
+    if (history.length === 0) {
+      appendSystemMessage('No messages to compact.')
+      return
+    }
+
+    const strategyName = options?.strategy ?? contextManager.getStrategyName()
+
+    // 进入 streaming 状态，显示 compact 进度
+    setIsStreaming(true)
+    setStreamingMessage(`Compacting ${history.length} messages with strategy: ${strategyName}...`)
+    eventBus.emit({ type: 'compact_status', status: 'start', strategy: strategyName, message: `Compacting ${history.length} messages...` })
+
+    try {
+      const result = await contextManager.compact(history, provider, {
+        model: currentModel,
+        strategy: options?.strategy,
+        focus: options?.focus,
+      })
+
+      // 退出 streaming
+      setStreamingMessage(null)
+      setIsStreaming(false)
+
+      // 用压缩后的 history 替换 messages
+      const compactedMsgs: ChatMessage[] = result.history.map(m => ({
+        id: randomUUID(),
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+      }))
+      setMessages(compactedMsgs)
+
+      // 记录 compact 事件到 JSONL
+      const sid = sessionLogger.sessionId
+      if (sid) {
+        const compactEventId = generateEventId()
+        sessionStore.append(sid, {
+          sessionId: sid,
+          type: 'compact',
+          timestamp: new Date().toISOString(),
+          uuid: compactEventId,
+          parentUuid: sessionLogger.lastEventUuid,
+          cwd: process.cwd(),
+          compactSummary: result.summary,
+          compactedMessageCount: result.compactedMessageCount,
+          tokensBefore: result.tokensBefore,
+          compactStrategy: strategyName,
+        })
+        sessionLogger.bind(sid, compactEventId)
+      }
+
+      const doneMsg = `Context compacted (${result.compactedMessageCount} messages → ${result.history.length}). Strategy: ${strategyName}`
+      appendSystemMessage(doneMsg)
+      eventBus.emit({ type: 'compact_status', status: 'done', strategy: strategyName, message: doneMsg })
+    } catch (err) {
+      setStreamingMessage(null)
+      setIsStreaming(false)
+      const errMsg = `Compact failed: ${err instanceof Error ? err.message : String(err)}`
+      appendSystemMessage(errMsg)
+      eventBus.emit({ type: 'compact_status', status: 'error', message: errMsg })
+    }
+  }, [isStreaming, messages, currentProvider, currentModel, appendSystemMessage])
+
   // ── Web 端输入回流：监听 EventBus，将 Web 侧事件桥接到 CLI hook ──
 
   /** Web 端聊天输入 → 触发 submit（过滤 source=web，避免 CLI submit 循环） */
@@ -627,6 +731,7 @@ export function useChat(): UseChatReturn {
     currentProvider,
     currentModel,
     todos,
+    contextState,
     submit,
     abort,
     interruptAndSubmit,
@@ -638,5 +743,6 @@ export function useChat(): UseChatReturn {
     getMcpInfo,
     loadSession,
     forkFromEvent,
+    compactMessages,
   }
 }

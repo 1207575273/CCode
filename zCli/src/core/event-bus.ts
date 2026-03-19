@@ -14,6 +14,8 @@ export type BridgeEvent =
   | { type: 'subagent_progress'; agentId: string; description: string; turn: number; maxTurns: number; currentTool?: string }
   | { type: 'subagent_done'; agentId: string; description: string; success: boolean; output: string }
   | { type: 'subagent_event'; agentId: string; detail: SubAgentDetail }
+  | { type: 'context_update'; usedPercentage: number; lastInputTokens: number; effectiveWindow: number; level: string }
+  | { type: 'compact_status'; status: 'start' | 'done' | 'error'; strategy?: string; message?: string }
 
 /** SubAgent 详细事件（透传到 Web 端展示） */
 export type SubAgentDetail =

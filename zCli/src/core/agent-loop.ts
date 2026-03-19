@@ -19,6 +19,7 @@ import { isStreamableTool } from '@tools/core/types.js'
 import type { Message, ToolCallContent, StreamChunk } from './types.js'
 import { classifyToolCalls, executeSafeToolsInParallel } from './parallel-executor.js'
 import type { HookManager } from '@hooks/hook-manager.js'
+import { contextTracker } from './context-tracker.js'
 
 // ═══════════════════════════════════════════════
 // 类型定义
@@ -233,6 +234,10 @@ export class AgentLoop {
       }
 
       yield { type: 'llm_done', inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, stopReason: doneStopReason }
+      // 更新上下文窗口追踪（精确值来自 API 返回的 inputTokens）
+      if (inputTokens > 0) {
+        contextTracker.update(inputTokens)
+      }
       return { toolCalls: pendingToolCalls, aborted: false }
     } catch (err) {
       if (isAbortError(err)) {
