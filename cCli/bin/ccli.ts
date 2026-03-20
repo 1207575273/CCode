@@ -16,6 +16,7 @@
 
 import { runPipe, readStdin } from '../src/core/pipe-runner.js'
 import { initialize } from '../src/core/initializer.js'
+import { isSensitiveDirectory, confirmWorkspaceTrust } from '../src/core/workspace-trust.js'
 
 // 过滤 Node.js 内部警告，不泄露到用户终端
 process.on('warning', (warning) => {
@@ -113,6 +114,12 @@ if (args.prompt != null) {
     verbose: args.verbose,
   })
 } else {
+  // 敏感目录信任确认（用户主目录、根目录等）
+  if (isSensitiveDirectory(process.cwd())) {
+    const trusted = await confirmWorkspaceTrust(process.cwd())
+    if (!trusted) process.exit(0)
+  }
+
   // 交互模式：并行加载所有模块（6 个 dynamic import 同时解析，不串行等待）
   const [
     React,

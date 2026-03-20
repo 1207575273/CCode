@@ -33,11 +33,19 @@ export class FileIndex {
    */
   async scan(): Promise<void> {
     // fast-glob 返回正斜杠路径
-    const allFiles = await fg('**/*', {
-      cwd: this.cwd,
-      dot: false,
-      onlyFiles: true,
-    })
+    // suppressErrors: 跳过无权限的目录（如 Windows Application Data junction）
+    let allFiles: string[]
+    try {
+      allFiles = await fg('**/*', {
+        cwd: this.cwd,
+        dot: false,
+        onlyFiles: true,
+        suppressErrors: true,
+      })
+    } catch {
+      // 极端情况：cwd 本身无权限
+      allFiles = []
+    }
 
     // 用 ignore 实例过滤
     this.paths = this.ignoreFilter.filter(allFiles).sort()
