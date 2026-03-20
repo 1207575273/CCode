@@ -31,6 +31,7 @@ import { loadInstructions, formatInstructionsPrompt } from '@config/instructions
 import type { LoadedInstruction } from '@config/instructions-loader.js'
 import { HookManager } from '@hooks/hook-manager.js'
 import { FileIndex, FileWatcher, createIgnoreFilter } from '@file-index/index.js'
+import { pluginRegistry } from '@plugin/registry.js'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 
@@ -172,6 +173,21 @@ export async function ensureFileIndexReady(): Promise<void> {
 export function stopFileWatcher(): void {
   fileWatcher?.stop()
 }
+
+// ═══ Runtime Plugin ═══
+
+let pluginsLoaded = false
+
+/** 发现并加载 Runtime Plugin（幂等） */
+async function ensurePluginsLoaded(): Promise<void> {
+  if (pluginsLoaded) return
+  pluginsLoaded = true
+  const registry = buildRegistry()
+  await pluginRegistry.discover(registry)
+}
+
+/** 导出 pluginRegistry 供 UI 层使用 */
+export { pluginRegistry }
 
 // ═══ 指令文件（CCODE.md / CLAUDE.md） ═══
 
@@ -369,6 +385,12 @@ export function bootstrapAll(): Promise<BootstrapResult> {
         const t = performance.now()
         await ensureFileIndexReady()
         timings['fileIndex'] = performance.now() - t
+      })(),
+      // 链 C：Runtime Plugin 发现与激活（独立于 Skills/Hooks）
+      (async () => {
+        const t = performance.now()
+        await ensurePluginsLoaded()
+        timings['plugins'] = performance.now() - t
       })(),
     ])
 

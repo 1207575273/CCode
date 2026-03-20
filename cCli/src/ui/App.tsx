@@ -27,6 +27,8 @@ import { CompactCommand } from '@commands/compact.js'
 import { ContextCommand } from '@commands/context.js'
 import { contextManager } from '@core/context-manager.js'
 import { contextTracker } from '@core/context-tracker.js'
+import { PluginsCommand } from '@commands/plugins.js'
+import { pluginRegistry } from '@core/bootstrap.js'
 import { getCleanupStats, executeCleanup } from '@core/cleanup-service.js'
 import { McpStatusView } from './McpStatusView.js'
 import { ResumePanel } from './ResumePanel.js'
@@ -193,6 +195,15 @@ export function App({
       const status = getBootstrapStatus()
       if (status.skillsReady) setSkillsReady(true)
       if (status.fileIndexReady) setFileIndexReady(true)
+      // 设置插件 UI 桥接（bootstrap 完成后插件已激活）
+      pluginRegistry.setBridge({
+        injectInput: (text) => { setInputValue(text); setInputResetKey(k => k + 1) },
+        submitInput: (text) => handleSubmit(text),
+        appendSystemMessage,
+        getSessionId: () => getCurrentSessionId(),
+        getModel: () => currentModel,
+        getProvider: () => currentProvider,
+      })
       if (result.timings) setBootTimings(result.timings)
     })
   }, [])
@@ -215,6 +226,7 @@ export function App({
     reg.register(new BridgeCommand())
     reg.register(new CompactCommand())
     reg.register(new ContextCommand())
+    reg.register(new PluginsCommand())
     return reg
   }, [currentProvider, currentModel])
 
@@ -245,7 +257,12 @@ export function App({
       .filter(s => (s.userInvocable ?? true) && s.name.startsWith(query))
       .map(s => ({ name: s.name, description: s.description, source: s.source }))
 
-    return [...cmdItems, ...skillItems]
+    // 插件命令也混入建议
+    const pluginItems: SuggestionItem[] = pluginRegistry.getCommands()
+      .filter(c => c.name.startsWith(query))
+      .map(c => ({ name: c.name, description: c.description, source: 'plugin' as const }))
+
+    return [...cmdItems, ...skillItems, ...pluginItems]
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputValue, registry, skillsReady])
   suggestionsRef.current = suggestions
@@ -351,6 +368,27 @@ export function App({
           enterAlternateScreen()
         }
         submit(prompt)
+        return
+      }
+
+      // Plugin command fallback：检查插件注册的命令
+      const pluginCmds = pluginRegistry.getCommands()
+      const pluginCmd = pluginCmds.find(c => {
+        const cmdName = parts[0] ?? ''
+        return c.name === cmdName || c.aliases?.includes(cmdName)
+      })
+      if (pluginCmd) {
+        const cmdArgs = parts.slice(1)
+        try {
+          const result = pluginCmd.execute(cmdArgs)
+          if (result && typeof (result as Promise<void>).catch === 'function') {
+            (result as Promise<void>).catch((err: unknown) => {
+              appendSystemMessage(`Plugin command error: ${err instanceof Error ? err.message : String(err)}`)
+            })
+          }
+        } catch (err: unknown) {
+          appendSystemMessage(`Plugin command error: ${err instanceof Error ? err.message : String(err)}`)
+        }
         return
       }
     }
@@ -546,6 +584,24 @@ export function App({
               `Strategy:   ${contextManager.getStrategyName()}`,
             ]
             appendSystemMessage(lines.join('\n'))
+            return
+          }
+          case 'list_plugins': {
+            const plugins = pluginRegistry.list()
+            if (plugins.length === 0) {
+              appendSystemMessage('No runtime plugins loaded.\nPlace plugins in ~/.ccode/plugins/<name>/runtime/index.js')
+            } else {
+              const lines = ['── Runtime Plugins ──', '']
+              for (const p of plugins) {
+                const status = p.status === 'active' ? '✓' : '✗'
+                const cmds = p.commands.length > 0 ? ` cmds: ${p.commands.join(', ')}` : ''
+                const tools = p.tools.length > 0 ? ` tools: ${p.tools.join(', ')}` : ''
+                lines.push(`  ${status} ${p.name} v${p.version} [${p.source}]${cmds}${tools}`)
+                if (p.description) lines.push(`    ${p.description}`)
+                if (p.error) lines.push(`    ✗ ${p.error}`)
+              }
+              appendSystemMessage(lines.join('\n'))
+            }
             return
           }
           case 'error':

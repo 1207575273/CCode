@@ -28,6 +28,8 @@
       "@utils/*": ["src/utils/*"],
       "@mcp/*": ["src/mcp/*"],
       "@skills/*": ["src/skills/*"],
+      "@plugin": ["src/plugin/index.ts"],
+      "@plugin/*": ["src/plugin/*"],
       "@hooks": ["src/hooks/index.ts"],
       "@hooks/*": ["src/hooks/*"],
       "@file-index": ["src/file-index/index.ts"],

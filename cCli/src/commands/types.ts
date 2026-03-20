@@ -29,6 +29,7 @@ export type CommandAction =
   | { type: 'bridge_stop' }
   | { type: 'run_compact'; strategy?: string; focus?: string }
   | { type: 'show_context' }
+  | { type: 'list_plugins' }
   | { type: 'error'; message: string }
 
 /**
