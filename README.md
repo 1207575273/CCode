@@ -74,6 +74,30 @@ pnpm dev
 }
 ```
 
+### 快速上手：以 GLM 为例
+
+本项目日常开发使用 **智谱 GLM-5** 作为基准测试模型。最小化配置：
+
+```jsonc
+{
+  "defaultProvider": "glm",
+  "defaultModel": "glm-5",
+  "providers": {
+    "glm": {
+      "apiKey": "your-zhipu-api-key",
+      "baseURL": "https://open.bigmodel.cn/api/coding/paas/v4",
+      "models": ["glm-5", "glm-4.7"]
+    }
+  }
+}
+```
+
+1. 前往 [智谱开放平台](https://open.bigmodel.cn/) 注册并获取 API Key
+2. 将上述配置写入 `~/.ccode/config.json`，替换 `your-zhipu-api-key`
+3. 启动 CCode（`pnpm dev` 或 `ccode`），即可使用 GLM-5 进行对话和工具调用
+
+> GLM 走 **OpenAI 兼容协议**，无需声明 `protocol` 字段。运行时输入 `/model glm-4.7` 可切换模型。
+
 > 更多配置说明（MCP、指令文件、插件、Hooks、权限）见 [HISTORY_README.md](./HISTORY_README.md)
 
 ---
