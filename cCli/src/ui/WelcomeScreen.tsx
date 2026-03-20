@@ -11,7 +11,7 @@
 import React from 'react'
 import { Box, Text } from 'ink'
 
-const APP_VERSION = 'v0.0.2'
+const APP_VERSION = 'v0.0.4'
 
 // 时间常量（与 ResumePanel 相同，按任务要求独立维护）
 const SECOND = 1000

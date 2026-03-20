@@ -17,12 +17,13 @@
  */
 
 import { Hono } from 'hono'
-import { serveStatic } from '@hono/node-server/serve-static'
+// serveStatic 不再使用（全局安装时 cwd 和包路径可能跨盘，serveStatic 无法处理）
+// import { serveStatic } from '@hono/node-server/serve-static'
 import { serve } from '@hono/node-server'
 import { createNodeWebSocket } from '@hono/node-ws'
 import type { ServerType } from '@hono/node-server'
-import { existsSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { sessionStore } from '@persistence/index.js'
 import { createApiRoutes } from '../dashboard/api.js'
 
@@ -168,12 +169,36 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
       }
     })
   } else if (existsSync(distDir)) {
-    // 生产模式：用绝对路径托管，不依赖 cwd
-    // serveStatic 的 root 是相对 cwd 的，需要转为相对路径
-    const relativeDistDir = relative(process.cwd(), distDir).replace(/\\/g, '/')
-    app.use('/*', serveStatic({ root: `./${relativeDistDir}` }))
-    // SPA fallback：未匹配的路径返回 index.html
-    app.get('*', serveStatic({ root: `./${relativeDistDir}`, path: '/index.html' }))
+    // 生产模式：手动托管静态文件（绝对路径，不依赖 cwd）
+    // Hono serveStatic 只支持相对 cwd 的路径，全局安装时 cwd 和包路径可能跨盘（Windows），
+    // relative() 无法正确计算，所以用手动读文件方式。
+    /** 文件扩展名 → Content-Type 映射 */
+    const MIME: Record<string, string> = {
+      '.html': 'text/html; charset=utf-8',
+      '.js': 'application/javascript; charset=utf-8',
+      '.css': 'text/css; charset=utf-8',
+      '.json': 'application/json; charset=utf-8',
+      '.svg': 'image/svg+xml',
+      '.png': 'image/png',
+      '.ico': 'image/x-icon',
+    }
+
+    app.get('*', (c) => {
+      const urlPath = new URL(c.req.url).pathname
+      // 尝试精确匹配文件
+      let filePath = join(distDir, urlPath === '/' ? 'index.html' : urlPath)
+      if (!existsSync(filePath)) {
+        // SPA fallback：未匹配的路径返回 index.html
+        filePath = join(distDir, 'index.html')
+      }
+      if (!existsSync(filePath)) {
+        return c.text('Not Found', 404)
+      }
+      const ext = filePath.slice(filePath.lastIndexOf('.'))
+      const contentType = MIME[ext] ?? 'application/octet-stream'
+      const body = readFileSync(filePath)
+      return new Response(body, { headers: { 'Content-Type': contentType } })
+    })
   }
 
   server = serve({ fetch: app.fetch, port }, () => { /* 启动成功 */ })
