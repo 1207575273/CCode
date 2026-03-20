@@ -91,7 +91,7 @@ export function markSubAgentDone(
   state.status = status
   state.finishedAt = Date.now()
   state.finalText = finalText
-  state.currentTool = undefined
+  delete state.currentTool
 }
 
 /** 设置关联的 JSONL virtualSessionId */
@@ -145,11 +145,11 @@ export function consumeAgentEvent(agentId: string, event: AgentEvent): void {
         toolCallId: event.toolCallId,
         durationMs: event.durationMs,
         success: event.success,
-        resultSummary: event.resultSummary,
+        ...(event.resultSummary !== undefined ? { resultSummary: event.resultSummary } : {}),
       })
       // 工具完成，清除 currentTool
       const s = store.get(agentId)
-      if (s) s.currentTool = undefined
+      if (s) delete s.currentTool
       break
     }
 

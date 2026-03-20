@@ -441,8 +441,8 @@ function makeLlmError(error: string, partialTokens: number): AgentEvent {
 }
 
 /** 构建 ToolContext，兼容 exactOptionalPropertyTypes（不传 undefined 值） */
-function buildToolContext(provider: LLMProvider, registry: ToolRegistry, config: AgentConfig): import('@tools/types.js').ToolContext {
-  const ctx: import('@tools/types.js').ToolContext = {
+function buildToolContext(provider: LLMProvider, registry: ToolRegistry, config: AgentConfig): import('@tools/core/types.js').ToolContext {
+  const ctx: import('@tools/core/types.js').ToolContext = {
     cwd: process.cwd(),
     provider,
     providerName: config.provider,

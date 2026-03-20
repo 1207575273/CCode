@@ -35,7 +35,11 @@ export class CompactCommand implements Command {
 
     return {
       handled: true,
-      action: { type: 'run_compact', strategy, focus },
+      action: {
+        type: 'run_compact',
+        ...(strategy !== undefined ? { strategy } : {}),
+        ...(focus !== undefined ? { focus } : {}),
+      },
     }
   }
 }

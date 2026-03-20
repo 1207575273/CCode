@@ -29,7 +29,7 @@ describe('subagent-store', () => {
     expect(state!.status).toBe('running')
     expect(state!.maxTurns).toBe(15)
     expect(state!.events).toEqual([])
-    expect(state!.done).toBeUndefined()
+    expect(state!.finishedAt).toBeUndefined()
   })
 
   it('应追加详细事件', () => {

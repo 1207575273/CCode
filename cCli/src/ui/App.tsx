@@ -525,7 +525,10 @@ export function App({
             return
           }
           case 'run_compact': {
-            compactMessages({ strategy: action.strategy, focus: action.focus })
+            compactMessages({
+              ...(action.strategy !== undefined ? { strategy: action.strategy } : {}),
+              ...(action.focus !== undefined ? { focus: action.focus } : {}),
+            })
             return
           }
           case 'show_context': {
@@ -787,7 +790,7 @@ export function App({
               <Box paddingX={1}>
                 <Text dimColor>{fmt(s.totalInputTokens)} in / {fmt(s.totalOutputTokens)} out{cost}</Text>
                 {contextState && (
-                  <Text color={ctxColor} dimColor={!ctxColor}>
+                  <Text {...(ctxColor ? { color: ctxColor } : { dimColor: true })}>
                     {ctxInfo}
                   </Text>
                 )}

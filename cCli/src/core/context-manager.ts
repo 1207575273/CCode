@@ -140,7 +140,9 @@ export class SummaryWithRecentStrategy implements CompactStrategy {
     let recentTokens = 0
     let splitIndex = history.length
     for (let i = history.length - 1; i >= 0; i--) {
-      const msgTokens = Math.ceil(history[i]!.content.length / 4)
+      const content = history[i]!.content
+      const contentStr = typeof content === 'string' ? content : JSON.stringify(content)
+      const msgTokens = Math.ceil(contentStr.length / 4)
       if (recentTokens + msgTokens > this.recentTokenBudget) break
       recentTokens += msgTokens
       splitIndex = i
@@ -213,7 +215,8 @@ export class ToolResultTrimStrategy implements CompactStrategy {
     // 找到所有 tool result 消息的索引
     const toolResultIndices: number[] = []
     for (let i = 0; i < history.length; i++) {
-      if (history[i]!.role === 'user' && toolResultPattern.test(history[i]!.content)) {
+      const c = history[i]!.content
+      if (history[i]!.role === 'user' && typeof c === 'string' && toolResultPattern.test(c)) {
         toolResultIndices.push(i)
       }
     }
@@ -226,7 +229,8 @@ export class ToolResultTrimStrategy implements CompactStrategy {
       if (trimSet.has(i)) {
         compactedCount++
         // 保留 tool 名称前缀，替换内容
-        const toolNameMatch = msg.content.match(/^\[Tool (\w+) result\]/)
+        const msgContent = typeof msg.content === 'string' ? msg.content : ''
+        const toolNameMatch = msgContent.match(/^\[Tool (\w+) result\]/)
         const toolName = toolNameMatch?.[1] ?? 'unknown'
         return { ...msg, content: `[Tool ${toolName} result]: ${TOOL_RESULT_PLACEHOLDER}` }
       }

@@ -187,7 +187,7 @@ function ListView({ agents, selectedIndex, onSelect, onClose }: {
 
         return (
           <Box key={agent.agentId} paddingLeft={1}>
-            <Text color={isSelected ? 'cyan' : undefined}>
+            <Text {...(isSelected ? { color: 'cyan' as const } : {})}>
               {isSelected ? '▸ ' : '  '}
             </Text>
             {agent.status === 'running' ? (

@@ -1,7 +1,7 @@
 // tests/unit/session-store.test.ts
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, readdirSync, utimesSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { SessionStore } from '@persistence/session-store'
@@ -45,7 +45,7 @@ describe('SessionStore.create', () => {
     const projectDir = join(tempDir, projectSlug)
 
     // The project directory should contain exactly one JSONL file
-    const { readdirSync } = require('node:fs')
+    // readdirSync 已在顶部 import
     const files = readdirSync(projectDir) as string[]
     expect(files).toHaveLength(1)
     expect(files[0]).toMatch(/^\d{17}_.+\.jsonl$/)
@@ -628,7 +628,7 @@ describe('SessionStore.cleanup', () => {
 
     // Manually set file mtime to 60 days ago
     const filePath = store.list()[0]!.filePath
-    const { utimesSync } = require('node:fs')
+    // utimesSync 已在顶部 import
     const oldDate = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)
     utimesSync(filePath, oldDate, oldDate)
 

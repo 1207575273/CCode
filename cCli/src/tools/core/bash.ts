@@ -109,9 +109,9 @@ export class BashTool implements Tool {
         child.stdout?.on('data', (data: Buffer) => appendOutput(pid, data.toString()))
         child.stderr?.on('data', (data: Buffer) => appendOutput(pid, data.toString()))
 
-        // unref stdio 流，不阻塞父进程退出
-        child.stdout?.unref()
-        child.stderr?.unref()
+        // unref stdio 流，不阻塞父进程退出（仅 Socket 类型有 unref）
+        if (child.stdout && 'unref' in child.stdout) (child.stdout as any).unref()
+        if (child.stderr && 'unref' in child.stderr) (child.stderr as any).unref()
 
         // 进程退出时记录退出码，延迟清理（给 task_output 留读取窗口）
         child.on('exit', (code) => {

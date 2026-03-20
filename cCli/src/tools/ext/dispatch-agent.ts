@@ -216,7 +216,7 @@ export class DispatchAgentTool implements StreamableTool {
             } satisfies AgentEvent
             eventBus.emit({
               type: 'subagent_event', agentId,
-              detail: { kind: 'tool_done', toolName: event.toolName, toolCallId: event.toolCallId, durationMs: event.durationMs, success: event.success, resultSummary: event.resultSummary },
+              detail: { kind: 'tool_done', toolName: event.toolName, toolCallId: event.toolCallId, durationMs: event.durationMs, success: event.success, ...(event.resultSummary !== undefined ? { resultSummary: event.resultSummary } : {}) },
             })
             break
 
@@ -335,7 +335,7 @@ function runSubAgentInBackground(
             })
             eventBus.emit({
               type: 'subagent_event', agentId,
-              detail: { kind: 'tool_done', toolName: event.toolName, toolCallId: event.toolCallId, durationMs: event.durationMs, success: event.success, resultSummary: event.resultSummary },
+              detail: { kind: 'tool_done', toolName: event.toolName, toolCallId: event.toolCallId, durationMs: event.durationMs, success: event.success, ...(event.resultSummary !== undefined ? { resultSummary: event.resultSummary } : {}) },
             })
             break
 

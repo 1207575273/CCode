@@ -10,7 +10,7 @@ import {
   existsSync,
 } from 'node:fs'
 import { join, basename } from 'node:path'
-import type { SessionEvent, SessionSnapshot, SessionSummary, BranchInfo } from './session-types.js'
+import type { SessionEvent, SessionSnapshot, SessionSummary, BranchInfo, SubagentSnapshot, SubagentSnapshotEvent } from './session-types.js'
 import {
   toProjectSlug,
   generateSessionId,
@@ -418,16 +418,16 @@ export class SessionStore {
               kind: 'tool_start',
               toolName: ev.toolName,
               toolCallId: ev.toolCallId ?? '',
-              args: ev.args,
+              ...(ev.args !== undefined ? { args: ev.args } : {}),
             })
           } else if (ev.type === 'tool_call_end' && ev.toolName) {
             detailEvents.push({
               kind: 'tool_done',
               toolName: ev.toolName,
               toolCallId: ev.toolCallId ?? '',
-              durationMs: ev.durationMs,
-              success: ev.success,
-              resultSummary: ev.resultSummary,
+              ...(ev.durationMs !== undefined ? { durationMs: ev.durationMs } : {}),
+              ...(ev.success !== undefined ? { success: ev.success } : {}),
+              ...(ev.resultSummary !== undefined ? { resultSummary: ev.resultSummary } : {}),
             })
           } else if (ev.type === 'assistant' && typeof ev.message?.content === 'string') {
             detailEvents.push({

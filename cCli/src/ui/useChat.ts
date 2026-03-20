@@ -281,14 +281,14 @@ export function useChat(): UseChatReturn {
 
         // 上下文管理：auto-compact 检查 + tool 结果裁剪
         const { history: optimizedHistory, compacted } = await contextManager.prepare(
-          history, provider, { model: currentModel, systemPrompt },
+          history, provider, { model: currentModel, ...(systemPrompt !== undefined ? { systemPrompt } : {}) },
         )
         if (compacted) {
           // auto-compact 触发，更新 messages state（UI 同步）
           const compactedMsgs: ChatMessage[] = optimizedHistory.map(m => ({
             id: randomUUID(),
             role: m.role as 'user' | 'assistant',
-            content: m.content,
+            content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
           }))
           setMessages(compactedMsgs)
         }
@@ -616,8 +616,8 @@ export function useChat(): UseChatReturn {
     try {
       const result = await contextManager.compact(history, provider, {
         model: currentModel,
-        strategy: options?.strategy,
-        focus: options?.focus,
+        ...(options?.strategy !== undefined ? { strategy: options.strategy } : {}),
+        ...(options?.focus !== undefined ? { focus: options.focus } : {}),
       })
 
       // 退出 streaming
@@ -628,7 +628,7 @@ export function useChat(): UseChatReturn {
       const compactedMsgs: ChatMessage[] = result.history.map(m => ({
         id: randomUUID(),
         role: m.role as 'user' | 'assistant',
-        content: m.content,
+        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
       }))
       setMessages(compactedMsgs)
 
