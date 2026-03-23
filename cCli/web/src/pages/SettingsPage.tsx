@@ -172,9 +172,29 @@ function ProvidersTab() {
         <p className="text-xs text-gray-500 mt-2">修改后点击"保存配置"生效（写入 ~/.ccode/config.json）</p>
       </div>
 
+      {/* 新增供应商 */}
+      <AddProviderButton onAdd={(name) => {
+        if (config.providers[name]) return
+        setConfig({
+          ...config,
+          providers: { ...config.providers, [name]: { apiKey: '', models: [] } },
+        })
+      }} />
+
       {/* Provider 列表 */}
       {Object.entries(config.providers).map(([name, prov]) => (
-        <ProviderCard key={name} name={name} provider={prov} />
+        <ProviderCard
+          key={name}
+          name={name}
+          provider={prov}
+          onChange={(updated) => {
+            setConfig({ ...config, providers: { ...config.providers, [name]: updated } })
+          }}
+          onDelete={() => {
+            const { [name]: _, ...rest } = config.providers
+            setConfig({ ...config, providers: rest })
+          }}
+        />
       ))}
 
       {/* 保存按钮 */}
@@ -318,28 +338,169 @@ function Field({ label, value, onChange, placeholder, type = 'text' }: {
   )
 }
 
-function ProviderCard({ name, provider }: { name: string; provider: ProviderConfig }) {
+function AddProviderButton({ onAdd }: { onAdd: (name: string) => void }) {
+  const [show, setShow] = useState(false)
+  const [name, setName] = useState('')
+
+  const handleAdd = () => {
+    const n = name.trim()
+    if (!n) return
+    onAdd(n)
+    setName('')
+    setShow(false)
+  }
+
+  if (!show) {
+    return (
+      <button onClick={() => setShow(true)} className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-500">
+        + 新增供应商
+      </button>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        value={name}
+        onChange={e => setName(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
+        placeholder="供应商名称（如 deepseek）"
+        className="bg-gray-900 text-sm rounded px-3 py-1.5 outline-none focus:ring-1 focus:ring-blue-500"
+        autoFocus
+      />
+      <button onClick={handleAdd} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-500">确认</button>
+      <button onClick={() => { setShow(false); setName('') }} className="px-3 py-1.5 bg-gray-700 text-gray-300 text-sm rounded hover:bg-gray-600">取消</button>
+    </div>
+  )
+}
+
+function ProviderCard({ name, provider, onChange, onDelete }: {
+  name: string
+  provider: ProviderConfig
+  onChange: (updated: ProviderConfig) => void
+  onDelete: () => void
+}) {
   const [showKey, setShowKey] = useState(false)
+  const [newModel, setNewModel] = useState('')
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
+
+  const handleTest = async () => {
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const res = await apiPost<{ success: boolean; model?: string; durationMs?: number; error?: string }>(
+        '/api/settings/test-provider',
+        { provider: name, config: provider }
+      )
+      if (res.success) {
+        setTestResult({ ok: true, msg: `连通成功（${res.model}, ${res.durationMs}ms）` })
+      } else {
+        setTestResult({ ok: false, msg: res.error ?? '未知错误' })
+      }
+    } catch (e) {
+      setTestResult({ ok: false, msg: String(e) })
+    }
+    setTesting(false)
+  }
+
+  const addModel = () => {
+    const m = newModel.trim()
+    if (!m || provider.models.includes(m)) return
+    onChange({ ...provider, models: [...provider.models, m] })
+    setNewModel('')
+  }
+
+  const removeModel = (model: string) => {
+    onChange({ ...provider, models: provider.models.filter(m => m !== model) })
+  }
+
   return (
     <div className="bg-gray-800 rounded-lg p-4">
+      {/* 头部：名称 + 协议 + 操作按钮 */}
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium text-gray-300">{name}</h3>
-        {provider.protocol && <span className="text-xs bg-gray-700 px-2 py-0.5 rounded text-gray-400">{provider.protocol}</span>}
-      </div>
-      <div className="space-y-2 text-sm">
-        {provider.baseURL && (
-          <div><span className="text-gray-500">baseURL:</span> <span className="text-gray-300 font-mono text-xs">{provider.baseURL}</span></div>
-        )}
         <div className="flex items-center gap-2">
-          <span className="text-gray-500">API Key:</span>
-          <span className="text-gray-300 font-mono text-xs">
-            {showKey ? provider.apiKey : `${provider.apiKey.slice(0, 8)}${'•'.repeat(Math.max(0, Math.min(provider.apiKey.length - 8, 24)))}`}
-          </span>
-          <button onClick={() => setShowKey(!showKey)} className="text-xs text-blue-400 hover:text-blue-300">
-            {showKey ? '隐藏' : '显示'}
+          <h3 className="text-sm font-medium text-gray-300">{name}</h3>
+          <select
+            value={provider.protocol ?? (name === 'anthropic' ? 'anthropic' : 'openai')}
+            onChange={e => onChange({ ...provider, protocol: e.target.value })}
+            className="text-xs bg-gray-700 px-2 py-0.5 rounded text-gray-400 outline-none"
+          >
+            <option value="openai">openai</option>
+            <option value="anthropic">anthropic</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={handleTest} disabled={testing}
+            className="px-2 py-1 text-xs bg-emerald-700 text-white rounded hover:bg-emerald-600 disabled:opacity-50">
+            {testing ? '测试中...' : '测试连通'}
+          </button>
+          <button onClick={() => { if (window.confirm(`确定删除供应商 "${name}"？`)) onDelete() }}
+            className="px-2 py-1 text-xs bg-red-700/60 text-red-300 rounded hover:bg-red-600/60">
+            删除
           </button>
         </div>
-        <div><span className="text-gray-500">Models:</span> <span className="text-gray-300">{provider.models.join(', ')}</span></div>
+      </div>
+
+      {/* 测试结果 */}
+      {testResult && (
+        <div className={`text-xs mb-3 px-2 py-1 rounded ${testResult.ok ? 'bg-emerald-900/30 text-emerald-400' : 'bg-red-900/30 text-red-400'}`}>
+          {testResult.ok ? '✅' : '❌'} {testResult.msg}
+        </div>
+      )}
+
+      {/* 编辑字段 */}
+      <div className="space-y-3 text-sm">
+        {/* API Key */}
+        <div>
+          <label className="text-xs text-gray-400 block mb-1">API Key</label>
+          <div className="flex gap-1">
+            <input
+              type={showKey ? 'text' : 'password'}
+              value={provider.apiKey}
+              onChange={e => onChange({ ...provider, apiKey: e.target.value })}
+              placeholder="填入 API Key"
+              className="flex-1 bg-gray-900 text-sm font-mono rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            <button onClick={() => setShowKey(!showKey)} className="px-2 text-xs text-blue-400 hover:text-blue-300 shrink-0">
+              {showKey ? '隐藏' : '显示'}
+            </button>
+          </div>
+        </div>
+
+        {/* Base URL */}
+        <div>
+          <label className="text-xs text-gray-400 block mb-1">Base URL（可选）</label>
+          <input
+            value={provider.baseURL ?? ''}
+            onChange={e => onChange({ ...provider, baseURL: e.target.value || undefined })}
+            placeholder="如 https://open.bigmodel.cn/api/coding/paas/v4"
+            className="w-full bg-gray-900 text-sm font-mono rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+
+        {/* Models */}
+        <div>
+          <label className="text-xs text-gray-400 block mb-1">模型列表</label>
+          <div className="flex flex-wrap gap-1 mb-1">
+            {provider.models.map(m => (
+              <span key={m} className="inline-flex items-center gap-1 bg-gray-700 text-gray-300 text-xs px-2 py-1 rounded">
+                {m}
+                <button onClick={() => removeModel(m)} className="text-gray-500 hover:text-red-400">×</button>
+              </span>
+            ))}
+          </div>
+          <div className="flex gap-1">
+            <input
+              value={newModel}
+              onChange={e => setNewModel(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addModel() } }}
+              placeholder="输入模型名称，回车添加"
+              className="flex-1 bg-gray-900 text-xs font-mono rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            <button onClick={addModel} className="px-2 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600">添加</button>
+          </div>
+        </div>
       </div>
     </div>
   )
