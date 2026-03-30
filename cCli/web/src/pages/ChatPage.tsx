@@ -377,8 +377,9 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
         {/* 权限确认 */}
         {pendingPermission && (
           <PermissionCard toolName={pendingPermission.toolName} args={pendingPermission.args}
-            onAllow={() => { send({ type: 'permission', allow: true }); setPendingPermission(null) }}
-            onDeny={() => { send({ type: 'permission', allow: false }); setPendingPermission(null) }}
+            onAllow={() => { send({ type: 'permission', allow: true, always: false }); setPendingPermission(null) }}
+            onAlwaysAllow={() => { send({ type: 'permission', allow: true, always: true }); setPendingPermission(null) }}
+            onDeny={() => { send({ type: 'permission', allow: false, always: false }); setPendingPermission(null) }}
           />
         )}
         {/* 用户问卷 */}

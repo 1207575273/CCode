@@ -109,6 +109,7 @@ function handleBridgeMessage(msg: { type: string; [key: string]: unknown }): voi
       eventBus.emit({
         type: 'permission_response',
         allow: Boolean(msg['allow']),
+        always: Boolean(msg['always']),
         source: 'web',
       })
       break

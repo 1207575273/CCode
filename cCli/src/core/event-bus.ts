@@ -5,7 +5,7 @@ import type { AgentEvent } from './agent-loop.js'
 /** Bridge 层扩展事件 */
 export type BridgeEvent =
   | { type: 'user_input'; text: string; source: 'cli' | 'web' }
-  | { type: 'permission_response'; allow: boolean; source: 'cli' | 'web' }
+  | { type: 'permission_response'; allow: boolean; always?: boolean; source: 'cli' | 'web' }
   | { type: 'question_response'; cancelled: boolean; answers?: Record<string, string | string[]>; source: 'cli' | 'web' }
   | { type: 'config_changed'; provider: string; model: string }
   | { type: 'client_connect'; clientId: string; clientType: 'cli' | 'web' }

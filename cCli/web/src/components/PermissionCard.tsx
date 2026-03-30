@@ -4,10 +4,11 @@ interface Props {
   toolName: string
   args: Record<string, unknown>
   onAllow: () => void
+  onAlwaysAllow: () => void
   onDeny: () => void
 }
 
-export function PermissionCard({ toolName, args, onAllow, onDeny }: Props) {
+export function PermissionCard({ toolName, args, onAllow, onAlwaysAllow, onDeny }: Props) {
   return (
     <div className="mx-4 my-2 p-4 bg-yellow-900/30 border border-yellow-600/50 rounded-lg">
       <div className="flex items-center gap-2 mb-2">
@@ -23,6 +24,9 @@ export function PermissionCard({ toolName, args, onAllow, onDeny }: Props) {
       <div className="flex gap-2">
         <button onClick={onAllow} className="px-4 py-1.5 bg-green-600 text-white rounded hover:bg-green-500 text-sm">
           允许
+        </button>
+        <button onClick={onAlwaysAllow} className="px-4 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-500 text-sm">
+          始终允许
         </button>
         <button onClick={onDeny} className="px-4 py-1.5 bg-red-600 text-white rounded hover:bg-red-500 text-sm">
           拒绝

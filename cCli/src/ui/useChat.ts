@@ -308,7 +308,13 @@ export function useChat(): UseChatReturn {
           // F10: token 计量
           tokenMeter.consume(event)
           // 广播到 EventBus（CLI/Web 共享事件流）
-          eventBus.emit(event)
+          // 但跳过会被白名单自动放行的 permission_request——
+          // 避免 Web 端收到一个"已经被 CLI 自动解决"的权限弹窗
+          const skipBroadcast = event.type === 'permission_request' && (
+            permissionManagerRef.current?.isAllowed(event.toolName) ||
+            allowedToolsRef.current.has(event.toolName)
+          )
+          if (!skipBroadcast) eventBus.emit(event)
 
           if (event.type === 'thinking') {
             thinkingAccumulated += event.text
@@ -680,7 +686,7 @@ export function useChat(): UseChatReturn {
   useEffect(() => {
     const off = eventBus.onType('permission_response', (event) => {
       if (event.source === 'web' && pendingPermission) {
-        resolvePermission(event.allow)
+        resolvePermission(event.allow, event.always ?? false)
       }
     })
     return off
