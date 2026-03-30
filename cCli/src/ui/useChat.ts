@@ -72,7 +72,7 @@ export interface UseChatReturn {
   currentProvider: string
   currentModel: string
   /** 当前任务计划列表（todo_write 工具写入，session 级） */
-  todos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' }>
+  todos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed'; activeForm: string }>
   /** 上下文窗口状态（每次 LLM 调用后更新） */
   contextState: ContextWindowState | null
   /** 发送用户消息，启动 AgentLoop */
@@ -122,7 +122,7 @@ export function useChat(): UseChatReturn {
   const [allowedTools, setAllowedTools] = useState<Set<string>>(new Set())
   const [currentProvider, setCurrentProvider] = useState<string>(() => configManager.load().defaultProvider ?? '')
   const [currentModel, setCurrentModel] = useState<string>(() => configManager.load().defaultModel ?? '')
-  const [todos, setTodosState] = useState<Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' }>>([])
+  const [todos, setTodosState] = useState<Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed'; activeForm: string }>>([])
   const [contextState, setContextState] = useState<ContextWindowState | null>(null)
 
   // useRef 双轨：xxxRef 供 async 回调读取最新值（避免闭包捕获陈旧 state）；

@@ -5,7 +5,9 @@
  *
  * LLM 调用此工具创建/更新任务列表。
  * 全量覆盖（每次传入完整的 todos 数组）。
- * 不依赖 dispatch_agent — TodoWrite 是 Planning 可视化，Agent 是执行。
+ * 对齐 Claude Code CLI 的 TodoWrite：
+ *   - activeForm：当前正在进行的动作描述（现在进行时）
+ *   - verificationNudgeNeeded：所有任务完成时提示用户验证
  */
 
 import type { Tool, ToolResult, ToolContext } from '../core/types.js'
@@ -15,7 +17,8 @@ export class TodoWriteTool implements Tool {
   readonly name = 'todo_write'
   readonly description =
     'Create or update the task plan. Pass the complete list of tasks with their current status. ' +
-    'Use this to track progress on multi-step tasks. Each call replaces the entire list.'
+    'Use this to track progress on multi-step tasks. Each call replaces the entire list. ' +
+    'Set activeForm to describe what is currently being done (in present tense, e.g. "Reading config file").'
   readonly dangerous = false
   readonly parameters = {
     type: 'object',
@@ -28,6 +31,7 @@ export class TodoWriteTool implements Tool {
           properties: {
             content: { type: 'string', description: 'Task description' },
             status: { type: 'string', enum: ['pending', 'in_progress', 'completed'], description: 'Task status' },
+            activeForm: { type: 'string', description: 'What is currently being done (present tense). Only meaningful when status is in_progress.' },
           },
           required: ['content', 'status'],
         },
@@ -42,24 +46,35 @@ export class TodoWriteTool implements Tool {
       return { success: false, output: 'todos must be an array' }
     }
 
-    const items = rawTodos.map(t => ({
-      content: String((t as Record<string, unknown>)['content'] ?? ''),
-      status: (String((t as Record<string, unknown>)['status'] ?? 'pending')) as 'pending' | 'in_progress' | 'completed',
-    }))
+    const items = rawTodos.map(t => {
+      const raw = t as Record<string, unknown>
+      return {
+        content: String(raw['content'] ?? ''),
+        status: (String(raw['status'] ?? 'pending')) as 'pending' | 'in_progress' | 'completed',
+        activeForm: String(raw['activeForm'] ?? ''),
+      }
+    })
 
-    setTodos(items)
-    const newTodos = getTodos()
+    const { oldTodos, newTodos } = setTodos(items)
 
     const completed = newTodos.filter(t => t.status === 'completed').length
     const total = newTodos.length
+    // 所有任务完成时提示用户验证
+    const verificationNudgeNeeded = total > 0 && completed === total
+
+    const output = `Task plan updated: ${completed}/${total} completed.` +
+      (verificationNudgeNeeded ? ' All tasks done — please verify the results.' : '') +
+      '\n' +
+      newTodos.map(t => {
+        const icon = t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '▸' : '○'
+        const active = t.status === 'in_progress' && t.activeForm ? ` (${t.activeForm})` : ''
+        return `${icon} ${t.content}${active}`
+      }).join('\n')
 
     return {
       success: true,
-      output: `Task plan updated: ${completed}/${total} completed.\n` +
-        newTodos.map(t => {
-          const icon = t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '▸' : '○'
-          return `${icon} ${t.content}`
-        }).join('\n'),
+      output,
+      // meta 不使用 ToolResultMeta（todo 数据通过 TodoStore + EventBus 分发，不需要走 meta 渲染通道）
     }
   }
 }

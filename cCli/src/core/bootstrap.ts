@@ -22,6 +22,7 @@ import { TaskOutputTool } from '@tools/core/task-output.js'
 import { TodoWriteTool } from '@tools/ext/todo-write.js'
 import { DispatchAgentTool } from '@tools/ext/dispatch-agent.js'
 import { AskUserQuestionTool } from '@tools/ext/ask-user-question.js'
+import { VerifyCodeTool } from '@tools/ext/verify-code.js'
 import { loadMcpConfigWithSources } from '@config/mcp-config.js'
 import { McpManager } from '@mcp/mcp-manager.js'
 import { SessionLogger, TokenMeter } from '@observability/index.js'
@@ -70,6 +71,7 @@ export function buildRegistry(): ToolRegistry {
   reg.register(new TodoWriteTool())
   reg.register(new DispatchAgentTool())
   reg.register(new AskUserQuestionTool())
+  reg.register(new VerifyCodeTool())
   reg.register(new SkillTool(skillStore))
   return reg
 }

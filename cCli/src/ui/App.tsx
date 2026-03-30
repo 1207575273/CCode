@@ -43,7 +43,7 @@ import { enterAlternateScreen } from './terminal-screen.js'
 import { useTerminalSize } from './useTerminalSize.js'
 import { AtSuggestion, createSearchItem, createBrowseItem } from './AtSuggestion.js'
 import type { AtSuggestionItem } from './AtSuggestion.js'
-import { TodoPanel } from './TodoPanel.js'
+import { TodoPanel, hasPendingTodos } from './TodoPanel.js'
 import { SubAgentPanel } from './SubAgentPanel.js'
 import { listSubAgents } from '@tools/ext/subagent-store.js'
 
@@ -863,7 +863,7 @@ export function App({
               <Text dimColor>Esc to interrupt</Text>
             </Box>
           )}
-          {todos.length > 0 && <TodoPanel todos={todos} />}
+          {hasPendingTodos(todos) && <TodoPanel todos={todos} />}
           {subAgentEvents.some(e => e.status === 'running') && (
             <Box paddingX={1}>
               <Text dimColor>{subAgentEvents.filter(e => e.status === 'running').length} agent(s) running  </Text>

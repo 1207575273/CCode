@@ -77,12 +77,13 @@ export type AgentEvent =
   | { type: 'llm_done';           inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; stopReason: string }
   | { type: 'llm_error';          error: string; partialOutputTokens?: number }
   | { type: 'tool_fallback';      toolName: string; fromLevel: string; toLevel: string; reason: string }
+  | { type: 'post_tool_feedback'; toolName: string; toolCallId: string; feedback: string }
   | { type: 'permission_grant';   toolName: string; always: boolean }
   // 子 Agent 事件 — dispatch_agent 的 stream() 通过 yield* 透传到主 AgentLoop
   | { type: 'subagent_progress';  agentId: string; description: string; turn: number; maxTurns: number; currentTool?: string }
   | { type: 'subagent_done';      agentId: string; description: string; success: boolean; output: string }
   // 任务规划事件 — todo_write 工具执行后由 useChat 广播
-  | { type: 'todo_update'; todos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' }> }
+  | { type: 'todo_update'; todos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed'; activeForm: string }> }
 
 export interface AgentConfig {
   model: string
@@ -369,21 +370,33 @@ export class AgentLoop {
 
     const durationMs = Date.now() - start
 
-    // PostToolUse Hook：工具执行后通知
-    if (this.#config.hookManager) {
-      await this.#config.hookManager.run('PostToolUse', {
-        trigger: tc.toolName,
-        env: { CCODE_TOOL_NAME: tc.toolName, CCODE_TOOL_CALL_ID: tc.toolCallId },
-        stdin: JSON.stringify({ toolName: tc.toolName, result: { success: result.success, output: truncate(result.output, 1000) } }),
-      })
-    }
-
     history.push({
       role: 'user',
       content: result.success
         ? `[Tool ${tc.toolName} result]: ${result.output}`
         : `[Tool ${tc.toolName} error]: ${result.error ?? 'error'}`,
     })
+
+    // PostToolUse Hook：工具执行后通知 + 消费反馈（Reflection 闭环）
+    // 放在 history.push(工具结果) 之后，这样 LLM 先看到工具结果，再看到验证反馈。
+    // hook 脚本可返回 { additionalContext: "tsc error: ..." }，追加到 history 引导 LLM 自行修正。
+    if (this.#config.hookManager) {
+      const postResults = await this.#config.hookManager.run('PostToolUse', {
+        trigger: tc.toolName,
+        env: { CCODE_TOOL_NAME: tc.toolName, CCODE_TOOL_CALL_ID: tc.toolCallId },
+        stdin: JSON.stringify({ toolName: tc.toolName, result: { success: result.success, output: truncate(result.output, 1000) } }),
+      })
+
+      for (const r of postResults) {
+        if (!r) continue
+        const ctx = r['additionalContext']
+        if (typeof ctx === 'string' && ctx.trim()) {
+          history.push({ role: 'user', content: `[PostToolUse feedback for ${tc.toolName}]: ${ctx}` })
+          // yield 事件让 SessionLogger 持久化到 JSONL
+          yield { type: 'post_tool_feedback', toolName: tc.toolName, toolCallId: tc.toolCallId, feedback: ctx }
+        }
+      }
+    }
 
     const rawOutput = result.success ? result.output : (result.error ?? 'error')
     const resultSummary = truncate(rawOutput, RESULT_SUMMARY_MAX_LENGTH)

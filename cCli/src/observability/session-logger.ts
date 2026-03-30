@@ -151,6 +151,14 @@ export class SessionLogger {
         })
         break
 
+      case 'post_tool_feedback':
+        this.#appendEvent('post_tool_feedback', {
+          toolName: event.toolName,
+          toolCallId: event.toolCallId,
+          feedback: event.feedback,
+        })
+        break
+
       // text, done, permission_request 不写日志
       default:
         break

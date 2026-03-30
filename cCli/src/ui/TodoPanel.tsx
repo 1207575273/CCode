@@ -4,7 +4,7 @@
  * TodoPanel — CLI 端任务计划面板。
  *
  * 在 todo_write 工具执行后，由 App.tsx 渲染于对话区下方、输入框上方。
- * todos 为空时不渲染（隐藏）。
+ * 全部任务完成时自动隐藏（不再占据悬浮层）。
  */
 
 import React from 'react'
@@ -14,10 +14,16 @@ interface TodoItem {
   id: string
   content: string
   status: 'pending' | 'in_progress' | 'completed'
+  activeForm?: string
 }
 
 interface Props {
   todos: TodoItem[]
+}
+
+/** 是否还有未完成的任务 */
+export function hasPendingTodos(todos: TodoItem[]): boolean {
+  return todos.length > 0 && todos.some(t => t.status !== 'completed')
 }
 
 export function TodoPanel({ todos }: Props) {
@@ -32,9 +38,10 @@ export function TodoPanel({ todos }: Props) {
         const icon = t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '▸' : '○'
         const color: 'green' | 'yellow' | undefined =
           t.status === 'completed' ? 'green' : t.status === 'in_progress' ? 'yellow' : undefined
+        const active = t.status === 'in_progress' && t.activeForm ? ` (${t.activeForm})` : ''
         return (
           <Box key={t.id} paddingLeft={1}>
-            <Text {...(color !== undefined ? { color } : {})}>{icon} {i + 1}. {t.content}</Text>
+            <Text {...(color !== undefined ? { color } : {})}>{icon} {i + 1}. {t.content}{active}</Text>
           </Box>
         )
       })}

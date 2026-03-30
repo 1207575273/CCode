@@ -141,7 +141,7 @@ if (args.prompt != null) {
 
   // 若指定 --web 则启动/连接 Bridge Server
   if (args.web) {
-    const { startBridgeServer, connectBridge, disconnectBridge } = await import('../src/server/bridge/index.js')
+    const { startBridgeServer, connectBridge, disconnectBridge, closeBridge } = await import('../src/server/bridge/index.js')
 
     // 检测端口是否已被占用
     const { createServer: createNetServer } = await import('node:net')
@@ -152,10 +152,17 @@ if (args.prompt != null) {
       tester.listen(9800)
     })
 
+    // 标记当前实例是否是 Bridge Server 的启动者
+    let isBridgeOwner = false
+    // 实际绑定的端口（可能因端口冲突自动递增，如 9800→9801）
+    let bridgePort = 9800
+
     if (!portInUse) {
       // 第一个 CLI：启动 Bridge Server + Vite
       const isDevMode = (process.argv[1] ?? '').endsWith('.ts')
-      startBridgeServer({ dev: isDevMode })
+      const bridge = startBridgeServer({ dev: isDevMode })
+      bridgePort = bridge.port
+      isBridgeOwner = true
 
       if (isDevMode) {
         const { execa } = await import('execa')
@@ -175,7 +182,7 @@ if (args.prompt != null) {
       const poll = () => {
         const sid = getCurrentSessionId()
         if (sid) {
-          connectBridge(9800, sid)
+          connectBridge(bridgePort, sid)
         } else if (++attempts < maxAttempts) {
           setTimeout(poll, 100)
         }
@@ -184,7 +191,11 @@ if (args.prompt != null) {
     }
     waitAndConnect()
 
-    process.on('exit', disconnectBridge)
+    process.on('exit', () => {
+      disconnectBridge()
+      // 只有 Bridge Server 的启动者才关闭 server，避免影响其他 CLI 实例
+      if (isBridgeOwner) closeBridge()
+    })
   }
 
   const { unmount } = render(

@@ -53,6 +53,43 @@ const DEFAULT_LOCAL_SETTINGS = {
   },
 }
 
+/**
+ * hooks.json 默认模板 — 内置 PostToolUse 验证 hook。
+ *
+ * 对 TypeScript 项目：write_file / edit_file 后自动跑 tsc --noEmit，
+ * 诊断结果通过 additionalContext 注入 LLM 上下文，引导自动修正。
+ *
+ * 优先级：项目级 > 用户级（bootstrap.ts 按 plugin → project → user 顺序加载，
+ * 同名 matcher 全部执行，不覆盖）。
+ *
+ * 用户可按项目语言自行修改检查命令（Python → ruff、Rust → cargo check 等）。
+ */
+const DEFAULT_HOOKS_CONFIG = {
+  hooks: {
+    PostToolUse: [
+      {
+        matcher: '^(write_file|edit_file)$',
+        hooks: [
+          {
+            type: 'command',
+            // TypeScript 项目：检测 tsconfig.json 存在才跑 tsc --noEmit
+            command: 'if [ -f tsconfig.json ]; then result=$(npx tsc --noEmit 2>&1 | head -30); if [ -n "$result" ]; then echo "{\\"additionalContext\\":\\"TypeScript check:\\n$result\\"}"; fi; fi',
+            timeout: 20000,
+          },
+          {
+            type: 'command',
+            // Java 项目：检测 pom.xml（Maven）或 build.gradle（Gradle）存在才编译检查
+            // Maven: mvn compile -q 静默编译，只输出错误
+            // Gradle: gradle compileJava -q 静默编译
+            command: 'if [ -f pom.xml ]; then result=$(mvn compile -q 2>&1 | tail -30); if echo "$result" | grep -qi "error"; then echo "{\\"additionalContext\\":\\"Java Maven check:\\n$result\\"}"; fi; elif [ -f build.gradle ] || [ -f build.gradle.kts ]; then result=$(gradle compileJava -q 2>&1 | tail -30); if echo "$result" | grep -qi "error"; then echo "{\\"additionalContext\\":\\"Java Gradle check:\\n$result\\"}"; fi; fi',
+            timeout: 60000,
+          },
+        ],
+      },
+    ],
+  },
+}
+
 export interface InitDiagnostic {
   /** 是否有配置问题需要警告用户 */
   warnings: string[]
@@ -130,7 +167,27 @@ export function initialize(): InitDiagnostic {
     created.push(localSettingsPath)
   }
 
-  // 5. 启动诊断：检查当前 provider 的 apiKey
+  // 5. 确保 hooks.json 存在（项目级 + 用户级）
+  //    bootstrap 加载顺序：plugin → project → user，规则叠加执行。
+  //    项目级放完整默认规则（tsc 检查等），用户级放空模板（避免重复执行）。
+  //    用户可按需修改任意一级的 hooks.json 自定义检查命令。
+  const projectHooksPath = join(projectCcodeDir, 'hooks.json')
+  if (!existsSync(projectHooksPath)) {
+    if (!existsSync(projectCcodeDir)) {
+      mkdirSync(projectCcodeDir, { recursive: true })
+    }
+    writeFileSync(projectHooksPath, JSON.stringify(DEFAULT_HOOKS_CONFIG, null, 2), 'utf-8')
+    created.push(projectHooksPath)
+  }
+  const userHooksPath = join(CCODE_HOME, 'hooks.json')
+  if (!existsSync(userHooksPath)) {
+    // 用户级为空模板，避免和项目级重复执行。
+    // 用户可在此配全局规则（所有项目生效）。
+    writeFileSync(userHooksPath, JSON.stringify({ hooks: {} }, null, 2), 'utf-8')
+    created.push(userHooksPath)
+  }
+
+  // 6. 启动诊断：检查当前 provider 的 apiKey
   try {
     const raw = readFileSync(CONFIG_PATH, 'utf-8')
     const config = JSON.parse(raw) as {

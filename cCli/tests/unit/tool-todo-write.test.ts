@@ -54,7 +54,7 @@ describe('TodoWriteTool', () => {
 
 describe('TodoStore', () => {
   it('should reset state', () => {
-    setTodos([{ content: 'x', status: 'pending' }])
+    setTodos([{ content: 'x', status: 'pending', activeForm: '' }])
     expect(getTodos()).toHaveLength(1)
     resetTodos()
     expect(getTodos()).toHaveLength(0)

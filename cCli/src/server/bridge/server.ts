@@ -28,6 +28,16 @@ import { sessionStore } from '@persistence/index.js'
 import { createApiRoutes } from '../dashboard/api.js'
 
 const DEFAULT_PORT = 9800
+/**
+ * 端口递增重试上限。
+ *
+ * 当目标端口被占用时（常见于上一个 CLI 实例非正常退出，端口残留在 TIME_WAIT），
+ * 自动尝试下一个端口（9800 → 9801 → 9802 ...），最多尝试 MAX_PORT_RETRIES 次。
+ *
+ * Windows TIME_WAIT 默认约 120 秒，3 个备选端口足以覆盖极端场景
+ * （同时非正常退出 3 个实例的概率极低）。
+ */
+const MAX_PORT_RETRIES = 3
 const VITE_DEV_PORT = 5173
 
 interface BridgeServerOptions {
@@ -201,11 +211,25 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
     })
   }
 
-  server = serve({ fetch: app.fetch, port }, () => { /* 启动成功 */ })
-  injectWebSocket(server)
-  activePort = port
+  // 端口绑定 + 自动递增重试
+  // 场景：上一个 CLI 实例被 kill -9，端口残留在 TIME_WAIT（Windows 约 120 秒）
+  // serve() 会同步触发底层 net.Server 的 'error' 事件抛 EADDRINUSE
+  let bindPort = port
+  for (let retry = 0; retry <= MAX_PORT_RETRIES; retry++) {
+    try {
+      server = serve({ fetch: app.fetch, port: bindPort }, () => { /* 启动成功 */ })
+      break
+    } catch (err) {
+      const isAddrInUse = err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'EADDRINUSE'
+      if (!isAddrInUse || retry === MAX_PORT_RETRIES) throw err
+      // 端口被占，尝试下一个
+      bindPort++
+    }
+  }
+  injectWebSocket(server!)
+  activePort = bindPort
 
-  return { port, close: closeBridge }
+  return { port: bindPort, close: closeBridge }
 }
 
 /** 广播消息给所有指定类型的客户端（供 Dashboard API 调用） */
@@ -217,7 +241,7 @@ export function broadcastToClients(msg: Record<string, unknown>, clientType?: 'c
   }
 }
 
-function closeBridge(): void {
+export function closeBridge(): void {
   // 通知所有客户端 Bridge 即将关闭
   const closeMsg = JSON.stringify({ type: 'bridge_stop' })
   for (const client of clients.values()) {

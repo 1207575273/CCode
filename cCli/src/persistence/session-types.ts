@@ -21,6 +21,7 @@ export type SessionEventType =
   | 'mcp_connect_end'
   | 'tool_fallback'
   | 'permission_grant'
+  | 'post_tool_feedback'
   | 'error'
   | 'compact'
   | 'session_end'
@@ -81,6 +82,9 @@ export interface SessionEvent {
   serverName?: string
   transport?: string
   toolCount?: number         // MCP 发现的工具数
+
+  /** PostToolUse hook 反馈 */
+  feedback?: string
 
   /** 降级相关 */
   fromLevel?: string
