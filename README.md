@@ -68,7 +68,6 @@ ccode -m glm-5
 | **上下文管理** | 实时使用率追踪 + `/compact` 三种压缩策略 + auto-compact |
 | **对话持久化** | JSONL 会话 + `--resume` 恢复 + `/fork` 分支 |
 | **SubAgent** | 后台并行运行 + CLI 悬浮面板（Ctrl+B）实时查看 |
-| **Web Dashboard** | `--web` 唤醒，对话/回放/设置/插件管理 |
 | **Token 计量** | 四维 token 统计 + 多币种计价 + `/usage` |
 | **Claude Code 兼容** | CLAUDE.md、.mcp.json、插件目录结构零迁移 |
 
