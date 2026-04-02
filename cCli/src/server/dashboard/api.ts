@@ -382,7 +382,9 @@ export function createApiRoutes(): Hono {
       // F32_BLOB → number[]，截断到 4 位小数减小传输体积
       const chunks = rows.map(row => {
         const buf = row.embedding
-        const f32 = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4)
+        // 安全转换：先 copy 到独立 ArrayBuffer，避免 Node Buffer pool 共享问题
+        const copy = new Uint8Array(buf).buffer
+        const f32 = new Float32Array(copy)
         const embedding = Array.from(f32, v => +v.toFixed(4))
         return {
           id: row.id,
