@@ -239,6 +239,13 @@ export function getLoadedInstructions(): LoadedInstruction[] {
 
 let cachedSystemPrompt: string | undefined
 
+/** System Prompt 各段元信息 */
+export interface SystemPromptSection {
+  name: string
+  charLength: number
+}
+let cachedSections: SystemPromptSection[] = []
+
 /**
  * 构建并缓存 system prompt（幂等，只构建一次）。
  *
@@ -255,6 +262,14 @@ export function buildSystemPrompt(hookContext: string, memoryContext?: string): 
 
   const instructionsPrompt = getInstructionsPrompt()
   const skillsPrompt = getSkillsSystemPrompt()
+
+  // 保存各段元信息（供记忆全景面板展示）
+  cachedSections = []
+  if (instructionsPrompt) cachedSections.push({ name: 'Instructions', charLength: instructionsPrompt.length })
+  if (skillsPrompt) cachedSections.push({ name: 'Skills', charLength: skillsPrompt.length })
+  if (hookContext) cachedSections.push({ name: 'Hooks', charLength: hookContext.length })
+  if (memoryContext) cachedSections.push({ name: 'Memory', charLength: memoryContext.length })
+
   const parts = [instructionsPrompt, skillsPrompt, hookContext, memoryContext].filter(Boolean)
   cachedSystemPrompt = parts.length > 0 ? parts.join('\n\n') : undefined
 }
@@ -262,6 +277,11 @@ export function buildSystemPrompt(hookContext: string, memoryContext?: string): 
 /** 获取已缓存的 system prompt（未构建时返回 undefined） */
 export function getSystemPrompt(): string | undefined {
   return cachedSystemPrompt
+}
+
+/** 获取 System Prompt 各段元信息 */
+export function getSystemPromptSections(): SystemPromptSection[] {
+  return cachedSections
 }
 
 /** MCP 连接是否已完成（成功或无配置） */
