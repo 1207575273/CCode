@@ -26,6 +26,7 @@ import { TokenMeter } from '@observability/token-meter.js'
 import { createPluginsRoutes } from './plugins-api.js'
 import { createMcpRoutes } from './mcp-api.js'
 import { broadcastToClients } from '../bridge/server.js'
+import { getSystemPromptSections } from '@core/bootstrap.js'
 import { AnthropicProvider } from '@providers/anthropic.js'
 import { OpenAICompatProvider } from '@providers/openai-compat.js'
 import { ProviderWrapper } from '@providers/wrapper.js'
@@ -341,6 +342,64 @@ export function createApiRoutes(): Hono {
   // Plugins + MCP 管理
   api.route('/plugins', createPluginsRoutes())
   api.route('/mcp', createMcpRoutes())
+
+  // ═══ 记忆向量数据 ═══
+
+  api.get('/memory/vectors', (c) => {
+    try {
+      const db = getDb()
+
+      // 读取向量维度
+      const dimRow = db.prepare('SELECT value FROM memory_meta WHERE key = ?').get('embedding_dimension') as { value: string } | undefined
+      const dimension = dimRow ? parseInt(dimRow.value, 10) : 0
+
+      // 读取所有向量 chunk
+      const rows = dimension > 0
+        ? db.prepare(`
+            SELECT id, entry_id, scope, chunk_text, chunk_index, tags, type, embedding
+            FROM memory_vectors
+          `).all() as Array<{
+            id: string; entry_id: string; scope: string
+            chunk_text: string; chunk_index: number
+            tags: string; type: string; embedding: Buffer
+          }>
+        : []
+
+      // F32_BLOB → number[]，截断到 4 位小数减小传输体积
+      const chunks = rows.map(row => {
+        const buf = row.embedding
+        const f32 = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4)
+        const embedding = Array.from(f32, v => +v.toFixed(4))
+        return {
+          id: row.id,
+          entryId: row.entry_id,
+          title: row.chunk_text.slice(0, 50).replace(/\n/g, ' '),
+          scope: row.scope as 'global' | 'project',
+          type: row.type,
+          tags: JSON.parse(row.tags || '[]') as string[],
+          chunkText: row.chunk_text,
+          chunkIndex: row.chunk_index,
+          embedding,
+        }
+      })
+
+      // System Prompt sections
+      const sections = getSystemPromptSections()
+      const systemPrompt = {
+        totalTokens: sections.reduce((sum, s) => sum + Math.ceil(s.charLength / 3.5), 0),
+        sections: sections.map(s => ({
+          name: s.name,
+          tokens: Math.ceil(s.charLength / 3.5),
+          source: s.name,
+        })),
+      }
+
+      return c.json({ chunks, systemPrompt, dimension })
+    } catch (err) {
+      console.error('[API] /memory/vectors error:', err)
+      return c.json({ chunks: [], systemPrompt: { totalTokens: 0, sections: [] }, dimension: 0 })
+    }
+  })
 
   return api
 }
