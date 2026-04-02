@@ -36,6 +36,7 @@ import { pluginRegistry } from '@plugin/registry.js'
 import { MemoryManager } from '@memory/core/memory-manager.js'
 import { MemoryWriteTool } from '@memory/tools/memory-write-tool.js'
 import { MemorySearchTool } from '@memory/tools/memory-search-tool.js'
+import { MemoryDeleteTool } from '@memory/tools/memory-delete-tool.js'
 import { NoopEmbedding } from '@memory/rag/embedding/noop-embedding.js'
 import { ProviderEmbedding } from '@memory/rag/embedding/provider-embedding.js'
 import { LibsqlVectorStore } from '@memory/storage/libsql-vector-store.js'
@@ -92,6 +93,7 @@ export function buildRegistry(): ToolRegistry {
   if (memoryManagerInstance) {
     reg.register(new MemoryWriteTool(memoryManagerInstance))
     reg.register(new MemorySearchTool(memoryManagerInstance))
+    reg.register(new MemoryDeleteTool(memoryManagerInstance))
   }
   return reg
 }

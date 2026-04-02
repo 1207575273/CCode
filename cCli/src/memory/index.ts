@@ -67,3 +67,4 @@ export type { MemoryFileChange, MemoryChangeCallback } from './core/memory-watch
 // Tools
 export { MemoryWriteTool } from './tools/memory-write-tool.js'
 export { MemorySearchTool } from './tools/memory-search-tool.js'
+export { MemoryDeleteTool } from './tools/memory-delete-tool.js'
