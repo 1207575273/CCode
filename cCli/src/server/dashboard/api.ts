@@ -27,6 +27,9 @@ import { createPluginsRoutes } from './plugins-api.js'
 import { createMcpRoutes } from './mcp-api.js'
 import { broadcastToClients } from '../bridge/server.js'
 import { getSystemPromptSections } from '@core/bootstrap.js'
+import { FileStore } from '@memory/storage/file-store.js'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { AnthropicProvider } from '@providers/anthropic.js'
 import { OpenAICompatProvider } from '@providers/openai-compat.js'
 import { ProviderWrapper } from '@providers/wrapper.js'
@@ -345,25 +348,35 @@ export function createApiRoutes(): Hono {
 
   // ═══ 记忆向量数据 ═══
 
-  api.get('/memory/vectors', (c) => {
+  api.get('/memory/vectors', async (c) => {
     try {
       const db = getDb()
 
       // 读取向量维度
-      const dimRow = db.prepare('SELECT value FROM memory_meta WHERE key = ?').get('embedding_dimension') as { value: string } | undefined
-      const dimension = dimRow ? parseInt(dimRow.value, 10) : 0
+      let dimension = 0
+      try {
+        const dimRow = db.prepare('SELECT value FROM memory_meta WHERE key = ?').get('embedding_dimension') as { value: string } | undefined
+        dimension = dimRow ? parseInt(dimRow.value, 10) : 0
+      } catch {
+        // memory_meta 表可能不存在
+      }
 
       // 读取所有向量 chunk
-      const rows = dimension > 0
-        ? db.prepare(`
+      let rows: Array<{
+        id: string; entry_id: string; scope: string
+        chunk_text: string; chunk_index: number
+        tags: string; type: string; embedding: Buffer
+      }> = []
+      if (dimension > 0) {
+        try {
+          rows = db.prepare(`
             SELECT id, entry_id, scope, chunk_text, chunk_index, tags, type, embedding
             FROM memory_vectors
-          `).all() as Array<{
-            id: string; entry_id: string; scope: string
-            chunk_text: string; chunk_index: number
-            tags: string; type: string; embedding: Buffer
-          }>
-        : []
+          `).all() as typeof rows
+        } catch {
+          // memory_vectors 表可能不存在
+        }
+      }
 
       // F32_BLOB → number[]，截断到 4 位小数减小传输体积
       const chunks = rows.map(row => {
@@ -383,6 +396,24 @@ export function createApiRoutes(): Hono {
         }
       })
 
+      // 扫描文件系统中的记忆条目（无论是否有向量数据都返回）
+      const fileStore = new FileStore()
+      const globalDir = join(homedir(), '.ccode', 'memory')
+      const projectDir = join(process.cwd(), '.ccode', 'memory')
+      const globalEntries = await fileStore.scan(globalDir, 'global')
+      const projectEntries = await fileStore.scan(projectDir, 'project')
+      const entries = [...globalEntries, ...projectEntries].map(e => ({
+        id: e.id,
+        scope: e.scope,
+        title: e.title,
+        type: e.type,
+        tags: e.tags,
+        content: e.content.slice(0, 500),
+        source: e.source,
+        created: e.created,
+        updated: e.updated,
+      }))
+
       // System Prompt sections
       const sections = getSystemPromptSections()
       const systemPrompt = {
@@ -394,10 +425,10 @@ export function createApiRoutes(): Hono {
         })),
       }
 
-      return c.json({ chunks, systemPrompt, dimension })
+      return c.json({ chunks, entries, systemPrompt, dimension })
     } catch (err) {
       console.error('[API] /memory/vectors error:', err)
-      return c.json({ chunks: [], systemPrompt: { totalTokens: 0, sections: [] }, dimension: 0 })
+      return c.json({ chunks: [], entries: [], systemPrompt: { totalTokens: 0, sections: [] }, dimension: 0 })
     }
   })
 

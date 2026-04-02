@@ -132,6 +132,18 @@ export interface MemoryVectorsResponse {
     chunkIndex: number
     embedding: number[]
   }>
+  /** 文件系统中的记忆条目（无论是否有向量数据都返回） */
+  entries: Array<{
+    id: string
+    scope: 'global' | 'project'
+    title: string
+    type: string
+    tags: string[]
+    content: string
+    source: string
+    created: string
+    updated: string
+  }>
   systemPrompt: {
     totalTokens: number
     sections: Array<{

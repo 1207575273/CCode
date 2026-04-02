@@ -18,6 +18,7 @@ export function MemoryPanel({ open, onClose }: MemoryPanelProps) {
   const [points, setPoints] = useState<Point2D[]>([])
   const [metas, setMetas] = useState<ChunkMeta[]>([])
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
+  const [selectedEntry, setSelectedEntry] = useState<MemoryVectorsResponse['entries'][number] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -49,6 +50,7 @@ export function MemoryPanel({ open, onClose }: MemoryPanelProps) {
       })))
 
       setSelectedIndex(null)
+      setSelectedEntry(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载失败')
     } finally {
@@ -134,8 +136,8 @@ export function MemoryPanel({ open, onClose }: MemoryPanelProps) {
               </div>
             </div>
 
-            {/* 散点图 */}
-            <div className="flex-1 min-h-0 px-2 py-2">
+            {/* 散点图 / 记忆列表 */}
+            <div className="flex-1 min-h-0 px-2 py-2 overflow-y-auto">
               {points.length > 0 ? (
                 <div className="w-full h-full rounded border border-gray-800 overflow-hidden">
                   <ScatterPlot
@@ -145,14 +147,47 @@ export function MemoryPanel({ open, onClose }: MemoryPanelProps) {
                     selectedIndex={selectedIndex}
                   />
                 </div>
+              ) : data.entries.length > 0 ? (
+                /* 无向量但有记忆文件 → 展示列表 */
+                <div className="space-y-2">
+                  <div className="text-xs text-gray-500 px-2 mb-1">
+                    记忆条目 ({data.entries.length}) — 未配置 Embedding，仅 BM25 关键词检索
+                  </div>
+                  {data.entries.map(entry => (
+                    <div
+                      key={entry.id}
+                      className={`px-3 py-2 rounded border cursor-pointer transition-colors ${
+                        selectedEntry?.id === entry.id
+                          ? 'border-purple-600 bg-purple-900/20'
+                          : 'border-gray-800 hover:border-gray-600'
+                      }`}
+                      onClick={() => setSelectedEntry(selectedEntry?.id === entry.id ? null : entry)}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-medium text-gray-200 truncate flex-1">{entry.title}</span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${
+                          entry.scope === 'global' ? 'bg-blue-900/50 text-blue-300' : 'bg-green-900/50 text-green-300'
+                        }`}>
+                          {entry.scope}
+                        </span>
+                      </div>
+                      <div className="flex gap-1.5 flex-wrap">
+                        <span className="text-xs text-gray-500">{entry.type}</span>
+                        {entry.tags.map(tag => (
+                          <span key={tag} className="text-xs text-gray-600">#{tag}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <div className="flex items-center justify-center h-full text-gray-600 text-xs">
-                  暂无向量数据（未配置 Embedding 或无记忆）
+                  暂无记忆数据
                 </div>
               )}
             </div>
 
-            {/* 选中详情 */}
+            {/* 选中详情（散点图模式） */}
             {selected && (
               <div className="px-4 py-3 border-t border-gray-800 max-h-[200px] overflow-y-auto">
                 <div className="text-xs font-medium text-gray-200 mb-1 truncate">{selected.title}</div>
@@ -172,6 +207,31 @@ export function MemoryPanel({ open, onClose }: MemoryPanelProps) {
                 <div className="text-xs text-gray-400 leading-relaxed whitespace-pre-wrap">
                   {selected.chunkText.slice(0, 300)}
                   {selected.chunkText.length > 300 && '...'}
+                </div>
+              </div>
+            )}
+
+            {/* 选中详情（列表模式） */}
+            {selectedEntry && !selected && (
+              <div className="px-4 py-3 border-t border-gray-800 max-h-[200px] overflow-y-auto">
+                <div className="text-xs font-medium text-gray-200 mb-1">{selectedEntry.title}</div>
+                <div className="flex gap-2 mb-2 flex-wrap">
+                  <span className={`text-xs px-1.5 py-0.5 rounded ${
+                    selectedEntry.scope === 'global' ? 'bg-blue-900/50 text-blue-300' : 'bg-green-900/50 text-green-300'
+                  }`}>
+                    {selectedEntry.scope}
+                  </span>
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-gray-400">{selectedEntry.type}</span>
+                  {selectedEntry.tags.map(tag => (
+                    <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-gray-500">
+                      {tag}
+                    </span>
+                  ))}
+                  <span className="text-xs text-gray-600">{selectedEntry.source}</span>
+                </div>
+                <div className="text-xs text-gray-400 leading-relaxed whitespace-pre-wrap">
+                  {selectedEntry.content.slice(0, 300)}
+                  {selectedEntry.content.length > 300 && '...'}
                 </div>
               </div>
             )}
