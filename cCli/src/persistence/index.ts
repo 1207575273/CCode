@@ -19,4 +19,4 @@ export {
 /** 全局单例，存储路径 ~/.ccode/sessions/ */
 export const sessionStore = new SessionStore(join(homedir(), '.ccode', 'sessions'))
 
-export { getDb, createDb, closeDb } from './db.js'
+export { getDb, createDb, closeDb, ensureMemoryTables, getStoredEmbeddingDimension } from './db.js'

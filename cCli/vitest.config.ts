@@ -29,6 +29,7 @@ export default defineConfig({
       '@mcp': new URL('./src/mcp', import.meta.url).pathname,
       '@skills': new URL('./src/skills', import.meta.url).pathname,
       '@plugin': new URL('./src/plugin', import.meta.url).pathname,
+      '@memory': new URL('./src/memory', import.meta.url).pathname,
     },
   },
 })

@@ -188,3 +188,95 @@ function seedSchemaComments(db: DatabaseType): void {
   })
   tx()
 }
+
+// ═══════════════════════════════════════════════
+// 记忆系统表（由 MemoryManager 初始化时调用）
+// ═══════════════════════════════════════════════
+
+/**
+ * 初始化记忆系统的 SQLite 表。
+ *
+ * memory_meta: 存储配置信息（如 embedding 维度）
+ * memory_vectors: 存储向量索引（F32_BLOB + DiskANN）
+ *
+ * 维度由 EmbeddingProvider.dimension 动态决定，建表时拼入 DDL。
+ * 如果维度变化（用户更换 Embedding 模型），需要 DROP + 重建。
+ *
+ * @param dimension 向量维度（如 1024、1536）。传 0 表示不建向量表（纯 BM25 模式）
+ */
+export function ensureMemoryTables(dimension: number): void {
+  const db = getDb()
+
+  // memory_meta: 键值配置表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS memory_meta (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `)
+
+  if (dimension <= 0) return
+
+  // 检查已有维度是否一致
+  const existing = db.prepare('SELECT value FROM memory_meta WHERE key = ?').get('embedding_dimension') as { value: string } | undefined
+  if (existing) {
+    const existingDim = parseInt(existing.value, 10)
+    if (existingDim !== dimension) {
+      // 维度变化，需要重建向量表
+      db.exec('DROP TABLE IF EXISTS memory_vectors')
+      db.exec('DROP INDEX IF EXISTS idx_memory_vec')
+      db.prepare('DELETE FROM memory_meta WHERE key = ?').run('embedding_dimension')
+    }
+  }
+
+  // memory_vectors: 向量索引表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS memory_vectors (
+      id          TEXT PRIMARY KEY,
+      entry_id    TEXT NOT NULL,
+      scope       TEXT NOT NULL,
+      project_slug TEXT,
+      embedding   F32_BLOB(${dimension}),
+      chunk_text  TEXT NOT NULL,
+      chunk_index INTEGER NOT NULL,
+      tags        TEXT,
+      type        TEXT NOT NULL,
+      source      TEXT NOT NULL,
+      created     TEXT NOT NULL,
+      updated     TEXT NOT NULL
+    );
+  `)
+
+  // DiskANN 向量索引
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_memory_vec
+      ON memory_vectors(libsql_vector_idx(embedding));
+  `)
+
+  // 常规索引
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_memory_entry_id
+      ON memory_vectors(entry_id);
+    CREATE INDEX IF NOT EXISTS idx_memory_scope
+      ON memory_vectors(scope);
+  `)
+
+  // 记录维度
+  db.prepare(`
+    INSERT OR REPLACE INTO memory_meta (key, value) VALUES ('embedding_dimension', ?)
+  `).run(String(dimension))
+}
+
+/**
+ * 获取已存储的 embedding 维度。
+ * 未初始化或纯 BM25 模式返回 null。
+ */
+export function getStoredEmbeddingDimension(): number | null {
+  const db = getDb()
+  try {
+    const row = db.prepare('SELECT value FROM memory_meta WHERE key = ?').get('embedding_dimension') as { value: string } | undefined
+    return row ? parseInt(row.value, 10) : null
+  } catch {
+    return null
+  }
+}

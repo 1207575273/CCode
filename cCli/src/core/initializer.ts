@@ -39,6 +39,15 @@ const DEFAULT_CONFIG = {
       models: ['gpt-4o', 'gpt-4o-mini'],
     },
   },
+  memory: {
+    enabled: false,
+    embedding: {
+      apiKey: 'your-embedding-api-key',
+      baseURL: 'https://your-embedding-api-base-url/v4',
+      model: 'your-embedding-model',
+      dimension: 1024,
+    },
+  },
 }
 
 /** .mcp.json 默认模板 */

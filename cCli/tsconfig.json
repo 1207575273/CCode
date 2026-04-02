@@ -34,7 +34,9 @@
       "@hooks/*": ["src/hooks/*"],
       "@file-index": ["src/file-index/index.ts"],
       "@file-index/*": ["src/file-index/*"],
-      "@server/*": ["src/server/*"]
+      "@server/*": ["src/server/*"],
+      "@memory": ["src/memory/index.ts"],
+      "@memory/*": ["src/memory/*"]
     },
     "outDir": "dist",
     "rootDir": ".",

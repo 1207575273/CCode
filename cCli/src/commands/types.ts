@@ -30,6 +30,11 @@ export type CommandAction =
   | { type: 'run_compact'; strategy?: string; focus?: string }
   | { type: 'show_context' }
   | { type: 'list_plugins' }
+  | { type: 'memory_list'; scope?: string }
+  | { type: 'memory_search'; query: string }
+  | { type: 'memory_delete'; id: string }
+  | { type: 'memory_rebuild' }
+  | { type: 'memory_write'; content: string }
   | { type: 'error'; message: string }
 
 /**

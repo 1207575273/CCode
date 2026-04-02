@@ -14,6 +14,7 @@ import type { LLMProvider } from '@providers/provider.js'
 import type { Message } from './types.js'
 import { contextTracker } from './context-tracker.js'
 import type { ContextWindowState, ContextLevel } from './context-tracker.js'
+import type { ICompactBridge } from '@memory/core/compact-bridge.js'
 
 // ═══════════════════════════════════════════════
 // 策略接口
@@ -262,6 +263,12 @@ const DEFAULT_STRATEGY = 'full-replace'
 
 export class ContextManager {
   #strategyName: string = DEFAULT_STRATEGY
+  #compactBridge: ICompactBridge | null = null
+
+  /** 注入 CompactBridge（记忆系统启用时由 bootstrap 调用） */
+  setCompactBridge(bridge: ICompactBridge): void {
+    this.#compactBridge = bridge
+  }
 
   /** 切换压缩策略 */
   setStrategy(name: string): boolean {
@@ -296,6 +303,13 @@ export class ContextManager {
       return { history: rawHistory, compacted: false }
     }
 
+    // 压缩前：通过 CompactBridge 提取关键信息到记忆系统（静默失败不影响压缩）
+    if (this.#compactBridge) {
+      try {
+        await this.#compactBridge.extractAndSave(rawHistory, provider, options.model)
+      } catch { /* 提取失败不阻塞压缩 */ }
+    }
+
     // auto-compact 级联：先 tool-trim，不够再用主策略
     const toolTrim = STRATEGIES.get('tool-trim')!
     const trimResult = await toolTrim.compact(rawHistory, provider, options)
@@ -325,9 +339,32 @@ export class ContextManager {
     provider: LLMProvider,
     options: CompactOptions & { strategy?: string },
   ): Promise<CompactResult> {
+    // 压缩前：提取关键信息到记忆系统
+    if (this.#compactBridge) {
+      try {
+        await this.#compactBridge.extractAndSave(rawHistory, provider, options.model)
+      } catch { /* 提取失败不阻塞压缩 */ }
+    }
+
     const strategyName = options.strategy ?? this.#strategyName
     const strategy = STRATEGIES.get(strategyName) ?? STRATEGIES.get(DEFAULT_STRATEGY)!
-    return strategy.compact(rawHistory, provider, options)
+    const result = await strategy.compact(rawHistory, provider, options)
+
+    // 压缩后：注入记忆提示
+    if (this.#compactBridge) {
+      const hint = this.#compactBridge.getCompactHint()
+      if (hint && result.history.length > 0) {
+        const lastMsg = result.history[result.history.length - 1]!
+        if (typeof lastMsg.content === 'string') {
+          result.history[result.history.length - 1] = {
+            ...lastMsg,
+            content: lastMsg.content + '\n\n' + hint,
+          }
+        }
+      }
+    }
+
+    return result
   }
 }
 

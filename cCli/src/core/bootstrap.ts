@@ -33,6 +33,13 @@ import type { LoadedInstruction } from '@config/instructions-loader.js'
 import { HookManager } from '@hooks/hook-manager.js'
 import { FileIndex, FileWatcher, createIgnoreFilter } from '@file-index/index.js'
 import { pluginRegistry } from '@plugin/registry.js'
+import { MemoryManager } from '@memory/core/memory-manager.js'
+import { MemoryWriteTool } from '@memory/tools/memory-write-tool.js'
+import { MemorySearchTool } from '@memory/tools/memory-search-tool.js'
+import { NoopEmbedding } from '@memory/rag/embedding/noop-embedding.js'
+import { ProviderEmbedding } from '@memory/rag/embedding/provider-embedding.js'
+import { LibsqlVectorStore } from '@memory/storage/libsql-vector-store.js'
+import { configManager } from '@config/config-manager.js'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 
@@ -55,9 +62,17 @@ export function getCurrentSessionId(): string | null {
   return sessionLogger.sessionId
 }
 
+/** 模块级 MemoryManager 实例（bootstrapAll 中初始化） */
+let memoryManagerInstance: MemoryManager | null = null
+
+/** 获取 MemoryManager 实例（未初始化时返回 null） */
+export function getMemoryManager(): MemoryManager | null {
+  return memoryManagerInstance
+}
+
 // ═══ 工厂函数 ═══
 
-/** 构建包含全部内置工具的 ToolRegistry（含 skill 工具） */
+/** 构建包含全部内置工具的 ToolRegistry（含 skill 工具 + memory 工具） */
 export function buildRegistry(): ToolRegistry {
   const reg = new ToolRegistry()
   reg.register(new ReadFileTool())
@@ -73,6 +88,11 @@ export function buildRegistry(): ToolRegistry {
   reg.register(new AskUserQuestionTool())
   reg.register(new VerifyCodeTool())
   reg.register(new SkillTool(skillStore))
+  // Memory 工具（MemoryManager 初始化后注册）
+  if (memoryManagerInstance) {
+    reg.register(new MemoryWriteTool(memoryManagerInstance))
+    reg.register(new MemorySearchTool(memoryManagerInstance))
+  }
   return reg
 }
 
@@ -228,13 +248,14 @@ let cachedSystemPrompt: string | undefined
  * - 指令文件超过 400 行自动截断，LLM 需要时自行 Read 完整内容
  *
  * @param hookContext SessionStart hook 注入的 additionalContext
+ * @param memoryContext 记忆系统冷启动上下文（可选）
  */
-export function buildSystemPrompt(hookContext: string): void {
+export function buildSystemPrompt(hookContext: string, memoryContext?: string): void {
   if (cachedSystemPrompt !== undefined) return
 
   const instructionsPrompt = getInstructionsPrompt()
   const skillsPrompt = getSkillsSystemPrompt()
-  const parts = [instructionsPrompt, skillsPrompt, hookContext].filter(Boolean)
+  const parts = [instructionsPrompt, skillsPrompt, hookContext, memoryContext].filter(Boolean)
   cachedSystemPrompt = parts.length > 0 ? parts.join('\n\n') : undefined
 }
 
@@ -322,8 +343,10 @@ export interface BootstrapResult {
   fileIndexReady: boolean
   /** System Prompt 是否已构建 */
   systemPromptReady: boolean
-  /** 各模块耗时（毫秒），仅 dev 模式填充 */
+  /** 各模块耗时（毫秒） */
   timings?: BootstrapTimings
+  /** 启动过程中的降级/警告信息（会在 UI 中短暂显示） */
+  warnings: string[]
 }
 
 /** 各模块启动耗时（毫秒），MCP 后台独立加载不计入 */
@@ -345,12 +368,16 @@ export const isDevMode = (process.argv[1] ?? '').endsWith('.ts')
 /**
  * 统一启动编排 — 按依赖拓扑最大化并行（幂等，多次调用返回同一 Promise）。
  *
- * 两条独立链路并行执行，总耗时 = max(链A, 链B)：
- * - 链 A：Skills → Instructions → Hooks → SessionStartHooks → SystemPrompt
- * - 链 B：文件索引扫描（磁盘 IO）
+ * 4 条并行链 + 屏障 + 后台 embed：
+ * - 链 A'：Skills → Instructions → Hooks → SessionStartHooks（产出 hookContext）
+ * - 链 B'：文件索引扫描（磁盘 IO）
+ * - 链 C'：Runtime Plugin 发现
+ * - 链 D'：MemoryManager.initialize()（扫描文件 + 加载已有索引 + 建 BM25，毫秒级）
+ * ── 屏障：等 A' + D' 都完成 ──
+ * → buildSystemPrompt(hookContext, memoryContext)
+ * → 后台：MemoryManager.embedPending()（增量 embed，不阻塞首次对话）
  *
- * MCP 不在此编排内 — 通过 startMcpBackground() 后台静默加载，
- * 不阻塞启动和首次对话，就绪后 submit 时自动注册工具。
+ * MCP 不在此编排内 — 通过 startMcpBackground() 后台静默加载。
  */
 export function bootstrapAll(): Promise<BootstrapResult> {
   if (bootstrapPromise) return bootstrapPromise
@@ -359,8 +386,11 @@ export function bootstrapAll(): Promise<BootstrapResult> {
     const t0 = performance.now()
     const timings: Record<string, number> = {}
 
+    // 链 A' 产出的 hookContext，需要跨 Promise.all 传递
+    let hookContext = ''
+
     await Promise.all([
-      // 链 A：Skills → Hooks → SessionStartHooks → SystemPrompt（串行依赖链）
+      // 链 A'：Skills → Hooks → SessionStartHooks（不含 SystemPrompt，屏障后构建）
       (async () => {
         let t = performance.now()
         await ensureSkillsDiscovered()
@@ -375,26 +405,43 @@ export function bootstrapAll(): Promise<BootstrapResult> {
         timings['hooks'] = performance.now() - t
 
         t = performance.now()
-        const hookContext = await runSessionStartHooks('startup')
+        hookContext = await runSessionStartHooks('startup')
         timings['sessionStartHooks'] = performance.now() - t
-
-        t = performance.now()
-        buildSystemPrompt(hookContext)
-        timings['systemPrompt'] = performance.now() - t
       })(),
-      // 链 B：文件索引扫描（磁盘 IO，完全独立）
+      // 链 B'：文件索引扫描（磁盘 IO，完全独立）
       (async () => {
         const t = performance.now()
         await ensureFileIndexReady()
         timings['fileIndex'] = performance.now() - t
       })(),
-      // 链 C：Runtime Plugin 发现与激活（独立于 Skills/Hooks）
+      // 链 C'：Runtime Plugin 发现与激活（独立于 Skills/Hooks）
       (async () => {
         const t = performance.now()
         await ensurePluginsLoaded()
         timings['plugins'] = performance.now() - t
       })(),
+      // 链 D'：MemoryManager 同步阶段（扫描文件 + BM25，毫秒级）
+      (async () => {
+        const t = performance.now()
+        await ensureMemoryInitialized()
+        timings['memory'] = performance.now() - t
+      })(),
     ])
+
+    // ── 屏障：A' + D' 都完成 ──
+    // 合并 hookContext + memoryContext 构建 SystemPrompt
+    const t = performance.now()
+    let memoryContext: string | undefined
+    if (memoryManagerInstance) {
+      memoryContext = await memoryManagerInstance.getRelevantContext(process.cwd())
+    }
+    buildSystemPrompt(hookContext, memoryContext || undefined)
+    timings['systemPrompt'] = performance.now() - t
+
+    // 后台：增量 embed（不阻塞启动和首次对话）
+    if (memoryManagerInstance) {
+      memoryManagerInstance.embedPending().catch(() => { /* embed 失败不影响启动 */ })
+    }
 
     timings['total'] = performance.now() - t0
 
@@ -403,10 +450,101 @@ export function bootstrapAll(): Promise<BootstrapResult> {
       fileIndexReady: true,
       systemPromptReady: true,
       timings: timings as unknown as BootstrapTimings,
+      warnings: [...bootstrapWarnings],
     }
   })()
 
   return bootstrapPromise
+}
+
+// ═══ 记忆系统初始化 ═══
+
+let memoryInitialized = false
+/** 启动过程中收集的警告（在 UI 中显示） */
+const bootstrapWarnings: string[] = []
+
+/**
+ * 初始化 MemoryManager（幂等）。
+ * 读取 config.json 中的 memory 配置，构建 MemoryManager 实例。
+ */
+async function ensureMemoryInitialized(): Promise<void> {
+  if (memoryInitialized) return
+  memoryInitialized = true
+
+  try {
+    const config = configManager.load()
+    const memoryConfig = (config as unknown as Record<string, unknown>)['memory'] as
+      | { enabled?: boolean; embedding?: { provider?: string; model?: string } }
+      | undefined
+
+    // memory.enabled 默认 false
+    if (!memoryConfig?.enabled) return
+
+    // 构建 EmbeddingProvider：独立配置，不依赖 providers
+    // config.json: memory.embedding = { apiKey, baseURL, model, dimension }
+    // 模板默认值（未修改 = 未配置 = 降级纯 BM25）
+    const embConfig = memoryConfig.embedding as
+      | { apiKey?: string; baseURL?: string; model?: string; dimension?: number }
+      | undefined
+    let embedding: import('@memory/types.js').EmbeddingProvider
+    let vectorStore: import('@memory/types.js').IVectorStore | null = null
+
+    const isTemplateDefault = !embConfig
+      || !embConfig.apiKey || embConfig.apiKey === 'your-embedding-api-key'
+      || !embConfig.baseURL || embConfig.baseURL === 'https://your-embedding-api-base-url/v4'
+      || !embConfig.model || embConfig.model === 'your-embedding-model'
+
+    if (!isTemplateDefault) {
+      // 用户已配置真实的 Embedding，探测连通性
+      const dimension = embConfig!.dimension ?? 1024
+      const candidate = new ProviderEmbedding({
+        providerName: 'embedding',
+        apiKey: embConfig!.apiKey!,
+        baseURL: embConfig!.baseURL!,
+        model: embConfig!.model!,
+        dimension,
+      })
+      // 连通性探测：调一次 isAvailable()（内部用极短文本测试 API）
+      let embAvailable = false
+      try {
+        embAvailable = await candidate.isAvailable()
+      } catch { /* 探测异常视为不可用 */ }
+
+      if (embAvailable) {
+        embedding = candidate
+        try {
+          vectorStore = new LibsqlVectorStore(dimension)
+          await vectorStore.initialize()
+        } catch (err) {
+          bootstrapWarnings.push('Embedding 向量存储初始化失败，记忆系统降级为纯 BM25 关键词检索')
+          vectorStore = null
+        }
+      } else {
+        bootstrapWarnings.push('Embedding API 不可达，记忆系统降级为纯 BM25 关键词检索（检查 config.json memory.embedding 配置）')
+        embedding = new NoopEmbedding()
+      }
+    } else {
+      // 未配置或模板默认值 → 纯 BM25（记忆功能可用，只是检索精度下降）
+      embedding = new NoopEmbedding()
+    }
+
+    memoryManagerInstance = new MemoryManager({
+      cwd: process.cwd(),
+      embedding,
+      vectorStore,
+    })
+
+    await memoryManagerInstance.initialize()
+
+    // 注入 CompactBridge — 压缩上下文时自动提取关键信息到记忆
+    const { CompactBridge } = await import('@memory/core/compact-bridge.js')
+    const { contextManager } = await import('./context-manager.js')
+    contextManager.setCompactBridge(new CompactBridge(memoryManagerInstance))
+  } catch (err) {
+    // 记忆系统初始化失败不阻塞启动
+    bootstrapWarnings.push(`记忆系统初始化失败: ${err instanceof Error ? err.message : String(err)}`)
+    memoryManagerInstance = null
+  }
 }
 
 /**

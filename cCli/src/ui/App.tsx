@@ -28,6 +28,7 @@ import { ContextCommand } from '@commands/context.js'
 import { contextManager } from '@core/context-manager.js'
 import { contextTracker } from '@core/context-tracker.js'
 import { PluginsCommand } from '@commands/plugins.js'
+import { RememberCommand } from '@commands/remember.js'
 import { pluginRegistry } from '@core/bootstrap.js'
 import { getCleanupStats, executeCleanup } from '@core/cleanup-service.js'
 import { McpStatusView } from './McpStatusView.js'
@@ -36,7 +37,7 @@ import { ForkPanel } from './ForkPanel.js'
 import type { ServerInfo } from '@mcp/mcp-manager.js'
 import { sessionStore, toProjectSlug } from '@persistence/index.js'
 import { tokenMeter } from './useChat.js'
-import { skillStore, fileIndex, bootstrapAll, getBootstrapStatus, startMcpBackground, getMcpTiming, isDevMode, getCurrentSessionId } from '@core/bootstrap.js'
+import { skillStore, fileIndex, bootstrapAll, getBootstrapStatus, startMcpBackground, getMcpTiming, isDevMode, getCurrentSessionId, getMemoryManager } from '@core/bootstrap.js'
 import type { BootstrapTimings } from '@core/bootstrap.js'
 import { AtResolver } from '@utils/at-resolver.js'
 import { enterAlternateScreen } from './terminal-screen.js'
@@ -187,6 +188,7 @@ export function App({
   const [skillsReady, setSkillsReady] = useState(false)
   const [fileIndexReady, setFileIndexReady] = useState(false)
   const [bootTimings, setBootTimings] = useState<BootstrapTimings | null>(null)
+  const [bootWarnings, setBootWarnings] = useState<string[]>([])
   const [mcpMs, setMcpMs] = useState<number | null>(null)
   useEffect(() => {
     // MCP 后台静默加载，就绪后回调更新 timing 显示
@@ -205,6 +207,11 @@ export function App({
         getProvider: () => currentProvider,
       })
       if (result.timings) setBootTimings(result.timings)
+      // 降级/警告提示：短暂显示后消失
+      if (result.warnings.length > 0) {
+        setBootWarnings(result.warnings)
+        setTimeout(() => setBootWarnings([]), 8000) // 8 秒后消失
+      }
     })
   }, [])
 
@@ -227,6 +234,7 @@ export function App({
     reg.register(new CompactCommand())
     reg.register(new ContextCommand())
     reg.register(new PluginsCommand())
+    reg.register(new RememberCommand())
     return reg
   }, [currentProvider, currentModel])
 
@@ -609,6 +617,69 @@ export function App({
             }
             return
           }
+          case 'memory_list': {
+            const mm = getMemoryManager()
+            if (!mm) { appendSystemMessage('记忆系统未初始化'); return }
+            const scope = action.scope === 'global' || action.scope === 'project' ? action.scope : undefined
+            mm.list(scope).then(entries => {
+              if (entries.length === 0) {
+                appendSystemMessage(scope ? `${scope} 范围无记忆条目` : '无记忆条目')
+              } else {
+                const lines = entries.map(e => `- **${e.title}** (${e.scope}) [${e.type}] ${e.tags.length > 0 ? `tags: ${e.tags.join(', ')}` : ''}`)
+                appendSystemMessage(`记忆条目 (${entries.length}):\n${lines.join('\n')}`)
+              }
+            }).catch(e => appendSystemMessage(`列出记忆失败: ${e}`))
+            return
+          }
+          case 'memory_search': {
+            const mm = getMemoryManager()
+            if (!mm) { appendSystemMessage('记忆系统未初始化'); return }
+            mm.search({ query: action.query, topK: 10 }).then(results => {
+              if (results.length === 0) {
+                appendSystemMessage(`搜索"${action.query}"未找到相关记忆`)
+              } else {
+                const lines = results.map(r => `- **${r.entry.title}** (score: ${r.score.toFixed(2)}) — ${r.snippet.slice(0, 80)}...`)
+                appendSystemMessage(`搜索"${action.query}"找到 ${results.length} 条:\n${lines.join('\n')}`)
+              }
+            }).catch(e => appendSystemMessage(`搜索记忆失败: ${e}`))
+            return
+          }
+          case 'memory_delete': {
+            const mm = getMemoryManager()
+            if (!mm) { appendSystemMessage('记忆系统未初始化'); return }
+            mm.delete(action.id).then(() => {
+              appendSystemMessage(`已删除记忆: ${action.id}`)
+            }).catch(e => appendSystemMessage(`删除失败: ${e}`))
+            return
+          }
+          case 'memory_write': {
+            const mm = getMemoryManager()
+            if (!mm) { appendSystemMessage('记忆系统未初始化'); return }
+            // 从内容提取标题（第一行或前 30 字符）
+            const firstLine = action.content.split('\n')[0] ?? action.content
+            const title = firstLine.length > 30 ? firstLine.slice(0, 27) + '...' : firstLine
+            mm.write({
+              scope: 'project',
+              title,
+              content: action.content,
+              type: 'user',
+              tags: [],
+              source: 'user',
+              filePath: '',
+            }).then(entry => {
+              appendSystemMessage(`已记住: ${entry.title} (${entry.scope}:${entry.id})`)
+            }).catch(e => appendSystemMessage(`写入记忆失败: ${e}`))
+            return
+          }
+          case 'memory_rebuild': {
+            const mm = getMemoryManager()
+            if (!mm) { appendSystemMessage('记忆系统未初始化'); return }
+            appendSystemMessage('正在重建记忆索引...')
+            mm.initialize().then(() => {
+              appendSystemMessage('记忆索引重建完成')
+            }).catch(e => appendSystemMessage(`重建失败: ${e}`))
+            return
+          }
           case 'error':
             appendSystemMessage(action.message)
             return
@@ -758,6 +829,13 @@ export function App({
                 {' | instructions '}{bootTimings.instructions.toFixed(0)}
                 {'ms) mcp: '}{mcpMs != null ? `${mcpMs.toFixed(0)}ms` : 'loading...'}
               </Text>
+            </Box>
+          )}
+          {bootWarnings.length > 0 && (
+            <Box paddingX={2} flexDirection="column">
+              {bootWarnings.map((w, i) => (
+                <Text key={i} color="yellow">⚠ {w}</Text>
+              ))}
             </Box>
           )}
           <WelcomeScreen model={currentModel} provider={currentProvider} cwd={cwd} recentSessions={recentSessions} />
