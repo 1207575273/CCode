@@ -277,6 +277,7 @@ export function getStoredEmbeddingDimension(): number | null {
     const row = db.prepare('SELECT value FROM memory_meta WHERE key = ?').get('embedding_dimension') as { value: string } | undefined
     return row ? parseInt(row.value, 10) : null
   } catch {
+    /* 表不存在或查询失败，返回默认值 */
     return null
   }
 }

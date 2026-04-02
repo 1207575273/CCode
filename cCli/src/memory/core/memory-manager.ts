@@ -171,7 +171,7 @@ export class MemoryManager implements IMemoryManager {
     await this.fileStore.updateIndex(scopeDir, scopeEntries)
 
     // embed 后台跑，不等
-    embedPromise.catch(() => { /* embed 失败不影响写入 */ })
+    embedPromise.catch(err => { console.warn('[Memory] embed 失败（不影响写入）:', err) })
 
     return saved
   }
@@ -187,7 +187,7 @@ export class MemoryManager implements IMemoryManager {
 
     // 重建索引
     const { embedPromise } = this.indexer.upsertEntry(updated, this.projectSlug)
-    embedPromise.catch(() => {})
+    embedPromise.catch(err => { console.warn('[Memory] embed 失败:', err) })
 
     // 更新 MEMORY.md
     const scopeEntries = [...this.entryMap.values()].filter(e => e.scope === updated.scope)

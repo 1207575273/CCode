@@ -91,6 +91,7 @@ export class PermissionManager {
       const rules = settings.permissions?.allow ?? []
       return new PermissionManager(rules, registeredTools)
     } catch {
+      /* 配置文件不存在或格式错误，使用默认权限 */
       return new PermissionManager([], registeredTools)
     }
   }

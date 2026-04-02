@@ -104,15 +104,17 @@ export class CompactBridge implements ICompactBridge {
             filePath: '',
           })
           saved.push(result)
-        } catch {
+        } catch (err) {
           // 单条写入失败不影响其他
+          console.warn('[Memory] CompactBridge: 单条记忆写入失败', err)
         }
       }
 
       this.#lastExtractedCount = saved.length
       return saved
-    } catch {
+    } catch (err) {
       // LLM 调用失败不影响 compact 流程
+      console.warn('[Memory] CompactBridge: 提取关键信息失败', err)
       return []
     }
   }
@@ -148,7 +150,8 @@ function parseExtractedEntries(raw: string): Array<{
       type: ['project', 'user', 'feedback', 'reference'].includes(e.type) ? e.type : 'project',
       tags: Array.isArray(e.tags) ? e.tags.filter((t: unknown) => typeof t === 'string') : [],
     }))
-  } catch {
+  } catch (err) {
+    console.warn('[Memory] CompactBridge: 解析提取结果失败', err)
     return []
   }
 }

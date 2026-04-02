@@ -148,6 +148,7 @@ export function App({
         updatedAt: s.updatedAt,
       }))
     } catch {
+      /* 历史记录获取失败，使用空列表 */
       return []
     }
   }, [cwd])
@@ -157,6 +158,7 @@ export function App({
     try {
       return sessionStore.listBranches(sessionId)
     } catch {
+      /* 分支列表获取失败，使用空列表 */
       return []
     }
   }, [])

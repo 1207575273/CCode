@@ -85,10 +85,11 @@ export class MemoryWatcher {
           this.handleEvent(fullPath, scope)
         })
 
-        watcher.on('error', () => { /* 静默 */ })
+        watcher.on('error', (err) => { console.warn('[Memory] Watcher 错误:', err) })
         this.watchers.push(watcher)
-      } catch {
+      } catch (err) {
         // 目录不可监听，静默跳过
+        console.warn('[Memory] 目录监听失败:', dir, err)
       }
     }
   }
@@ -123,8 +124,9 @@ export class MemoryWatcher {
           })
         }
         this.scheduleFlush()
-      } catch {
+      } catch (err) {
         // 静默
+        console.warn('[Memory] Watcher handleEvent 异常:', err)
       }
     })
   }
@@ -140,8 +142,9 @@ export class MemoryWatcher {
     this.pendingChanges.clear()
     try {
       this.callback(changes)
-    } catch {
+    } catch (err) {
       // 回调异常不影响 watcher 运行
+      console.warn('[Memory] Watcher 回调异常:', err)
     }
   }
 }

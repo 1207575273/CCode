@@ -102,6 +102,7 @@ export class SkillStore {
       const { body } = parseSkillFile(raw)
       return body
     } catch {
+      /* skill 文件读取失败，跳过 */
       return null
     }
   }
@@ -128,6 +129,7 @@ export class SkillStore {
         .filter(f => basename(f) !== 'SKILL.md')
         .map(f => relative(skillDir, f).replace(/\\/g, '/'))
     } catch {
+      /* 支撑文件列表获取失败，返回空 */
       return []
     }
   }
@@ -210,6 +212,7 @@ export class SkillStore {
             const { frontmatter } = parseSkillFile(raw)
             return toSkillMetadata(frontmatter, filePath, source)
           } catch {
+            /* skill 文件扫描失败，跳过 */
             return null
           }
         }),

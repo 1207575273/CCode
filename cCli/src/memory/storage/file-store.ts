@@ -13,6 +13,7 @@
 
 import { readFileSync, writeFileSync, unlinkSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { join, relative, dirname, basename, extname } from 'node:path'
+import { homedir } from 'node:os'
 import type { IFileStore, MemoryEntry, MemoryScope, MemoryFrontmatter, MemoryType, MemorySource } from '@memory/types.js'
 
 // ═══════════════════════════════════════════════
@@ -109,6 +110,7 @@ export class FileStore implements IFileStore {
     try {
       items = readdirSync(dir)
     } catch {
+      /* 目录不可读（可能被并发删除），跳过 */
       return
     }
 
@@ -118,6 +120,7 @@ export class FileStore implements IFileStore {
       try {
         stat = statSync(fullPath)
       } catch {
+        /* 文件状态不可读（可能被并发删除），跳过 */
         continue
       }
 
@@ -160,6 +163,7 @@ export class FileStore implements IFileStore {
         filePath,
       }
     } catch {
+      /* 文件解析失败（格式异常或被并发修改），跳过该条目 */
       return null
     }
   }
@@ -211,7 +215,7 @@ export class FileStore implements IFileStore {
     // 重新读取返回完整 entry
     const memoryIdx = filePath.replace(/\\/g, '/').lastIndexOf('/memory/')
     const basePath = memoryIdx !== -1 ? filePath.slice(0, memoryIdx + '/memory'.length + 1) : dirname(filePath)
-    const scope = filePath.includes('.ccode/memory') && !filePath.includes(require('node:os').homedir())
+    const scope = filePath.includes('.ccode/memory') && !filePath.includes(homedir())
       ? 'project' as MemoryScope
       : 'global' as MemoryScope
     const entry = this.parseFile(filePath, basePath, scope)

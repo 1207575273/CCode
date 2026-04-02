@@ -86,8 +86,9 @@ export class Retriever {
       try {
         const queryEmbedding = await this.embedding.embed(query.query)
         vectorResults = await this.vectorStore.similaritySearch(queryEmbedding, filterOpts)
-      } catch {
+      } catch (err) {
         // Embedding 调用失败，降级为纯 BM25
+        console.warn('[Memory] Retriever: 向量检索失败，降级为纯 BM25', err)
       }
     }
 

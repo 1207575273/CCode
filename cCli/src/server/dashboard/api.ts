@@ -357,9 +357,8 @@ export function createApiRoutes(): Hono {
       try {
         const dimRow = db.prepare('SELECT value FROM memory_meta WHERE key = ?').get('embedding_dimension') as { value: string } | undefined
         dimension = dimRow ? parseInt(dimRow.value, 10) : 0
-        console.log('[Memory API] dimension:', dimension)
-      } catch (err) {
-        console.log('[Memory API] memory_meta not found:', err instanceof Error ? err.message : err)
+      } catch {
+        // memory_meta 表不存在时静默跳过
       }
 
       // 读取所有向量 chunk
@@ -374,8 +373,8 @@ export function createApiRoutes(): Hono {
             SELECT id, entry_id, scope, chunk_text, chunk_index, tags, type, embedding
             FROM memory_vectors
           `).all() as typeof rows
-        } catch (err) {
-          console.log('[Memory API] memory_vectors query failed:', err instanceof Error ? err.message : err)
+        } catch {
+          // memory_vectors 查询失败时静默跳过，返回空数组
         }
       }
 
@@ -428,7 +427,6 @@ export function createApiRoutes(): Hono {
         })),
       }
 
-      console.log(`[Memory API] returning: ${chunks.length} chunks, ${entries.length} entries, dim=${dimension}`)
       return c.json({ chunks, entries, systemPrompt, dimension })
     } catch (err) {
       console.error('[API] /memory/vectors error:', err)

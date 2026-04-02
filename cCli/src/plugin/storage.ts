@@ -17,6 +17,7 @@ export function createPluginStorage(storagePath: string): PluginStorage {
     try {
       data = JSON.parse(readFileSync(storagePath, 'utf-8'))
     } catch {
+      /* 存储文件不存在或损坏，使用空对象 */
       data = {}
     }
   }
