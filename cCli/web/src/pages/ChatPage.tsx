@@ -8,6 +8,7 @@ import { ToolStatus } from '../components/ToolStatus'
 import { PermissionCard } from '../components/PermissionCard'
 import { UserQuestionForm } from '../components/UserQuestionForm'
 import { TodoPanel } from '../components/TodoPanel'
+import { MemoryPanel } from '../components/MemoryPanel'
 import type { SubAgentInfo, SubAgentDetailEvent } from '../components/SubAgentCard'
 import type { ChatMessage, ToolEvent, ServerEvent, UserQuestion } from '../types'
 
@@ -33,6 +34,8 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
   const [contextInfo, setContextInfo] = useState<{ usedPercentage: number; level: string } | null>(null)
   /** compact 状态 */
   const [compacting, setCompacting] = useState<{ strategy: string; message: string } | null>(null)
+  /** 记忆全景面板 */
+  const [memoryPanelOpen, setMemoryPanelOpen] = useState(false)
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const msgIdCounter = useRef(0)
@@ -308,6 +311,17 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
             </span>
           )}
           <button
+            onClick={() => setMemoryPanelOpen(prev => !prev)}
+            className={`text-xs px-2 py-1 rounded transition-colors ${
+              memoryPanelOpen
+                ? 'bg-purple-900 text-purple-300'
+                : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+            }`}
+            title="记忆全景"
+          >
+            记忆
+          </button>
+          <button
             onClick={() => {
               if (window.confirm('确定关闭 Bridge Server？所有 Web 客户端将断开连接。')) {
                 fetch('/api/bridge/stop', { method: 'POST' }).catch(() => {})
@@ -393,6 +407,8 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
       </div>
 
       <InputBar onSubmit={handleSubmit} disabled={!connected || !!compacting} />
+
+      <MemoryPanel open={memoryPanelOpen} onClose={() => setMemoryPanelOpen(false)} />
     </div>
   )
 }
