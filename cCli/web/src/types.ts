@@ -118,3 +118,27 @@ export interface SubagentSnapshot {
     | { kind: 'error'; error: string }
   >
 }
+
+/** 记忆向量 API 响应 */
+export interface MemoryVectorsResponse {
+  chunks: Array<{
+    id: string
+    entryId: string
+    title: string
+    scope: 'global' | 'project'
+    type: string
+    tags: string[]
+    chunkText: string
+    chunkIndex: number
+    embedding: number[]
+  }>
+  systemPrompt: {
+    totalTokens: number
+    sections: Array<{
+      name: string
+      tokens: number
+      source: string
+    }>
+  }
+  dimension: number
+}
