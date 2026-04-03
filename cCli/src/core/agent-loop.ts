@@ -16,7 +16,7 @@ import type { LLMProvider } from '@providers/provider.js'
 import type { ToolRegistry } from '@tools/core/registry.js'
 import type { ToolResult, ToolResultMeta } from '@tools/core/types.js'
 import { isStreamableTool } from '@tools/core/types.js'
-import type { Message, MessageContent, ToolCallContent, StreamChunk } from './types.js'
+import type { Message, MessageContent, ToolCallContent, ToolResultContent, StreamChunk } from './types.js'
 import { classifyToolCalls, executeSafeToolsInParallel } from './parallel-executor.js'
 import type { HookManager } from '@hooks/hook-manager.js'
 import { contextTracker } from './context-tracker.js'
@@ -331,14 +331,15 @@ export class AgentLoop {
       )
       // yield 收集到的事件
       for (const e of events) { yield e }
-      // 按原始顺序追加到 history
-      for (const pr of results) {
-        history.push({
-          role: 'user',
-          content: pr.success
-            ? `[Tool ${pr.toolName} result]: ${pr.output}`
-            : `[Tool ${pr.toolName} error]: ${pr.error ?? 'error'}`,
-        })
+      // 所有并行工具结果合并到一条 user 消息（Anthropic 要求同一条消息包含所有 tool_result）
+      const toolResults: ToolResultContent[] = results.map(pr => ({
+        type: 'tool_result' as const,
+        toolCallId: pr.toolCallId,
+        result: pr.success ? pr.output : (pr.error ?? 'error'),
+        ...(pr.success === false ? { isError: true as const } : {}),
+      }))
+      if (toolResults.length > 0) {
+        history.push({ role: 'user', content: toolResults })
       }
     }
 
@@ -362,7 +363,7 @@ export class AgentLoop {
     // 权限检查：isSidechain 模式跳过弹窗（主 Agent 派发即授权）
     const allowed = yield* this.#checkPermission(tc)
     if (!allowed) {
-      history.push({ role: 'user', content: `[Tool ${tc.toolName} was rejected by user]` })
+      history.push({ role: 'user', content: [{ type: 'tool_result', toolCallId: tc.toolCallId, result: 'rejected by user', isError: true }] })
       yield { type: 'tool_done', toolName: tc.toolName, toolCallId: tc.toolCallId, durationMs: 0, success: false, resultSummary: 'rejected by user' }
       return
     }
@@ -379,7 +380,7 @@ export class AgentLoop {
         if (!r) continue
         if (r['decision'] === 'block') {
           const reason = typeof r['reason'] === 'string' ? r['reason'] : 'blocked by hook'
-          history.push({ role: 'user', content: `[Tool ${tc.toolName} blocked]: ${reason}` })
+          history.push({ role: 'user', content: [{ type: 'tool_result', toolCallId: tc.toolCallId, result: `blocked: ${reason}`, isError: true }] })
           yield { type: 'tool_done', toolName: tc.toolName, toolCallId: tc.toolCallId, durationMs: 0, success: false, resultSummary: reason }
           return
         }
@@ -408,9 +409,12 @@ export class AgentLoop {
 
     history.push({
       role: 'user',
-      content: result.success
-        ? `[Tool ${tc.toolName} result]: ${result.output}`
-        : `[Tool ${tc.toolName} error]: ${result.error ?? 'error'}`,
+      content: [{
+        type: 'tool_result',
+        toolCallId: tc.toolCallId,
+        result: result.success ? result.output : (result.error ?? 'error'),
+        ...(result.success === false ? { isError: true } : {}),
+      }],
     })
 
     // PostToolUse Hook：工具执行后通知 + 消费反馈（Reflection 闭环）
