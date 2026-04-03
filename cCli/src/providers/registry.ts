@@ -29,3 +29,31 @@ export function createProvider(providerName: string, config: CCodeConfig): LLMPr
 
   return new ProviderWrapper(new OpenAICompatProvider(providerName, providerCfg))
 }
+
+// ═══ Provider 缓存 ═══
+
+const _providerCache = new Map<string, LLMProvider>()
+
+/**
+ * 获取或创建 Provider 实例。
+ * 同一 providerName + apiKey 组合返回缓存实例，避免重复创建 SDK 客户端。
+ */
+export function getOrCreateProvider(providerName: string, config: CCodeConfig): LLMProvider {
+  const cfg = config.providers[providerName]
+  if (!cfg) {
+    throw new Error(`Provider "${providerName}" 未在 ~/.ccode/config.json 中配置`)
+  }
+  const cacheKey = `${providerName}|${cfg.baseURL ?? ''}|${cfg.apiKey}`
+
+  let cached = _providerCache.get(cacheKey)
+  if (!cached) {
+    cached = createProvider(providerName, config)
+    _providerCache.set(cacheKey, cached)
+  }
+  return cached
+}
+
+/** 配置变更时清空 Provider 缓存（设置页保存后调用） */
+export function clearProviderCache(): void {
+  _providerCache.clear()
+}

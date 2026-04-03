@@ -1,5 +1,5 @@
 // src/config/config-manager.ts
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 
@@ -39,6 +39,8 @@ const DEFAULT_CONFIG: CCodeConfig = {
 
 export class ConfigManager {
   readonly #configPath: string
+  #cached: CCodeConfig | null = null
+  #cachedMtime: number = 0
 
   constructor(baseDir: string = join(homedir(), '.ccode')) {
     this.#configPath = join(baseDir, 'config.json')
@@ -48,19 +50,34 @@ export class ConfigManager {
     if (!existsSync(this.#configPath)) {
       this.#ensureDir()
       this.#write(DEFAULT_CONFIG)
-      return { ...DEFAULT_CONFIG }
+      this.#cached = { ...DEFAULT_CONFIG }
+      return this.#cached
     }
+
+    // mtime 未变则返回缓存，避免重复读磁盘
+    try {
+      const mtime = statSync(this.#configPath).mtimeMs
+      if (this.#cached && mtime === this.#cachedMtime) return this.#cached
+      this.#cachedMtime = mtime
+    } catch {
+      // statSync 失败，走无缓存路径
+    }
+
     try {
       const raw = readFileSync(this.#configPath, 'utf-8')
-      return JSON.parse(raw) as CCodeConfig
+      this.#cached = JSON.parse(raw) as CCodeConfig
+      return this.#cached
     } catch {
-      return { ...DEFAULT_CONFIG }
+      this.#cached = { ...DEFAULT_CONFIG }
+      return this.#cached
     }
   }
 
   save(config: CCodeConfig): void {
     this.#ensureDir()
     this.#write(config)
+    this.#cached = config
+    try { this.#cachedMtime = statSync(this.#configPath).mtimeMs } catch { /* ignore */ }
   }
 
   #ensureDir(): void {

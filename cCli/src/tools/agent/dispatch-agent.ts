@@ -25,7 +25,7 @@ import type { AgentEvent } from '@core/agent-loop.js'
 import { sessionStore } from '@persistence/index.js'
 import { SessionLogger } from '@observability/session-logger.js'
 import { configManager } from '@config/config-manager.js'
-import { createProvider } from '@providers/registry.js'
+import { getOrCreateProvider } from '@providers/registry.js'
 import {
   registerSubAgent, consumeAgentEvent, markSubAgentDone,
   setSubAgentSessionId, resolveAgentName,
@@ -458,7 +458,7 @@ function resolveSubAgentProvider(
   for (const [name, providerCfg] of Object.entries(config.providers)) {
     if (!providerCfg) continue
     if (providerCfg.models.includes(model)) {
-      const provider = createProvider(name, config)
+      const provider = getOrCreateProvider(name, config)
       return { provider, providerName: name, modelName: model }
     }
   }

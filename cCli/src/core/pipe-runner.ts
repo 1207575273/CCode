@@ -15,7 +15,7 @@
 import { buildArgsSummary } from '@ui/ToolStatusLine.js'
 import { formatDuration } from '@ui/format-utils.js'
 import { configManager } from '@config/config-manager.js'
-import { createProvider } from '@providers/registry.js'
+import { getOrCreateProvider } from '@providers/registry.js'
 import { AgentLoop } from './agent-loop.js'
 import type { Message } from './types.js'
 import {
@@ -49,7 +49,7 @@ export async function runPipe(options: PipeOptions): Promise<void> {
   const providerName = options.provider ?? config.defaultProvider ?? ''
   const modelName = options.model ?? config.defaultModel ?? ''
 
-  const provider = createProvider(providerName, config)
+  const provider = getOrCreateProvider(providerName, config)
   const registry = getRegistry()
 
   // 构建用户消息：stdin 内容 + prompt

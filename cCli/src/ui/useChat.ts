@@ -14,7 +14,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { randomUUID } from 'node:crypto'
 import { configManager } from '@config/config-manager.js'
-import { createProvider } from '@providers/registry.js'
+import { getOrCreateProvider } from '@providers/registry.js'
 import { AgentLoop, isAbortError } from '@core/agent-loop.js'
 import {
   sessionLogger, tokenMeter, getCurrentSessionId,
@@ -221,7 +221,7 @@ export function useChat(): UseChatReturn {
 
     const config = configManager.load()
     // 使用 state 中的 provider/model（可能已通过 /model 切换，与 config 文件不同）
-    const provider = createProvider(currentProvider, config)
+    const provider = getOrCreateProvider(currentProvider, config)
     const registry = getRegistry()
 
     // 首次 submit 时基于实际注册工具构建权限管理器
@@ -606,7 +606,7 @@ export function useChat(): UseChatReturn {
     if (isStreaming) return
 
     const config = configManager.load()
-    const provider = createProvider(currentProvider, config)
+    const provider = getOrCreateProvider(currentProvider, config)
 
     // 构建当前 history
     const llmMsgs = messages.filter(m => m.role === 'user' || m.role === 'assistant')
