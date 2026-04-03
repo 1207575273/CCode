@@ -18,7 +18,7 @@ import { createProvider } from '@providers/registry.js'
 import { AgentLoop, isAbortError } from '@core/agent-loop.js'
 import {
   sessionLogger, tokenMeter, getCurrentSessionId,
-  buildRegistry, registerMcpTools, getMcpStatus,
+  getRegistry, registerMcpTools, getMcpStatus,
   hookManager,
   getSystemPrompt,
   bootstrapAll,
@@ -222,7 +222,7 @@ export function useChat(): UseChatReturn {
     const config = configManager.load()
     // 使用 state 中的 provider/model（可能已通过 /model 切换，与 config 文件不同）
     const provider = createProvider(currentProvider, config)
-    const registry = buildRegistry()
+    const registry = getRegistry()
 
     // 首次 submit 时基于实际注册工具构建权限管理器
     if (!permissionManagerRef.current) {

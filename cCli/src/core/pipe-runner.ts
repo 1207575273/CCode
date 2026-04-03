@@ -20,7 +20,7 @@ import { AgentLoop } from './agent-loop.js'
 import type { Message } from './types.js'
 import {
   sessionLogger, tokenMeter,
-  buildRegistry, ensureMcpInitialized, registerMcpTools,
+  getRegistry, ensureMcpInitialized, registerMcpTools,
   hookManager,
   getSystemPrompt,
   bootstrapAll,
@@ -50,7 +50,7 @@ export async function runPipe(options: PipeOptions): Promise<void> {
   const modelName = options.model ?? config.defaultModel ?? ''
 
   const provider = createProvider(providerName, config)
-  const registry = buildRegistry()
+  const registry = getRegistry()
 
   // 构建用户消息：stdin 内容 + prompt
   let userContent = options.prompt
@@ -81,7 +81,7 @@ export async function runPipe(options: PipeOptions): Promise<void> {
   const onSigint = () => { controller.abort() }
   process.on('SIGINT', onSigint)
 
-  const loop = new AgentLoop(provider, options.noTools ? buildRegistry() : registry, {
+  const loop = new AgentLoop(provider, options.noTools ? getRegistry() : registry, {
     model: modelName,
     provider: providerName,
     signal: controller.signal,

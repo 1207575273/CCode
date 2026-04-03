@@ -75,7 +75,7 @@ export function getMemoryManager(): MemoryManager | null {
 // ═══ 工厂函数 ═══
 
 /** 构建包含全部内置工具的 ToolRegistry（含 skill 工具 + memory 工具） */
-export function buildRegistry(): ToolRegistry {
+function buildRegistry(): ToolRegistry {
   // 确保内置 Agent 定义已注册（幂等，DispatchAgentTool 依赖 registry 生成参数 enum）
   registerBuiltInAgents()
 
@@ -100,6 +100,22 @@ export function buildRegistry(): ToolRegistry {
     reg.register(new MemoryDeleteTool(memoryManagerInstance))
   }
   return reg
+}
+
+/** 会话级 registry 单例（工具实例无状态，安全复用） */
+let _registryCache: ToolRegistry | null = null
+
+/** 获取 ToolRegistry 单例，首次调用时构建，MCP 工具注册后 invalidate 重建 */
+export function getRegistry(): ToolRegistry {
+  if (!_registryCache) {
+    _registryCache = buildRegistry()
+  }
+  return _registryCache
+}
+
+/** 标记 registry 需要重建（MemoryManager 延迟初始化完成后调用） */
+export function invalidateRegistry(): void {
+  _registryCache = null
 }
 
 /** 确保 Skills 已发现（幂等） */
@@ -210,7 +226,7 @@ let pluginsLoaded = false
 async function ensurePluginsLoaded(): Promise<void> {
   if (pluginsLoaded) return
   pluginsLoaded = true
-  const registry = buildRegistry()
+  const registry = getRegistry()
   await pluginRegistry.discover(registry)
 }
 
