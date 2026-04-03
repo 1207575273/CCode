@@ -21,6 +21,8 @@ export interface ToolContext {
   config?: import('@config/config-manager.js').CCodeConfig
   /** 主 Agent 的 systemPrompt（子 Agent 继承前缀以命中 Prompt Cache） */
   systemPrompt?: string
+  /** 主 Agent 的对话历史快照（只读，供 dispatch_agent 构建子 Agent 初始消息） */
+  history?: ReadonlyArray<import('@core/types.js').Message>
 }
 
 export interface ToolResult {

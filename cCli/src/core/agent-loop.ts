@@ -325,7 +325,7 @@ export class AgentLoop {
     // 1. 并行执行安全工具
     if (safe.length > 0) {
       const events: AgentEvent[] = []
-      const ctx = buildToolContext(this.#provider, this.#registry, this.#config)
+      const ctx = buildToolContext(this.#provider, this.#registry, this.#config, history)
       const results = await executeSafeToolsInParallel(
         safe, this.#registry, (e) => events.push(e), ctx, this.#config.maxParallelTools,
       )
@@ -391,7 +391,7 @@ export class AgentLoop {
     }
 
     // 构建 ToolContext（流式工具需要 provider/registry 来创建子 AgentLoop）
-    const ctx = buildToolContext(this.#provider, this.#registry, this.#config)
+    const ctx = buildToolContext(this.#provider, this.#registry, this.#config, history)
 
     const start = Date.now()
     const tool = this.#registry.get(tc.toolName)
@@ -499,7 +499,7 @@ function makeLlmError(error: string, partialTokens: number): AgentEvent {
 }
 
 /** 构建 ToolContext，兼容 exactOptionalPropertyTypes（不传 undefined 值） */
-function buildToolContext(provider: LLMProvider, registry: ToolRegistry, config: AgentConfig): import('@tools/core/types.js').ToolContext {
+function buildToolContext(provider: LLMProvider, registry: ToolRegistry, config: AgentConfig, history?: ReadonlyArray<Message>): import('@tools/core/types.js').ToolContext {
   const ctx: import('@tools/core/types.js').ToolContext = {
     cwd: process.cwd(),
     provider,
@@ -512,6 +512,7 @@ function buildToolContext(provider: LLMProvider, registry: ToolRegistry, config:
   if (config.nonInteractive) { ctx.nonInteractive = config.nonInteractive }
   if (config.systemPrompt !== undefined) { ctx.systemPrompt = config.systemPrompt }
   if (config.config !== undefined) { ctx.config = config.config }
+  if (history !== undefined) { ctx.history = history }
   return ctx
 }
 

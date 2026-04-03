@@ -24,6 +24,7 @@ const generalAgent: BuiltInAgentDefinition = {
   toolPolicy: { mode: 'exclude', tools: [] },
   maxTurns: 25,
   modelHint: 'balanced',
+  contextPolicy: { mode: 'trimmed', maxMessages: 20, maxTokenEstimate: 8000 },
 
   getSystemPrompt() {
     return [
@@ -51,6 +52,7 @@ const exploreAgent: BuiltInAgentDefinition = {
   },
   maxTurns: 15,
   modelHint: 'fast',
+  contextPolicy: { mode: 'trimmed', maxMessages: 10, maxTokenEstimate: 4000 },
 
   getSystemPrompt() {
     return [
@@ -82,6 +84,7 @@ const planAgent: BuiltInAgentDefinition = {
   },
   maxTurns: 15,
   modelHint: 'strong',
+  contextPolicy: { mode: 'trimmed', maxMessages: 30, maxTokenEstimate: 12000 },
 
   getSystemPrompt() {
     return [

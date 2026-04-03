@@ -32,6 +32,7 @@ import {
 } from './store.js'
 import { agentDefinitionRegistry } from './definition-registry.js'
 import type { ToolPolicy, AgentCompletedOutput, AgentAsyncLaunchedOutput, AgentErrorOutput } from './types.js'
+import { trimHistoryForSubAgent } from './context-utils.js'
 import { eventBus } from '@core/event-bus.js'
 
 // ═══════════════════════════════════════════════
@@ -196,9 +197,16 @@ export class DispatchAgentTool implements StreamableTool {
 
     subLogger.logUserMessage(prompt)
 
+    // 构建子 Agent 初始消息：裁剪后的主 Agent 历史 + prompt
+    const contextMessages = trimHistoryForSubAgent(ctx.history ?? [], definition.contextPolicy)
+    const initialMessages = [
+      ...contextMessages,
+      { role: 'user' as const, content: prompt },
+    ]
+
     // ── 后台模式 ──
     if (runInBackground) {
-      runSubAgentInBackground(subLoop, prompt, agentId, agentName, agentType, description, subLogger, modelName, maxTurns, sessionProvider)
+      runSubAgentInBackground(subLoop, initialMessages, agentId, agentName, agentType, description, subLogger, modelName, maxTurns, sessionProvider)
 
       yield {
         type: 'subagent_progress',
@@ -226,7 +234,7 @@ export class DispatchAgentTool implements StreamableTool {
     let currentTurn = 0
 
     try {
-      for await (const event of subLoop.run([{ role: 'user', content: prompt }])) {
+      for await (const event of subLoop.run(initialMessages)) {
         subLogger.consume(event)
         consumeAgentEvent(agentId, event)
 
@@ -349,7 +357,7 @@ function buildSubRegistry(parentRegistry: ToolRegistry, toolPolicy: ToolPolicy):
  */
 function runSubAgentInBackground(
   subLoop: AgentLoop,
-  prompt: string,
+  initialMessages: import('@core/types.js').Message[],
   agentId: string,
   agentName: string,
   agentType: string,
@@ -364,7 +372,7 @@ function runSubAgentInBackground(
 
   void (async () => {
     try {
-      for await (const event of subLoop.run([{ role: 'user', content: prompt }])) {
+      for await (const event of subLoop.run(initialMessages)) {
         subLogger.consume(event)
         consumeAgentEvent(agentId, event)
 

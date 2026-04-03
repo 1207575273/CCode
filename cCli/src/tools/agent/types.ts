@@ -57,6 +57,9 @@ export interface AgentDefinition {
   /** 模型建议（hint，不强制覆盖 LLM 传入的 model） */
   readonly modelHint?: 'fast' | 'balanced' | 'strong'
 
+  /** 上下文继承策略（默认 trimmed，子 Agent 继承主 Agent 裁剪后的对话历史） */
+  readonly contextPolicy?: import('./context-utils.js').ContextPolicy
+
   // ── 预留字段 ──
   // readonly skills?: string[]
   // readonly background?: boolean
