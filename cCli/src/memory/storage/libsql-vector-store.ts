@@ -32,8 +32,12 @@ export class LibsqlVectorStore implements IVectorStore {
     if (chunks.length === 0) return
     const db = getDb()
 
-    const stmt = db.prepare(`
-      INSERT OR REPLACE INTO memory_vectors
+    // 注意：不能用 INSERT OR REPLACE，libsql DiskANN 向量索引的 shadow table
+    // 在 REPLACE（内部 DELETE+INSERT）时无法正确清理，会报 "failed to insert shadow row"。
+    // 改为显式 DELETE + INSERT 绕开此 bug。
+    const delStmt = db.prepare('DELETE FROM memory_vectors WHERE id = ?')
+    const insStmt = db.prepare(`
+      INSERT INTO memory_vectors
         (id, entry_id, scope, project_slug, embedding, chunk_text, chunk_index, tags, type, source, created, updated)
       VALUES
         (?, ?, ?, ?, vector32(?), ?, ?, ?, ?, ?, ?, ?)
@@ -43,7 +47,8 @@ export class LibsqlVectorStore implements IVectorStore {
       for (const c of chunks) {
         const embeddingJson = `[${c.embedding.join(',')}]`
         const tagsJson = JSON.stringify(c.tags)
-        stmt.run(
+        delStmt.run(c.id)
+        insStmt.run(
           c.id, c.entryId, c.scope, c.projectSlug ?? null,
           embeddingJson, c.text, c.chunkIndex,
           tagsJson, c.type, c.source, c.created, c.updated,
