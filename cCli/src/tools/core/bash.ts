@@ -2,6 +2,7 @@
 import { execa, ExecaError } from 'execa'
 import { resolveShell } from '@platform/shell-resolver.js'
 import { detectPlatform } from '@platform/detector.js'
+import { getSnapshotPath } from '@platform/shell-snapshot.js'
 import { registerProcess, unregisterProcess, appendOutput, markDone } from './process-tracker.js'
 import type { Tool, ToolContext, ToolResult } from './types.js'
 
@@ -55,11 +56,21 @@ export class BashTool implements Tool {
     }
 
     // ---- 前台运行（等待结束）----
+    // 有快照时 source 快照并跳过 login shell（-l），省去 .bashrc 完整初始化
+    const snapshotPath = getSnapshotPath()
+    const finalCommand = snapshotPath
+      ? `source '${snapshotPath}' 2>/dev/null || true && ${command}`
+      : command
+    const shellArgs = snapshotPath
+      ? ['-c', finalCommand]           // 有快照：不传 -l
+      : [...shell.args, finalCommand]  // 无快照：保持原行为
+
     try {
-      const { stdout, stderr } = await execa(shell.path, [...shell.args, command], {
+      const { stdout, stderr } = await execa(shell.path, shellArgs, {
         cwd,
         timeout,
         reject: true,
+        windowsHide: true,
       })
       const output = [stdout, stderr].filter(Boolean).join('\n')
       return { success: true, output: output || '(no output)' }

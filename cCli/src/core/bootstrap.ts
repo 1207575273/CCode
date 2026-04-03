@@ -42,6 +42,7 @@ import { NoopEmbedding } from '@memory/rag/embedding/noop-embedding.js'
 import { ProviderEmbedding } from '@memory/rag/embedding/provider-embedding.js'
 import { LibsqlVectorStore } from '@memory/storage/libsql-vector-store.js'
 import { configManager } from '@config/config-manager.js'
+import { startSnapshotCreation, cleanupSnapshot } from '@platform/shell-snapshot.js'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 
@@ -468,6 +469,12 @@ export function bootstrapAll(): Promise<BootstrapResult> {
         await ensureMemoryInitialized()
         timings['memory'] = performance.now() - t
       })(),
+      // 链 E'：Shell 快照创建（完全独立，后续 bash 命令 source 快照跳过 login shell）
+      (async () => {
+        const t = performance.now()
+        await startSnapshotCreation()
+        timings['shellSnapshot'] = performance.now() - t
+      })(),
     ])
 
     // ── 屏障：A' + D' 都完成 ──
@@ -484,6 +491,9 @@ export function bootstrapAll(): Promise<BootstrapResult> {
     if (memoryManagerInstance) {
       memoryManagerInstance.embedPending().catch(() => { /* embed 失败不影响启动 */ })
     }
+
+    // 退出时清理 shell 快照文件
+    process.on('exit', () => { void cleanupSnapshot() })
 
     timings['total'] = performance.now() - t0
 
