@@ -15,10 +15,14 @@ export interface PlatformInfo {
 
 const SUPPORTED_PLATFORMS = new Set<string>(['win32', 'linux', 'darwin'])
 
+/** 模块级缓存，进程生命周期内只计算一次 */
+let _cached: PlatformInfo | undefined
+
 export function detectPlatform(): PlatformInfo {
+  if (_cached) return _cached
   const raw = os.platform()
   const platform: Platform = SUPPORTED_PLATFORMS.has(raw) ? (raw as Platform) : 'linux'
-  return {
+  _cached = {
     platform,
     isWindows: platform === 'win32',
     isLinux: platform === 'linux',
@@ -27,4 +31,5 @@ export function detectPlatform(): PlatformInfo {
     homeDir: os.homedir(),
     ccodeDir: `${os.homedir()}/.ccode`,
   }
+  return _cached
 }

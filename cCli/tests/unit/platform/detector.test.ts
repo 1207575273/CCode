@@ -14,4 +14,10 @@ describe('detectPlatform', () => {
     const trueCount = [isWindows, isLinux, isMac].filter(Boolean).length
     expect(trueCount).toBe(1)
   })
+
+  it('多次调用返回同一引用（缓存生效）', () => {
+    const a = detectPlatform()
+    const b = detectPlatform()
+    expect(a).toBe(b)
+  })
 })
