@@ -177,12 +177,10 @@ export class DispatchAgentTool implements StreamableTool {
     // 为子 Agent 创建独立的会话级 Provider（隔离 ChatOpenAI 等有状态资源）
     const sessionProvider = subProvider.createSession?.() ?? subProvider
 
-    // 子 Agent 的 systemPrompt：继承主 Agent 前缀 + 追加子 Agent 指令
-    // 保持前缀一致有助于 Anthropic Prompt Cache 命中
-    const subDirective = definition.getSystemPrompt()
-    const subSystemPrompt = ctx.systemPrompt
-      ? `${ctx.systemPrompt}\n\n---\n\nSubAgent directive:\n${subDirective}`
-      : subDirective
+    // 子 Agent 使用自己的 systemPrompt（不继承主 Agent 的 Instructions/Skills/Hooks）
+    // 主 Agent 的 systemPrompt 是给主 Agent 看的，对子 Agent 是噪音，会稀释指令权重
+    // 上下文共享通过 ctx.history 传递（历史消息中已包含足够背景）
+    const subSystemPrompt = definition.getSystemPrompt()
 
     // 每个 SubAgent 独立 AbortController（避免共享父 signal 导致 MaxListeners 泄漏）
     const subController = new AbortController()
