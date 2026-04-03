@@ -17,7 +17,7 @@ import { dbg } from '../debug.js'
 
 /** 将内部 Message 转为 Anthropic SDK 的消息格式 */
 function toAnthropicMessages(messages: Message[]): Anthropic.MessageParam[] {
-  const result: Anthropic.MessageParam[] = []
+  const raw: Anthropic.MessageParam[] = []
 
   for (const msg of messages) {
     if (msg.role === 'system') continue // system 走独立参数
@@ -25,7 +25,7 @@ function toAnthropicMessages(messages: Message[]): Anthropic.MessageParam[] {
     const content = msg.content
 
     if (typeof content === 'string') {
-      result.push({ role: msg.role as 'user' | 'assistant', content })
+      raw.push({ role: msg.role as 'user' | 'assistant', content })
       continue
     }
 
@@ -49,28 +49,51 @@ function toAnthropicMessages(messages: Message[]): Anthropic.MessageParam[] {
           break
         }
         case 'tool_result': {
-          // tool_result 需要作为独立的 user 消息发送
           const tr = block as MessageContent & { type: 'tool_result' }
-          result.push({
-            role: 'user',
-            content: [{
-              type: 'tool_result',
-              tool_use_id: tr.toolCallId,
-              content: typeof tr.result === 'string' ? tr.result : JSON.stringify(tr.result),
-              ...(tr.isError ? { is_error: true } : {}),
-            }],
+          parts.push({
+            type: 'tool_result',
+            tool_use_id: tr.toolCallId,
+            content: typeof tr.result === 'string' ? tr.result : JSON.stringify(tr.result),
+            ...(tr.isError ? { is_error: true } : {}),
           })
-          continue
+          break
         }
       }
     }
 
     if (parts.length > 0) {
-      result.push({ role: msg.role as 'user' | 'assistant', content: parts })
+      raw.push({ role: msg.role as 'user' | 'assistant', content: parts })
     }
   }
 
-  return result
+  // 合并连续相同 role 的消息（Anthropic 要求 user/assistant 严格交替）
+  return mergeConsecutiveRoles(raw)
+}
+
+/**
+ * 合并连续相同 role 的消息，确保 Anthropic API 不报 400。
+ * 改造后 history 格式标准（assistant → user 交替），此函数作为防御性保障。
+ */
+function mergeConsecutiveRoles(messages: Anthropic.MessageParam[]): Anthropic.MessageParam[] {
+  if (messages.length === 0) return messages
+  const merged: Anthropic.MessageParam[] = [messages[0]!]
+  for (let i = 1; i < messages.length; i++) {
+    const cur = messages[i]!
+    const last = merged[merged.length - 1]!
+    if (last.role === cur.role) {
+      // 合并 content
+      const lastParts = typeof last.content === 'string'
+        ? [{ type: 'text' as const, text: last.content }]
+        : last.content
+      const curParts = typeof cur.content === 'string'
+        ? [{ type: 'text' as const, text: cur.content }]
+        : cur.content
+      merged[merged.length - 1] = { role: last.role, content: [...lastParts, ...curParts] }
+    } else {
+      merged.push(cur)
+    }
+  }
+  return merged
 }
 
 export class AnthropicProvider implements LLMProvider {
