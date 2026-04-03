@@ -184,11 +184,16 @@ export class DispatchAgentTool implements StreamableTool {
       ? `${ctx.systemPrompt}\n\n---\n\nSubAgent directive:\n${subDirective}`
       : subDirective
 
+    // 每个 SubAgent 独立 AbortController（避免共享父 signal 导致 MaxListeners 泄漏）
+    const subController = new AbortController()
+    const onParentAbort = () => subController.abort()
+    ctx.signal?.addEventListener('abort', onParentAbort, { once: true })
+
     // 创建子 AgentLoop
     const subLoop = new AgentLoop(sessionProvider, subRegistry, {
       model: modelName,
       provider: providerName,
-      signal: ctx.signal,
+      signal: subController.signal,
       maxTurns,
       isSidechain: true,
       agentId,
@@ -207,7 +212,7 @@ export class DispatchAgentTool implements StreamableTool {
 
     // ── 后台模式 ──
     if (runInBackground) {
-      runSubAgentInBackground(subLoop, initialMessages, agentId, agentName, agentType, description, subLogger, modelName, maxTurns, sessionProvider)
+      runSubAgentInBackground(subLoop, initialMessages, agentId, agentName, agentType, description, subLogger, modelName, maxTurns, sessionProvider, () => ctx.signal?.removeEventListener('abort', onParentAbort))
 
       yield {
         type: 'subagent_progress',
@@ -332,6 +337,7 @@ export class DispatchAgentTool implements StreamableTool {
         error: `子 Agent 执行异常: ${errorMsg}`,
       }
     } finally {
+      ctx.signal?.removeEventListener('abort', onParentAbort)
       sessionProvider.dispose?.()
     }
   }
@@ -367,6 +373,7 @@ function runSubAgentInBackground(
   modelName: string,
   maxTurns: number,
   sessionProvider?: import('@providers/provider.js').LLMProvider,
+  cleanup?: () => void,
 ): void {
   let finalText = ''
   let currentTurn = 0
@@ -455,6 +462,7 @@ function runSubAgentInBackground(
         output: errorMsg,
       })
     } finally {
+      cleanup?.()
       sessionProvider?.dispose?.()
     }
   })()

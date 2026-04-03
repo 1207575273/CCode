@@ -25,7 +25,7 @@ const generalAgent: BuiltInAgentDefinition = {
   maxTurns: 25,
   modelHint: 'balanced',
   contextPolicy: { mode: 'trimmed', maxMessages: 20, maxTokenEstimate: 8000 },
-  minTurns: 3,
+  minTurns: 5,
 
   getSystemPrompt() {
     return [
