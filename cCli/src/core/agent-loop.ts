@@ -161,6 +161,9 @@ export class AgentLoop {
   async *run(messages: Message[]): AsyncIterable<AgentEvent> {
     const history: Message[] = [...messages]
     const maxTurns = this.#config.maxTurns ?? DEFAULT_MAX_TURNS
+    const minToolRounds = this.#config.minTurns ?? 0
+    /** 实际执行了工具的轮次数（不含纯文本轮） */
+    let toolRounds = 0
 
     for (let turn = 0; turn < maxTurns; turn++) {
       const llmResult = yield* this.#callLLM(history)
@@ -180,9 +183,8 @@ export class AgentLoop {
       }
 
       if (llmResult.toolCalls.length === 0) {
-        // 续跑检测：SubAgent 模式下，轮次不足 minTurns 时注入继续消息
-        const minTurns = this.#config.minTurns ?? 0
-        if (turn < minTurns && this.#config.isSidechain) {
+        // 续跑检测：SubAgent 模式下，工具调用轮次不足 minToolRounds 时注入继续消息
+        if (toolRounds < minToolRounds && this.#config.isSidechain) {
           history.push({
             role: 'user',
             content: 'You have not completed the task yet. Continue executing tools to finish the task. Do NOT just describe what to do — actually call tools.',
@@ -193,6 +195,7 @@ export class AgentLoop {
         return
       }
 
+      toolRounds++
       yield* this.#executeToolCalls(llmResult.toolCalls, history)
     }
 
