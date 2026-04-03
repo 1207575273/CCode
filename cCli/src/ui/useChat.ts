@@ -301,6 +301,7 @@ export function useChat(): UseChatReturn {
           provider: currentProvider,
           signal: controller.signal,
           hookManager,
+          config,
           ...(systemPrompt !== undefined ? { systemPrompt } : {}),
           ...(sid ? { sessionId: sid } : {}),
         })

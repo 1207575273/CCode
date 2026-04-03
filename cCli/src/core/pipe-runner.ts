@@ -88,6 +88,7 @@ export async function runPipe(options: PipeOptions): Promise<void> {
     signal: controller.signal,
     nonInteractive: true,
     hookManager,
+    config,
     ...(systemPrompt !== undefined ? { systemPrompt } : {}),
     ...(sid ? { sessionId: sid } : {}),
   })

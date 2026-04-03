@@ -176,6 +176,13 @@ export class DispatchAgentTool implements StreamableTool {
     // 为子 Agent 创建独立的会话级 Provider（隔离 ChatOpenAI 等有状态资源）
     const sessionProvider = subProvider.createSession?.() ?? subProvider
 
+    // 子 Agent 的 systemPrompt：继承主 Agent 前缀 + 追加子 Agent 指令
+    // 保持前缀一致有助于 Anthropic Prompt Cache 命中
+    const subDirective = definition.getSystemPrompt()
+    const subSystemPrompt = ctx.systemPrompt
+      ? `${ctx.systemPrompt}\n\n---\n\nSubAgent directive:\n${subDirective}`
+      : subDirective
+
     // 创建子 AgentLoop
     const subLoop = new AgentLoop(sessionProvider, subRegistry, {
       model: modelName,
@@ -184,7 +191,7 @@ export class DispatchAgentTool implements StreamableTool {
       maxTurns,
       isSidechain: true,
       agentId,
-      systemPrompt: definition.getSystemPrompt(),
+      systemPrompt: subSystemPrompt,
     })
 
     subLogger.logUserMessage(prompt)
@@ -461,7 +468,7 @@ function resolveSubAgentProvider(
   }
 
   const model = modelArg.trim()
-  const config = configManager.load()
+  const config = ctx.config ?? configManager.load()
 
   for (const [name, providerCfg] of Object.entries(config.providers)) {
     if (!providerCfg) continue

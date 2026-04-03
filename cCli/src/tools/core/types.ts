@@ -17,6 +17,10 @@ export interface ToolContext {
   sessionId?: string
   /** 标记非交互模式（pipe），不可弹出用户交互 */
   nonInteractive?: boolean
+  /** 配置快照（避免子 Agent 重复读磁盘） */
+  config?: import('@config/config-manager.js').CCodeConfig
+  /** 主 Agent 的 systemPrompt（子 Agent 继承前缀以命中 Prompt Cache） */
+  systemPrompt?: string
 }
 
 export interface ToolResult {

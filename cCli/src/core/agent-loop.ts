@@ -108,6 +108,8 @@ export interface AgentConfig {
   nonInteractive?: boolean | undefined
   /** Hook 管理器（可选，注入后启用 PreToolUse / PostToolUse 钩子） */
   hookManager?: HookManager | undefined
+  /** 配置快照（透传到 ToolContext，避免子 Agent 重复读磁盘） */
+  config?: import('@config/config-manager.js').CCodeConfig | undefined
 }
 
 // ═══════════════════════════════════════════════
@@ -470,5 +472,7 @@ function buildToolContext(provider: LLMProvider, registry: ToolRegistry, config:
   if (config.signal !== undefined) { ctx.signal = config.signal }
   if (config.sessionId !== undefined) { ctx.sessionId = config.sessionId }
   if (config.nonInteractive) { ctx.nonInteractive = config.nonInteractive }
+  if (config.systemPrompt !== undefined) { ctx.systemPrompt = config.systemPrompt }
+  if (config.config !== undefined) { ctx.config = config.config }
   return ctx
 }
