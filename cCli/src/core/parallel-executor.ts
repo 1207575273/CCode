@@ -38,7 +38,7 @@ export interface ClassifiedToolCalls {
 // 常量
 // ═══════════════════════════════════════════════
 
-const DEFAULT_MAX_PARALLEL = 5
+const DEFAULT_MAX_PARALLEL = 10
 const RESULT_SUMMARY_MAX_LEN = 200
 const RESULT_FULL_MAX_LEN = 100_000
 
