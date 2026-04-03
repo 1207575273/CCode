@@ -190,6 +190,8 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
           const existing = next.get(event.agentId)
           next.set(event.agentId, {
             agentId: event.agentId,
+            name: event.name,
+            agentType: event.agentType,
             description: event.description,
             status: 'running',
             turn: event.turn,

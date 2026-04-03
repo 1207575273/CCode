@@ -1,4 +1,4 @@
-// src/tools/subagent-store.ts
+// src/tools/agent/store.ts
 
 /**
  * SubAgent 内存状态管理 — 缓存执行中/已完成的子 Agent 事件。
@@ -30,7 +30,13 @@ export interface SubAgentDetailEvent {
 /** 内存中的 SubAgent 完整状态 */
 export interface SubAgentState {
   agentId: string
+  /** 人类可读名称 */
+  name: string
   description: string
+  /** Agent 类型标识 */
+  agentType: string
+  /** 实际使用的模型名 */
+  modelName: string
   status: 'running' | 'done' | 'error'
   /** 缓存的详细事件 */
   events: SubAgentDetailEvent[]
@@ -50,17 +56,60 @@ export interface SubAgentState {
 /** agentId → SubAgentState */
 const store = new Map<string, SubAgentState>()
 
+/** 会话内 name 计数器（用于去重） */
+const nameCounter = new Map<string, number>()
+
 /** 注册新的子 Agent */
-export function registerSubAgent(agentId: string, description: string, maxTurns: number): void {
+export function registerSubAgent(params: {
+  agentId: string
+  name: string
+  description: string
+  agentType: string
+  modelName: string
+  maxTurns: number
+}): void {
+  const { agentId, name, description, agentType, modelName, maxTurns } = params
   store.set(agentId, {
     agentId,
+    name,
     description,
+    agentType,
+    modelName,
     status: 'running',
     events: [],
     turn: 0,
     maxTurns,
     startedAt: Date.now(),
   })
+}
+
+/**
+ * 解析并去重 name。
+ *
+ * 规则：
+ * 1. 传入 name → trim + kebab-case 友好截断
+ * 2. 未传 → 自动生成 `{agentType}-{agentId前6位}`
+ * 3. 会话内同名 → 追加序号 `-2`、`-3`
+ */
+export function resolveAgentName(
+  nameArg: string | undefined,
+  agentType: string,
+  agentId: string,
+): string {
+  let baseName: string
+  if (nameArg?.trim()) {
+    // 用户指定：trim + 截断 40 字符
+    baseName = nameArg.trim().slice(0, 40)
+  } else {
+    // 自动生成
+    baseName = `${agentType}-${agentId.slice(0, 6)}`
+  }
+
+  // 会话内去重
+  const count = (nameCounter.get(baseName) ?? 0) + 1
+  nameCounter.set(baseName, count)
+
+  return count === 1 ? baseName : `${baseName}-${count}`
 }
 
 /** 追加详细事件到缓冲区 */
@@ -106,6 +155,14 @@ export function getSubAgent(agentId: string): SubAgentState | undefined {
   return store.get(agentId)
 }
 
+/** 按 name 查找子 Agent（用于 task_output 按名称查询） */
+export function findSubAgentByName(name: string): SubAgentState | undefined {
+  for (const state of store.values()) {
+    if (state.name === name) return state
+  }
+  return undefined
+}
+
 /** 获取所有子 Agent 状态（按 startedAt 排序） */
 export function listSubAgents(): SubAgentState[] {
   return [...store.values()].sort((a, b) => a.startedAt - b.startedAt)
@@ -119,6 +176,7 @@ export function listRunningSubAgents(): SubAgentState[] {
 /** 清除所有子 Agent 状态（会话结束时调用） */
 export function clearSubAgents(): void {
   store.clear()
+  nameCounter.clear()
 }
 
 /** 将 AgentEvent 转换为 SubAgentDetailEvent 写入 store */

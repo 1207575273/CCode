@@ -11,8 +11,8 @@ export type BridgeEvent =
   | { type: 'client_connect'; clientId: string; clientType: 'cli' | 'web' }
   | { type: 'client_disconnect'; clientId: string }
   | { type: 'todo_update'; todos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' }> }
-  | { type: 'subagent_progress'; agentId: string; description: string; turn: number; maxTurns: number; currentTool?: string }
-  | { type: 'subagent_done'; agentId: string; description: string; success: boolean; output: string }
+  | { type: 'subagent_progress'; agentId: string; name: string; agentType: string; description: string; turn: number; maxTurns: number; currentTool?: string }
+  | { type: 'subagent_done'; agentId: string; name: string; description: string; success: boolean; output: string }
   | { type: 'subagent_event'; agentId: string; detail: SubAgentDetail }
   | { type: 'context_update'; usedPercentage: number; lastInputTokens: number; effectiveWindow: number; level: string }
   | { type: 'compact_status'; status: 'start' | 'done' | 'error'; strategy?: string; message?: string }

@@ -13,7 +13,7 @@
  */
 
 import { getProcess, getOutput } from './process-tracker.js'
-import { getSubAgent } from '../ext/subagent-store.js'
+import { getSubAgent, findSubAgentByName } from '../agent/store.js'
 import type { Tool, ToolContext, ToolResult } from './types.js'
 
 /** 默认阻塞超时 10 秒 */
@@ -64,14 +64,15 @@ export class TaskOutputTool implements Tool {
     return { success: false, output: '', error: '需要提供 pid（进程）或 agent_id（子 Agent）' }
   }
 
-  /** 读取子 Agent 状态 */
+  /** 读取子 Agent 状态（支持 agentId 精确匹配或 name 查找） */
   async #readSubAgent(agentId: string, args: Record<string, unknown>): Promise<ToolResult> {
-    const state = getSubAgent(agentId)
+    // 先按 agentId 精确查找，找不到再按 name 查找
+    const state = getSubAgent(agentId) ?? findSubAgentByName(agentId)
     if (!state) {
       return {
         success: false,
         output: '',
-        error: `agentId "${agentId}" 不在追踪列表中。子 Agent 可能已完成并被清理。`,
+        error: `"${agentId}" 不在追踪列表中（按 agentId 和 name 均未匹配）。子 Agent 可能已完成并被清理。`,
       }
     }
 

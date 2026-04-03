@@ -14,7 +14,7 @@ import {
   appendSubAgentEvent,
   markSubAgentDone,
   clearSubAgents,
-} from '../../src/tools/ext/subagent-store.js'
+} from '../../src/tools/agent/store.js'
 import type { ToolContext } from '../../src/tools/core/types.js'
 
 const ctx: ToolContext = { cwd: '/tmp' }
@@ -134,7 +134,7 @@ describe('TaskOutputTool — SubAgent 模式', () => {
   })
 
   it('应通过 agent_id 读取子 Agent 状态', async () => {
-    registerSubAgent('test-agent', '测试任务', 10)
+    registerSubAgent({ agentId: 'test-agent', name: 'test', description: '测试任务', agentType: 'general', modelName: 'test', maxTurns: 10 })
     appendSubAgentEvent('test-agent', { type: 'tool_done', timestamp: 1, toolName: 'bash', success: true, durationMs: 50 })
     markSubAgentDone('test-agent', '完成了', 'done')
 

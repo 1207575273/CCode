@@ -10,6 +10,10 @@ import { useState } from 'react'
 
 export interface SubAgentInfo {
   agentId: string
+  /** 人类可读名称 */
+  name?: string
+  /** Agent 类型（general / explore / plan / 自定义） */
+  agentType?: string
   description: string
   status: 'running' | 'done' | 'error'
   turn: number
@@ -56,8 +60,13 @@ export function SubAgentCard({ agent }: SubAgentCardProps) {
       >
         <div className="flex items-center gap-2">
           <span className={`${statusColor} font-mono`}>{statusIcon}</span>
+          {agent.agentType && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-400 font-mono">
+              {agent.agentType}
+            </span>
+          )}
           <span className="text-sm font-medium text-gray-200">
-            Agent: {agent.description}
+            {agent.name ?? agent.description}
           </span>
           {agent.status === 'running' && (
             <span className="text-xs text-gray-500">

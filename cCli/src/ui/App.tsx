@@ -46,7 +46,7 @@ import { AtSuggestion, createSearchItem, createBrowseItem } from './AtSuggestion
 import type { AtSuggestionItem } from './AtSuggestion.js'
 import { TodoPanel, hasPendingTodos } from './TodoPanel.js'
 import { SubAgentPanel } from './SubAgentPanel.js'
-import { listSubAgents } from '@tools/ext/subagent-store.js'
+import { listSubAgents } from '@tools/agent/store.js'
 
 /**
  * App — cCli 根组件

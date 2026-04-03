@@ -80,8 +80,8 @@ export type AgentEvent =
   | { type: 'post_tool_feedback'; toolName: string; toolCallId: string; feedback: string }
   | { type: 'permission_grant';   toolName: string; always: boolean }
   // 子 Agent 事件 — dispatch_agent 的 stream() 通过 yield* 透传到主 AgentLoop
-  | { type: 'subagent_progress';  agentId: string; description: string; turn: number; maxTurns: number; currentTool?: string }
-  | { type: 'subagent_done';      agentId: string; description: string; success: boolean; output: string }
+  | { type: 'subagent_progress';  agentId: string; name: string; agentType: string; description: string; turn: number; maxTurns: number; currentTool?: string }
+  | { type: 'subagent_done';      agentId: string; name: string; description: string; success: boolean; output: string }
   // 任务规划事件 — todo_write 工具执行后由 useChat 广播
   | { type: 'todo_update'; todos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed'; activeForm: string }> }
 

@@ -156,6 +156,8 @@ export function useChat(): UseChatReturn {
           const updated: SubAgentEvent = {
             id: event.agentId,
             agentId: event.agentId,
+            name: event.name,
+            agentType: event.agentType,
             description: event.description,
             status: 'running',
             turn: event.turn,
@@ -387,6 +389,8 @@ export function useChat(): UseChatReturn {
               const updated: SubAgentEvent = {
                 id: event.agentId,
                 agentId: event.agentId,
+                name: event.name,
+                agentType: event.agentType,
                 description: event.description,
                 status: 'running',
                 turn: event.turn,

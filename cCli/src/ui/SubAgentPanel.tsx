@@ -13,8 +13,8 @@
 import React, { useState, useCallback } from 'react'
 import { Box, Text, useInput } from 'ink'
 import Spinner from 'ink-spinner'
-import { listSubAgents, getSubAgent } from '@tools/ext/subagent-store.js'
-import type { SubAgentState, SubAgentDetailEvent } from '@tools/ext/subagent-store.js'
+import { listSubAgents, getSubAgent } from '@tools/agent/store.js'
+import type { SubAgentState, SubAgentDetailEvent } from '@tools/agent/store.js'
 import { formatDuration } from './format-utils.js'
 
 interface SubAgentPanelProps {
@@ -56,8 +56,9 @@ function DetailView({ state, onBack }: { state: SubAgentState; onBack: () => voi
       {/* 标题栏 */}
       <Box justifyContent="space-between">
         <Text>
-          <Text color="cyan" bold>Agent: </Text>
-          <Text>{truncate(state.description, 40)}</Text>
+          <Text color="cyan" bold>{state.name}</Text>
+          <Text dimColor> [{state.agentType}]</Text>
+          <Text> {truncate(state.description, 30)}</Text>
           <Text dimColor> {elapsed}</Text>
         </Text>
         <Text dimColor>ESC 返回</Text>
@@ -190,10 +191,11 @@ function ListView({ agents, selectedIndex, onSelect, onClose }: {
             <Text {...(isSelected ? { color: 'cyan' as const } : {})}>
               {isSelected ? '▸ ' : '  '}
             </Text>
+            <Text dimColor>[{agent.agentType}] </Text>
             {agent.status === 'running' ? (
               <>
                 <Box marginRight={1}><Spinner type="dots" /></Box>
-                <Text>{truncate(agent.description, 30)}</Text>
+                <Text bold>{agent.name}</Text>
                 <Text dimColor>  turn {agent.turn}/{agent.maxTurns}</Text>
                 {agent.currentTool && <Text dimColor>  ▸ {agent.currentTool}</Text>}
               </>
@@ -202,7 +204,7 @@ function ListView({ agents, selectedIndex, onSelect, onClose }: {
                 <Text color={agent.status === 'done' ? 'green' : 'red'}>
                   {agent.status === 'done' ? '✓' : '✗'}{' '}
                 </Text>
-                <Text>{truncate(agent.description, 30)}</Text>
+                <Text bold>{agent.name}</Text>
                 <Text dimColor>  {elapsed}</Text>
               </>
             )}

@@ -42,6 +42,8 @@ export interface ToolEvent {
 export interface SubAgentEvent {
   id: string
   agentId: string
+  name: string
+  agentType: string
   description: string
   status: 'running' | 'done'
   turn: number
@@ -230,7 +232,7 @@ export function SubAgentStatusLine({ event }: { event: SubAgentEvent }) {
       <Box paddingLeft={1}>
         <Box marginRight={1}><Spinner type="dots" /></Box>
         <Text dimColor>
-          Agent[{event.description}]  turn {event.turn}/{event.maxTurns}
+          Agent[{event.name}]  turn {event.turn}/{event.maxTurns}
           {event.currentTool ? `  ▸ ${event.currentTool}` : ''}
         </Text>
       </Box>
@@ -243,7 +245,7 @@ export function SubAgentStatusLine({ event }: { event: SubAgentEvent }) {
     <Box paddingLeft={1}>
       <Text color="green">✓ </Text>
       <Text color="green" bold>Agent</Text>
-      <Text color="green">[{event.description}]</Text>
+      <Text color="green">[{event.name}]</Text>
       <Text dimColor>  completed</Text>
       {duration && <Text dimColor>  {duration}</Text>}
     </Box>

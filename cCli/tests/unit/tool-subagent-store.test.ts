@@ -12,7 +12,7 @@ import {
   listRunningSubAgents,
   clearSubAgents,
   consumeAgentEvent,
-} from '../../src/tools/ext/subagent-store.js'
+} from '../../src/tools/agent/store.js'
 import type { AgentEvent } from '../../src/core/agent-loop.js'
 
 describe('subagent-store', () => {
@@ -21,7 +21,7 @@ describe('subagent-store', () => {
   })
 
   it('应注册并获取子 Agent', () => {
-    registerSubAgent('a1', '测试任务', 15)
+    registerSubAgent({ agentId: 'a1', name: 'test-a1', description: '测试任务', agentType: 'general', modelName: 'test', maxTurns: 15 })
     const state = getSubAgent('a1')
     expect(state).toBeDefined()
     expect(state!.agentId).toBe('a1')
@@ -33,7 +33,7 @@ describe('subagent-store', () => {
   })
 
   it('应追加详细事件', () => {
-    registerSubAgent('a1', '任务', 10)
+    registerSubAgent({ agentId: 'a1', name: 'task-a1', description: '任务', agentType: 'general', modelName: 'test', maxTurns: 10 })
     appendSubAgentEvent('a1', { type: 'tool_start', timestamp: 1, toolName: 'bash' })
     appendSubAgentEvent('a1', { type: 'tool_done', timestamp: 2, toolName: 'bash', success: true, durationMs: 100 })
 
@@ -44,7 +44,7 @@ describe('subagent-store', () => {
   })
 
   it('应更新进度', () => {
-    registerSubAgent('a1', '任务', 10)
+    registerSubAgent({ agentId: 'a1', name: 'task-a1', description: '任务', agentType: 'general', modelName: 'test', maxTurns: 10 })
     updateSubAgentProgress('a1', 3, 'grep')
 
     const state = getSubAgent('a1')!
@@ -53,7 +53,7 @@ describe('subagent-store', () => {
   })
 
   it('应标记完成', () => {
-    registerSubAgent('a1', '任务', 10)
+    registerSubAgent({ agentId: 'a1', name: 'task-a1', description: '任务', agentType: 'general', modelName: 'test', maxTurns: 10 })
     markSubAgentDone('a1', '完成内容', 'done')
 
     const state = getSubAgent('a1')!
@@ -64,7 +64,7 @@ describe('subagent-store', () => {
   })
 
   it('应设置 virtualSessionId', () => {
-    registerSubAgent('a1', '任务', 10)
+    registerSubAgent({ agentId: 'a1', name: 'task-a1', description: '任务', agentType: 'general', modelName: 'test', maxTurns: 10 })
     setSubAgentSessionId('a1', 'sess-123')
 
     const state = getSubAgent('a1')!
@@ -72,16 +72,16 @@ describe('subagent-store', () => {
   })
 
   it('listSubAgents 应按 startedAt 排序', () => {
-    registerSubAgent('a2', '后注册', 10)
-    registerSubAgent('a1', '先注册', 10)
+    registerSubAgent({ agentId: 'a2', name: 'task-a2', description: '后注册', agentType: 'general', modelName: 'test', maxTurns: 10 })
+    registerSubAgent({ agentId: 'a1', name: 'task-a1b', description: '先注册', agentType: 'general', modelName: 'test', maxTurns: 10 })
     // a2 先注册所以 startedAt 更早（同毫秒内可能相同，但顺序保持）
     const list = listSubAgents()
     expect(list).toHaveLength(2)
   })
 
   it('listRunningSubAgents 应过滤已完成', () => {
-    registerSubAgent('a1', '运行中', 10)
-    registerSubAgent('a2', '已完成', 10)
+    registerSubAgent({ agentId: 'a1', name: 'running-a1', description: '运行中', agentType: 'general', modelName: 'test', maxTurns: 10 })
+    registerSubAgent({ agentId: 'a2', name: 'done-a2', description: '已完成', agentType: 'general', modelName: 'test', maxTurns: 10 })
     markSubAgentDone('a2', '', 'done')
 
     const running = listRunningSubAgents()
@@ -90,14 +90,14 @@ describe('subagent-store', () => {
   })
 
   it('clearSubAgents 应清空所有', () => {
-    registerSubAgent('a1', '任务', 10)
-    registerSubAgent('a2', '任务', 10)
+    registerSubAgent({ agentId: 'a1', name: 'task-a1', description: '任务', agentType: 'general', modelName: 'test', maxTurns: 10 })
+    registerSubAgent({ agentId: 'a2', name: 'task-a2', description: '任务', agentType: 'general', modelName: 'test', maxTurns: 10 })
     clearSubAgents()
     expect(listSubAgents()).toHaveLength(0)
   })
 
   it('consumeAgentEvent 应正确转换事件', () => {
-    registerSubAgent('a1', '任务', 10)
+    registerSubAgent({ agentId: 'a1', name: 'task-a1', description: '任务', agentType: 'general', modelName: 'test', maxTurns: 10 })
 
     consumeAgentEvent('a1', { type: 'llm_start', provider: 'test', model: 'test', messageCount: 1 } as AgentEvent)
     expect(getSubAgent('a1')!.turn).toBe(1)

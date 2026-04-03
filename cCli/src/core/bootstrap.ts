@@ -20,7 +20,8 @@ import { BashTool } from '@tools/core/bash.js'
 import { KillShellTool } from '@tools/core/kill-shell.js'
 import { TaskOutputTool } from '@tools/core/task-output.js'
 import { TodoWriteTool } from '@tools/ext/todo-write.js'
-import { DispatchAgentTool } from '@tools/ext/dispatch-agent.js'
+import { DispatchAgentTool } from '@tools/agent/dispatch-agent.js'
+import { registerBuiltInAgents } from '@tools/agent/built-in.js'
 import { AskUserQuestionTool } from '@tools/ext/ask-user-question.js'
 import { VerifyCodeTool } from '@tools/ext/verify-code.js'
 import { loadMcpConfigWithSources } from '@config/mcp-config.js'
@@ -75,6 +76,9 @@ export function getMemoryManager(): MemoryManager | null {
 
 /** 构建包含全部内置工具的 ToolRegistry（含 skill 工具 + memory 工具） */
 export function buildRegistry(): ToolRegistry {
+  // 确保内置 Agent 定义已注册（幂等，DispatchAgentTool 依赖 registry 生成参数 enum）
+  registerBuiltInAgents()
+
   const reg = new ToolRegistry()
   reg.register(new ReadFileTool())
   reg.register(new WriteFileTool())

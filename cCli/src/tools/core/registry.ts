@@ -23,7 +23,7 @@ export class ToolRegistry {
   }
 
   /**
-   * 克隆当前 registry，排除指定工具。
+   * 克隆当前 registry，排除指定工具（黑名单）。
    * 用于构建子 Agent 的受限工具集（如排除 dispatch_agent 防递归）。
    */
   cloneWithout(...names: string[]): ToolRegistry {
@@ -31,6 +31,21 @@ export class ToolRegistry {
     const cloned = new ToolRegistry()
     for (const tool of this.#tools.values()) {
       if (!excludeSet.has(tool.name)) {
+        cloned.register(tool)
+      }
+    }
+    return cloned
+  }
+
+  /**
+   * 克隆当前 registry，只保留指定工具（白名单）。
+   * 用于构建子 Agent 白名单工具集（如 explore 只保留只读工具）。
+   */
+  cloneWith(...names: string[]): ToolRegistry {
+    const includeSet = new Set(names)
+    const cloned = new ToolRegistry()
+    for (const tool of this.#tools.values()) {
+      if (includeSet.has(tool.name)) {
         cloned.register(tool)
       }
     }

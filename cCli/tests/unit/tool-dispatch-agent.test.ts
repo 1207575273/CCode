@@ -1,10 +1,14 @@
-import { describe, it, expect, vi } from 'vitest'
-import { DispatchAgentTool } from '@tools/ext/dispatch-agent.js'
+import { describe, it, expect, vi, beforeAll } from 'vitest'
+import { DispatchAgentTool } from '@tools/agent/dispatch-agent.js'
+import { registerBuiltInAgents } from '@tools/agent/built-in.js'
 import type { ToolContext, ToolResult } from '@tools/core/types.js'
 import type { AgentEvent } from '@core/agent-loop.js'
 import { ToolRegistry } from '@tools/core/registry.js'
 import type { LLMProvider } from '@providers/provider.js'
 import type { Tool } from '@tools/core/types.js'
+
+// 注册内置 Agent 定义（dispatch-agent 依赖 registry 获取类型配置）
+registerBuiltInAgents()
 
 // ═══════════════════════════════════════════════
 // Mock 工具
@@ -148,11 +152,13 @@ describe('DispatchAgentTool', () => {
       tool.stream({ description: '测试任务', prompt: '请完成测试' }, ctx),
     )
 
-    // 成功返回（output 包含信任标记包装）
+    // 成功返回（结构化 JSON 输出）
     expect(result.success).toBe(true)
-    expect(result.output).toContain('task completed successfully')
-    expect(result.output).toContain('[Sub-agent completed:')
-    expect(result.output).toContain('Do NOT repeat')
+    const output = JSON.parse(result.output)
+    expect(output.status).toBe('completed')
+    expect(output.result).toContain('task completed successfully')
+    expect(output.agentType).toBe('general')
+    expect(output.name).toBeDefined()
 
     // 应有 subagent_progress 事件（至少一个 llm_start → turn 递增）
     const progressEvents = events.filter(e => e.type === 'subagent_progress')
