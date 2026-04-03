@@ -221,7 +221,8 @@ export function useChat(): UseChatReturn {
 
     const config = configManager.load()
     // 使用 state 中的 provider/model（可能已通过 /model 切换，与 config 文件不同）
-    const provider = getOrCreateProvider(currentProvider, config)
+    const globalProvider = getOrCreateProvider(currentProvider, config)
+    const provider = globalProvider.createSession?.() ?? globalProvider
     const registry = getRegistry()
 
     // 首次 submit 时基于实际注册工具构建权限管理器
@@ -470,6 +471,7 @@ export function useChat(): UseChatReturn {
           setError(err instanceof Error ? err.message : String(err))
         }
       } finally {
+        provider.dispose?.()
         setStreamingMessage(null)
         setIsStreaming(false)
         abortRef.current = null

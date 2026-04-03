@@ -199,4 +199,12 @@ export class AnthropicProvider implements LLMProvider {
     ).join(' ')
     return Math.ceil(text.length / 4)
   }
+
+  createSession(): LLMProvider {
+    return this  // Anthropic SDK 无状态，安全共享
+  }
+
+  dispose(): void {
+    // Anthropic SDK 无需清理
+  }
 }

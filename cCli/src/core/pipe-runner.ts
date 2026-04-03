@@ -49,7 +49,8 @@ export async function runPipe(options: PipeOptions): Promise<void> {
   const providerName = options.provider ?? config.defaultProvider ?? ''
   const modelName = options.model ?? config.defaultModel ?? ''
 
-  const provider = getOrCreateProvider(providerName, config)
+  const globalProvider = getOrCreateProvider(providerName, config)
+  const provider = globalProvider.createSession?.() ?? globalProvider
   const registry = getRegistry()
 
   // 构建用户消息：stdin 内容 + prompt
@@ -148,6 +149,7 @@ export async function runPipe(options: PipeOptions): Promise<void> {
       }
     }
   } finally {
+    provider.dispose?.()
     process.off('SIGINT', onSigint)
   }
 

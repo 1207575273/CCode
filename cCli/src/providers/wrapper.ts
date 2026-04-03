@@ -60,4 +60,15 @@ export class ProviderWrapper implements LLMProvider {
   isModelSupported(model: string): boolean {
     return this.#inner.isModelSupported(model)
   }
+
+  createSession(): LLMProvider {
+    const sessionInner = this.#inner.createSession?.() ?? this.#inner
+    // 如果内层返回了 this（无状态），wrapper 也返回 this 避免多层包装
+    if (sessionInner === this.#inner) return this
+    return new ProviderWrapper(sessionInner)
+  }
+
+  dispose(): void {
+    this.#inner.dispose?.()
+  }
 }

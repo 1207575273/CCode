@@ -173,8 +173,11 @@ export class DispatchAgentTool implements StreamableTool {
     // 构建受限工具集
     const subRegistry = buildSubRegistry(ctx.registry, definition.toolPolicy)
 
+    // 为子 Agent 创建独立的会话级 Provider（隔离 ChatOpenAI 等有状态资源）
+    const sessionProvider = subProvider.createSession?.() ?? subProvider
+
     // 创建子 AgentLoop
-    const subLoop = new AgentLoop(subProvider, subRegistry, {
+    const subLoop = new AgentLoop(sessionProvider, subRegistry, {
       model: modelName,
       provider: providerName,
       signal: ctx.signal,
@@ -188,7 +191,7 @@ export class DispatchAgentTool implements StreamableTool {
 
     // ── 后台模式 ──
     if (runInBackground) {
-      runSubAgentInBackground(subLoop, prompt, agentId, agentName, agentType, description, subLogger, modelName, maxTurns)
+      runSubAgentInBackground(subLoop, prompt, agentId, agentName, agentType, description, subLogger, modelName, maxTurns, sessionProvider)
 
       yield {
         type: 'subagent_progress',
@@ -312,6 +315,8 @@ export class DispatchAgentTool implements StreamableTool {
         output: JSON.stringify(output),
         error: `子 Agent 执行异常: ${errorMsg}`,
       }
+    } finally {
+      sessionProvider.dispose?.()
     }
   }
 }
@@ -345,6 +350,7 @@ function runSubAgentInBackground(
   subLogger: SessionLogger,
   modelName: string,
   maxTurns: number,
+  sessionProvider?: import('@providers/provider.js').LLMProvider,
 ): void {
   let finalText = ''
   let currentTurn = 0
@@ -432,6 +438,8 @@ function runSubAgentInBackground(
         success: false,
         output: errorMsg,
       })
+    } finally {
+      sessionProvider?.dispose?.()
     }
   })()
 }

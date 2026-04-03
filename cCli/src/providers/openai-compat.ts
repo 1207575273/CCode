@@ -11,10 +11,42 @@ export class OpenAICompatProvider implements LLMProvider {
   readonly protocol: ProviderProtocol = 'openai-compat'
 
   readonly #config: ProviderConfig
+  /** 会话级缓存的 ChatOpenAI 实例 */
+  #chatModel: ChatOpenAI | null = null
+  #chatModelName: string | null = null
+  #disposed = false
 
   constructor(providerName: string, config: ProviderConfig) {
     this.name = providerName
     this.#config = config
+  }
+
+  /** 为每个 AgentLoop 创建独立的会话级 Provider（共享 config，独立缓存） */
+  createSession(): OpenAICompatProvider {
+    return new OpenAICompatProvider(this.name, this.#config)
+  }
+
+  /** 释放 ChatOpenAI 实例及其内部连接资源 */
+  dispose(): void {
+    if (this.#disposed) return
+    this.#disposed = true
+    this.#chatModel = null
+    this.#chatModelName = null
+  }
+
+  /** 获取或创建当前 session 的 ChatOpenAI 实例 */
+  #getOrCreateModel(model: string): ChatOpenAI {
+    if (this.#disposed) throw new Error('SessionProvider already disposed')
+    if (this.#chatModel && this.#chatModelName === model) return this.#chatModel
+    this.#chatModel = new ChatOpenAI({
+      apiKey: this.#config.apiKey,
+      model,
+      ...(this.#config.baseURL !== undefined && {
+        configuration: { baseURL: this.#config.baseURL, apiKey: this.#config.apiKey },
+      }),
+    })
+    this.#chatModelName = model
+    return this.#chatModel
   }
 
   isModelSupported(model: string): boolean {
@@ -22,13 +54,7 @@ export class OpenAICompatProvider implements LLMProvider {
   }
 
   async *chat(request: ChatRequest): AsyncIterable<StreamChunk> {
-    const baseModel = new ChatOpenAI({
-      apiKey: this.#config.apiKey,
-      model: request.model,
-      ...(request.maxTokens !== undefined && { maxTokens: request.maxTokens }),
-      ...(request.temperature !== undefined && { temperature: request.temperature }),
-      ...(this.#config.baseURL !== undefined && { configuration: { baseURL: this.#config.baseURL, apiKey: this.#config.apiKey } }),
-    })
+    const baseModel = this.#getOrCreateModel(request.model)
 
     // 有工具时绑定，转换为 OpenAI function calling 标准格式
     const model = (request.tools && request.tools.length > 0)
@@ -114,10 +140,7 @@ export class OpenAICompatProvider implements LLMProvider {
   }
 
   async countTokens(messages: Message[]): Promise<number> {
-    const model = new ChatOpenAI({
-      apiKey: this.#config.apiKey,
-      model: this.#config.models[0] ?? 'gpt-4o-mini',
-    })
+    const model = this.#getOrCreateModel(this.#config.models[0] ?? 'gpt-4o-mini')
     return model.getNumTokens(messages.map(m =>
       typeof m.content === 'string' ? m.content : ''
     ).join(' '))
