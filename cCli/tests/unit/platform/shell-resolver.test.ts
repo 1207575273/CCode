@@ -13,4 +13,10 @@ describe('resolveShell', () => {
     const shell = resolveShell()
     expect(['bash', 'gitbash', 'powershell', 'sh']).toContain(shell.type)
   })
+
+  it('多次调用返回同一引用（缓存生效）', () => {
+    const a = resolveShell()
+    const b = resolveShell()
+    expect(a).toBe(b)
+  })
 })

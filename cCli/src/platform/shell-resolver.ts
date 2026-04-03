@@ -30,7 +30,10 @@ function findGitBash(): string | null {
   return null
 }
 
-export function resolveShell(preferred?: ShellType): ResolvedShell {
+/** 模块级缓存，进程生命周期内只解析一次 */
+let _cached: ResolvedShell | undefined
+
+function doResolveShell(preferred?: ShellType): ResolvedShell {
   const { isWindows } = detectPlatform()
 
   if (isWindows) {
@@ -50,4 +53,9 @@ export function resolveShell(preferred?: ShellType): ResolvedShell {
   // Linux / macOS
   const bash = existsSync('/bin/bash') ? '/bin/bash' : '/bin/sh'
   return { type: bash.endsWith('bash') ? 'bash' : 'sh', path: bash, args: ['-c'] }
+}
+
+export function resolveShell(preferred?: ShellType): ResolvedShell {
+  if (!_cached) _cached = doResolveShell(preferred)
+  return _cached
 }
