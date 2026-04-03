@@ -16,7 +16,7 @@ import type { LLMProvider } from '@providers/provider.js'
 import type { ToolRegistry } from '@tools/core/registry.js'
 import type { ToolResult, ToolResultMeta } from '@tools/core/types.js'
 import { isStreamableTool } from '@tools/core/types.js'
-import type { Message, ToolCallContent, StreamChunk } from './types.js'
+import type { Message, MessageContent, ToolCallContent, StreamChunk } from './types.js'
 import { classifyToolCalls, executeSafeToolsInParallel } from './parallel-executor.js'
 import type { HookManager } from '@hooks/hook-manager.js'
 import { contextTracker } from './context-tracker.js'
@@ -164,6 +164,19 @@ export class AgentLoop {
       const llmResult = yield* this.#callLLM(history)
       if (llmResult.aborted) return
 
+      // 追加 assistant 消息到 history（text + tool_calls）
+      // 确保 LLM 下一轮能看到自己上一轮的回复，也确保 user/assistant 交替
+      const assistantContent: MessageContent[] = []
+      if (llmResult.text) {
+        assistantContent.push({ type: 'text', text: llmResult.text })
+      }
+      for (const tc of llmResult.toolCalls) {
+        assistantContent.push(tc)
+      }
+      if (assistantContent.length > 0) {
+        history.push({ role: 'assistant', content: assistantContent })
+      }
+
       if (llmResult.toolCalls.length === 0) {
         yield { type: 'done', reason: 'complete' }
         return
@@ -188,7 +201,7 @@ export class AgentLoop {
    */
   async *#callLLM(
     history: Message[],
-  ): AsyncGenerator<AgentEvent, { toolCalls: ToolCallContent[]; aborted: boolean }> {
+  ): AsyncGenerator<AgentEvent, { toolCalls: ToolCallContent[]; text: string; aborted: boolean }> {
     const chatRequest = {
       model: this.#config.model,
       messages: history,
@@ -206,6 +219,7 @@ export class AgentLoop {
     }
 
     const pendingToolCalls: ToolCallContent[] = []
+    let accumulatedText = ''
     let inputTokens = 0
     let outputTokens = 0
     let cacheReadTokens = 0
@@ -217,6 +231,7 @@ export class AgentLoop {
       for await (const chunk of this.#provider.chat(chatRequest)) {
         const mapped = this.#mapChunk(chunk, pendingToolCalls)
         if (mapped) {
+          if (mapped.type === 'text' && 'text' in mapped) accumulatedText += mapped.text
           if (mapped.type === 'error') {
             const errorMsg = chunk.error ?? 'unknown error'
             // Provider 将 abort 错误包装为 error chunk（不抛出）→ 重新抛出使 catch 路径生效
@@ -262,7 +277,7 @@ export class AgentLoop {
       if (inputTokens > 0) {
         contextTracker.update(inputTokens)
       }
-      return { toolCalls: pendingToolCalls, aborted: false }
+      return { toolCalls: pendingToolCalls, text: accumulatedText, aborted: false }
     } catch (err) {
       if (isAbortError(err)) {
         yield { type: 'llm_done', inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, stopReason: 'abort' }
