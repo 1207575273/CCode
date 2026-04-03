@@ -1,5 +1,6 @@
 // src/tools/bash.ts
-import { execa, ExecaError } from 'execa'
+import { spawn } from 'node:child_process'
+import { execa } from 'execa'
 import { resolveShell } from '@platform/shell-resolver.js'
 import { detectPlatform } from '@platform/detector.js'
 import { getSnapshotPath } from '@platform/shell-snapshot.js'
@@ -65,31 +66,47 @@ export class BashTool implements Tool {
       ? ['-c', finalCommand]           // 有快照：不传 -l
       : [...shell.args, finalCommand]  // 无快照：保持原行为
 
-    try {
-      const { stdout, stderr } = await execa(shell.path, shellArgs, {
+    // 用 child_process.spawn 替代 execa（减少模块开销），手动实现 timeout
+    return new Promise<ToolResult>((resolve) => {
+      let timedOut = false
+      let stdout = ''
+      let stderr = ''
+
+      const child = spawn(shell.path, shellArgs, {
         cwd,
-        timeout,
-        reject: true,
+        stdio: 'pipe',
         windowsHide: true,
       })
-      const output = [stdout, stderr].filter(Boolean).join('\n')
-      return { success: true, output: output || '(no output)' }
-    } catch (err: unknown) {
-      if (err instanceof ExecaError) {
-        if (err.timedOut) {
-          const output = [err.stdout, err.stderr].filter(Boolean).join('\n')
-          return {
-            success: false,
-            output,
-            error: `Command timed out after ${timeout} milliseconds`,
-          }
+
+      // 手动 timeout：到时间 kill 进程
+      const timer = setTimeout(() => {
+        timedOut = true
+        child.kill('SIGTERM')
+        // 给 SIGTERM 500ms 宽限期，之后强制 SIGKILL
+        setTimeout(() => { try { child.kill('SIGKILL') } catch { /* 进程可能已退出 */ } }, 500)
+      }, timeout)
+
+      child.stdout?.on('data', (d: Buffer) => { stdout += d.toString() })
+      child.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+
+      child.on('close', (code) => {
+        clearTimeout(timer)
+        const output = [stdout, stderr].filter(Boolean).join('\n')
+
+        if (timedOut) {
+          resolve({ success: false, output, error: `Command timed out after ${timeout} milliseconds` })
+        } else if (code === 0) {
+          resolve({ success: true, output: output || '(no output)' })
+        } else {
+          resolve({ success: false, output: output || '', error: `Exit code ${code}` })
         }
-        const output = [err.stdout, err.stderr].filter(Boolean).join('\n')
-        return { success: false, output: output || '', error: err.message }
-      }
-      const message = err instanceof Error ? err.message : String(err)
-      return { success: false, output: '', error: message }
-    }
+      })
+
+      child.on('error', (err) => {
+        clearTimeout(timer)
+        resolve({ success: false, output: '', error: err.message })
+      })
+    })
   }
 
   /** 后台模式：启动进程后立即 unref 并返回 PID */
