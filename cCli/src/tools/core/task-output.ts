@@ -98,16 +98,28 @@ export class TaskOutputTool implements Tool {
         ? '子 Agent 已完成'
         : '子 Agent 执行异常'
 
-    const toolSummary = state.events
-      .filter(e => e.type === 'tool_done')
-      .map(e => `${e.success ? '✓' : '✗'} ${e.toolName} ${e.durationMs ?? 0}ms`)
+    const toolEvents = state.events.filter(e => e.type === 'tool_done')
+    const toolSummary = toolEvents
+      .map(e => {
+        const icon = e.success ? '✓' : '✗'
+        const duration = e.durationMs ?? 0
+        const summary = e.resultSummary ? `  ${e.resultSummary.slice(0, 120)}` : ''
+        return `${icon} ${e.toolName} ${duration}ms${summary}`
+      })
       .join('\n')
+
+    const successCount = toolEvents.filter(e => e.success).length
+    const failCount = toolEvents.filter(e => !e.success).length
+    const statsLine = toolEvents.length > 0
+      ? `工具调用: ${successCount} 成功, ${failCount} 失败, 共 ${toolEvents.length} 次`
+      : ''
 
     const output = [
       `[${status}]`,
       `任务: ${state.description}`,
       state.currentTool ? `当前工具: ${state.currentTool}` : '',
-      toolSummary ? `\n工具调用历史:\n${toolSummary}` : '',
+      statsLine,
+      toolSummary ? `\n工具调用详情:\n${toolSummary}` : '',
       state.finalText ? `\n最终输出:\n${state.finalText}` : '',
     ].filter(Boolean).join('\n')
 
