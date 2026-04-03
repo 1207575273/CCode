@@ -4,9 +4,11 @@ import type { ToolDefinition } from '@providers/provider.js'
 
 export class ToolRegistry {
   readonly #tools = new Map<string, Tool>()
+  #cachedDefinitions: ToolDefinition[] | null = null
 
   register(tool: Tool): void {
     this.#tools.set(tool.name, tool)
+    this.#cachedDefinitions = null  // 注册新工具时失效缓存
   }
 
   getAll(): Tool[] {
@@ -57,11 +59,14 @@ export class ToolRegistry {
   }
 
   toToolDefinitions(): ToolDefinition[] {
-    return this.getAll().map(t => ({
-      name: t.name,
-      description: t.description,
-      parameters: t.parameters,
-    }))
+    if (!this.#cachedDefinitions) {
+      this.#cachedDefinitions = this.getAll().map(t => ({
+        name: t.name,
+        description: t.description,
+        parameters: t.parameters,
+      }))
+    }
+    return this.#cachedDefinitions
   }
 
   async execute(name: string, args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
