@@ -20,6 +20,7 @@ import type { Message, ToolCallContent, StreamChunk } from './types.js'
 import { classifyToolCalls, executeSafeToolsInParallel } from './parallel-executor.js'
 import type { HookManager } from '@hooks/hook-manager.js'
 import { contextTracker } from './context-tracker.js'
+import { dbg } from '../debug.js'
 
 // ═══════════════════════════════════════════════
 // 类型定义
@@ -132,6 +133,9 @@ export class AgentLoop {
   readonly #provider: LLMProvider
   readonly #registry: ToolRegistry
   readonly #config: AgentConfig
+  /** 上一次 LLM 调用的参数指纹（用于 Prompt Cache 破裂检测） */
+  #lastCacheFingerprint: string | null = null
+  #llmCallIndex = 0
 
   constructor(
     provider: LLMProvider,
@@ -237,6 +241,21 @@ export class AgentLoop {
           doneStopReason = chunk.stopReason ?? 'end_turn'
         }
       }
+
+      // Prompt Cache 破裂检测：systemPrompt + tools 指纹变化 → 缓存失效
+      this.#llmCallIndex++
+      const fingerprint = simpleHash(
+        (this.#config.systemPrompt ?? '') +
+        JSON.stringify(this.#registry.toToolDefinitions().map(t => t.name)),
+      )
+      if (this.#lastCacheFingerprint !== null && this.#lastCacheFingerprint !== fingerprint) {
+        // 指纹变化 = 缓存前缀不同，Prompt Cache 必然 miss
+        dbg(`[CACHE-BREAK] LLM call #${this.#llmCallIndex}: prompt/tools fingerprint changed (${this.#lastCacheFingerprint} → ${fingerprint})\n`)
+      } else if (this.#llmCallIndex > 1 && cacheReadTokens === 0 && inputTokens > 2000) {
+        // 指纹没变但 cacheRead=0，可能是 TTL 过期或 API 侧未命中
+        dbg(`[CACHE-MISS] LLM call #${this.#llmCallIndex}: cacheReadTokens=0 with ${inputTokens} input tokens\n`)
+      }
+      this.#lastCacheFingerprint = fingerprint
 
       yield { type: 'llm_done', inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, stopReason: doneStopReason }
       // 更新上下文窗口追踪（精确值来自 API 返回的 inputTokens）
@@ -475,4 +494,13 @@ function buildToolContext(provider: LLMProvider, registry: ToolRegistry, config:
   if (config.systemPrompt !== undefined) { ctx.systemPrompt = config.systemPrompt }
   if (config.config !== undefined) { ctx.config = config.config }
   return ctx
+}
+
+/** djb2 字符串哈希 — 用于 Prompt Cache 破裂检测（不需要密码学安全性） */
+function simpleHash(str: string): string {
+  let hash = 5381
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash + str.charCodeAt(i)) | 0
+  }
+  return (hash >>> 0).toString(36)
 }
