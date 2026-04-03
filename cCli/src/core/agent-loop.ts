@@ -111,6 +111,8 @@ export interface AgentConfig {
   hookManager?: HookManager | undefined
   /** 配置快照（透传到 ToolContext，避免子 Agent 重复读磁盘） */
   config?: import('@config/config-manager.js').CCodeConfig | undefined
+  /** 最少执行轮次（仅 isSidechain 模式生效，防止弱模型提前退出） */
+  minTurns?: number | undefined
 }
 
 // ═══════════════════════════════════════════════
@@ -178,6 +180,15 @@ export class AgentLoop {
       }
 
       if (llmResult.toolCalls.length === 0) {
+        // 续跑检测：SubAgent 模式下，轮次不足 minTurns 时注入继续消息
+        const minTurns = this.#config.minTurns ?? 0
+        if (turn < minTurns && this.#config.isSidechain) {
+          history.push({
+            role: 'user',
+            content: 'You have not completed the task yet. Continue executing tools to finish the task. Do NOT just describe what to do — actually call tools.',
+          })
+          continue
+        }
         yield { type: 'done', reason: 'complete' }
         return
       }

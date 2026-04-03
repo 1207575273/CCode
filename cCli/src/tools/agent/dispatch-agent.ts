@@ -193,6 +193,7 @@ export class DispatchAgentTool implements StreamableTool {
       isSidechain: true,
       agentId,
       systemPrompt: subSystemPrompt,
+      ...(definition.minTurns !== undefined ? { minTurns: definition.minTurns } : {}),
     })
 
     subLogger.logUserMessage(prompt)

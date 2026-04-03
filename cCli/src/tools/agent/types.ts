@@ -60,6 +60,9 @@ export interface AgentDefinition {
   /** 上下文继承策略（默认 trimmed，子 Agent 继承主 Agent 裁剪后的对话历史） */
   readonly contextPolicy?: import('./context-utils.js').ContextPolicy
 
+  /** 最少执行轮次（防止弱模型提前退出，仅 SubAgent 模式生效） */
+  readonly minTurns?: number
+
   // ── 预留字段 ──
   // readonly skills?: string[]
   // readonly background?: boolean
