@@ -169,14 +169,20 @@ export class AgentLoop {
       const llmResult = yield* this.#callLLM(history)
       if (llmResult.aborted) return
 
-      // 追加 assistant 消息到 history（text + tool_calls）
-      // 确保 LLM 下一轮能看到自己上一轮的回复，也确保 user/assistant 交替
+      // 追加 assistant 消息到 history（text + tool_calls 摘要）
+      // tool_call 只记录 id/name，不记录完整 args（args 可能包含 write_file 的整个文件内容，
+      // 放入 history 会导致每轮 LLM 调用 token 数爆炸）
       const assistantContent: MessageContent[] = []
       if (llmResult.text) {
         assistantContent.push({ type: 'text', text: llmResult.text })
       }
       for (const tc of llmResult.toolCalls) {
-        assistantContent.push(tc)
+        assistantContent.push({
+          type: 'tool_call',
+          toolCallId: tc.toolCallId,
+          toolName: tc.toolName,
+          args: {},  // 不记录完整 args，避免 history 膨胀
+        })
       }
       if (assistantContent.length > 0) {
         history.push({ role: 'assistant', content: assistantContent })
