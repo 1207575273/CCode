@@ -38,12 +38,12 @@ const DEFAULT_PORT = 9800
  * （同时非正常退出 3 个实例的概率极低）。
  */
 const MAX_PORT_RETRIES = 3
-const VITE_DEV_PORT = 5173
-
 interface BridgeServerOptions {
   port?: number
   /** dev 模式：反向代理 Vite dev server */
   dev?: boolean
+  /** dev 模式下 Vite dev server 的实际端口（由 ccli.ts 动态分配） */
+  vitePort?: number
 }
 
 /** WebSocket 客户端上下文 */
@@ -161,7 +161,7 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
       if (path === '/ws' || path.startsWith('/api/')) return next()
 
       const url = new URL(c.req.url)
-      const viteUrl = `http://localhost:${VITE_DEV_PORT}${url.pathname}${url.search}`
+      const viteUrl = `http://localhost:${options.vitePort}${url.pathname}${url.search}`
       try {
         const isBodyless = c.req.method === 'GET' || c.req.method === 'HEAD'
         const init: RequestInit = {

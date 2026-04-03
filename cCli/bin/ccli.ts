@@ -160,17 +160,57 @@ if (args.prompt != null) {
     if (!portInUse) {
       // 第一个 CLI：启动 Bridge Server + Vite
       const isDevMode = (process.argv[1] ?? '').endsWith('.ts')
-      const bridge = startBridgeServer({ dev: isDevMode })
-      bridgePort = bridge.port
-      isBridgeOwner = true
+      let vitePort: number | undefined
 
       if (isDevMode) {
+        // 动态分配空闲端口给 Vite（避免与用户项目的 5173 冲突）
+        const { createServer: createNetServer2 } = await import('node:net')
+        vitePort = await new Promise<number>((resolve, reject) => {
+          const srv = createNetServer2()
+          srv.listen(0, () => {
+            const addr = srv.address()
+            const port = typeof addr === 'object' && addr ? addr.port : 0
+            srv.close(() => resolve(port))
+          })
+          srv.on('error', reject)
+        })
+
         const { execa } = await import('execa')
         const webDir = new URL('../web', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1')
-        const viteProcess = execa('npx', ['vite'], { cwd: webDir, stdio: 'ignore' })
+        const viteProcess = execa('npx', ['vite', '--port', String(vitePort)], { cwd: webDir, stdio: 'ignore' })
         viteProcess.catch(() => { /* Vite 退出时静默 */ })
         process.on('exit', () => { viteProcess.kill() })
+
+        // 等 Vite 就绪（轮询端口，最多 15 秒）
+        const { createConnection } = await import('node:net')
+        const viteReady = await new Promise<boolean>((resolve) => {
+          let attempts = 0
+          const maxAttempts = 150 // 150 × 100ms = 15s
+          const poll = () => {
+            const sock = createConnection({ port: vitePort! }, () => {
+              sock.destroy()
+              resolve(true)
+            })
+            sock.on('error', () => {
+              sock.destroy()
+              if (++attempts < maxAttempts) setTimeout(poll, 100)
+              else resolve(false)
+            })
+          }
+          poll()
+        })
+        if (!viteReady) {
+          // Vite 超时未就绪，不阻塞 CLI 启动，反代时会返回 502
+          // 但几乎不会发生（Vite 冷启动通常 < 3 秒）
+        }
       }
+
+      const bridge = startBridgeServer({
+        dev: isDevMode,
+        ...(vitePort !== undefined ? { vitePort } : {}),
+      })
+      bridgePort = bridge.port
+      isBridgeOwner = true
     }
 
     // 所有 CLI（包括第一个）都作为 WS 客户端连接 Bridge
