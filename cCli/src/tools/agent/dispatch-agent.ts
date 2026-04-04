@@ -30,6 +30,7 @@ import {
   registerSubAgent, consumeAgentEvent, markSubAgentDone,
   setSubAgentSessionId, resolveAgentName,
 } from './store.js'
+import { getTodos } from '../ext/todo-store.js'
 import { agentDefinitionRegistry } from './definition-registry.js'
 import type { ToolPolicy, AgentCompletedOutput, AgentAsyncLaunchedOutput, AgentErrorOutput } from './types.js'
 import { trimHistoryForSubAgent } from './context-utils.js'
@@ -42,8 +43,8 @@ import { eventBus } from '@core/event-bus.js'
 /** 硬编码排除 — 所有子 Agent 类型必须遵守，不可通过 toolPolicy 覆盖 */
 const ALWAYS_EXCLUDE = ['dispatch_agent', 'ask_user_question']
 
-/** general 类型的默认 maxTurns（未匹配到定义时的兜底） */
-const DEFAULT_MAX_TURNS = 25
+/** SubAgent 默认 maxTurns（未匹配到定义时的兜底） */
+const DEFAULT_MAX_TURNS = 50
 
 // ═══════════════════════════════════════════════
 // DispatchAgentTool
@@ -184,6 +185,9 @@ export class DispatchAgentTool implements StreamableTool {
 
     // 每个 SubAgent 独立 AbortController（避免共享父 signal 导致 MaxListeners 泄漏）
     const subController = new AbortController()
+    // SubAgent 的 LLM 多轮调用会给 signal 反复加 listener（LangChain stream 内部行为），
+    // 默认 MaxListeners=10 不够用（25 轮 maxTurns），提高上限避免 Node.js 警告
+    import('node:events').then(events => events.setMaxListeners(100, subController.signal)).catch(() => {})
     const onParentAbort = () => subController.abort()
     ctx.signal?.addEventListener('abort', onParentAbort, { once: true })
 
@@ -201,11 +205,20 @@ export class DispatchAgentTool implements StreamableTool {
 
     subLogger.logUserMessage(prompt)
 
-    // 构建子 Agent 初始消息：裁剪后的主 Agent 历史 + prompt
+    // 构建子 Agent 初始消息：裁剪后的主 Agent 历史 + todo 上下文 + prompt
     const contextMessages = trimHistoryForSubAgent(ctx.history ?? [], definition.contextPolicy)
+
+    // 注入主 Agent 的 todo 任务规划（如果有），让 SubAgent 了解全局任务分工
+    const todoContext = buildTodoContext()
+
+    // 在 prompt 末尾追加任务边界约束，防止子 Agent 自我扩展范围
+    // 放在末尾是因为 LLM 对尾部指令的遵从度更高（recency bias）
+    const scopeFence = '\n\n---\nIMPORTANT: Stay strictly within the scope described above. Do not expand, refactor, or fix anything beyond this task.'
+    const fencedPrompt = prompt + scopeFence
+
     const initialMessages = [
       ...contextMessages,
-      { role: 'user' as const, content: prompt },
+      { role: 'user' as const, content: todoContext ? `${todoContext}\n\n${fencedPrompt}` : fencedPrompt },
     ]
 
     // ── 后台模式 ──
@@ -535,4 +548,27 @@ function createSubagentLogger(
     // JSONL 创建失败不阻断执行
   }
   return logger
+}
+
+/**
+ * 构建 todo 上下文摘要，注入到 SubAgent 的 prompt 前面。
+ *
+ * 让 SubAgent 了解主 Agent 的全局任务分工，知道自己负责哪一部分。
+ * 返回 null 表示没有 todo 或 todo 为空。
+ */
+function buildTodoContext(): string | null {
+  const todos = getTodos()
+  if (todos.length === 0) return null
+
+  const lines = todos.map(t => {
+    const icon = t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '▶' : '○'
+    return `  ${icon} ${t.content}`
+  })
+
+  return [
+    '[Current task plan from the main agent]:',
+    ...lines,
+    '',
+    'You are responsible for ONE of these tasks. Focus on your assigned task only.',
+  ].join('\n')
 }

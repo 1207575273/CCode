@@ -232,14 +232,10 @@ export function useChat(): UseChatReturn {
     }
 
     const userMsg: ChatMessage = { id: randomUUID(), role: 'user', content: text }
-    // 过滤 system 消息，不发送给 LLM（system 消息仅用于 UI 展示）
-    const llmMessages = [...messages, userMsg].filter(m => m.role !== 'system')
-    // 类型谓词收窄：确保 history 只含 LLM 接受的 user/assistant 角色
-    const history: Message[] = llmMessages
-      .filter((m): m is ChatMessage & { role: 'user' | 'assistant' } =>
-        m.role === 'user' || m.role === 'assistant'
-      )
-      .map(m => ({ role: m.role, content: m.content }))
+
+    // LLM history 由 ContextManager 管理（完整的结构化 Message[]），
+    // 不再从 UI 的 ChatMessage[] 重建——ChatMessage 是渲染模型，有损转换会丢失工具过程。
+    contextManager.pushUser(text)
 
     setMessages(prev => [...prev, userMsg])
     // 只有 CLI 端直接输入时广播（Web 端触发的 submit 已由 EventBus 广播过）
@@ -254,6 +250,9 @@ export function useChat(): UseChatReturn {
     setError(null)
 
     const controller = new AbortController()
+    // 主 Agent 多轮 LLM 调用 + 并行 SubAgent，每次 provider.chat() 都给 signal 加 listener，
+    // 默认 MaxListeners=10 在长会话中不够用，提高上限避免 Node.js 误报内存泄漏警告
+    import('node:events').then(({ setMaxListeners }) => setMaxListeners(200, controller.signal)).catch(() => {})
     abortRef.current = controller
 
     // toolCallId → eventId 映射，保证多次调用同名工具时状态更新精确匹配
@@ -283,12 +282,14 @@ export function useChat(): UseChatReturn {
         const systemPrompt = getSystemPrompt()
 
         // 上下文管理：auto-compact 检查 + tool 结果裁剪
-        const { history: optimizedHistory, compacted } = await contextManager.prepare(
-          history, provider, { model: currentModel, ...(systemPrompt !== undefined ? { systemPrompt } : {}) },
+        // history 来自 ContextManager（完整结构化 Message[]），不从 UI ChatMessage 重建
+        const historyRef = contextManager.getHistoryRef()
+        const { compacted } = await contextManager.prepare(
+          historyRef, provider, { model: currentModel, ...(systemPrompt !== undefined ? { systemPrompt } : {}) },
         )
         if (compacted) {
-          // auto-compact 触发，更新 messages state（UI 同步）
-          const compactedMsgs: ChatMessage[] = optimizedHistory.map(m => ({
+          // auto-compact 触发：ContextManager 内部已通过 prepare 更新，UI 侧同步
+          const compactedMsgs: ChatMessage[] = historyRef.map(m => ({
             id: randomUUID(),
             role: m.role as 'user' | 'assistant',
             content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
@@ -306,7 +307,7 @@ export function useChat(): UseChatReturn {
           ...(sid ? { sessionId: sid } : {}),
         })
 
-        for await (const event of loop.run(optimizedHistory)) {
+        for await (const event of loop.run(historyRef)) {
           // F9: 观测日志记录
           sessionLogger.consume(event)
           // F10: token 计量
@@ -492,6 +493,7 @@ export function useChat(): UseChatReturn {
   /** 清空消息列表（/clear 指令） */
   const clearMessages = useCallback((): void => {
     setMessages([])
+    contextManager.clearHistory()
   }, [])
 
   /** 追加 UI 专用的 system 消息（不发送给 LLM） */
@@ -523,13 +525,19 @@ export function useChat(): UseChatReturn {
       // 绑定 SessionLogger 到恢复的会话
       sessionLogger.bind(sessionId, snapshot.leafEventUuid)
 
-      // 恢复消息列表
+      // 恢复消息列表（UI）
       const restored: ChatMessage[] = snapshot.messages.map(m => ({
         id: m.id,
         role: m.role,
         content: m.content,
       }))
       setMessages(restored)
+
+      // 恢复 LLM history（ContextManager）
+      const structuredHistory: Message[] = snapshot.messages
+        .filter(m => m.role === 'user' || m.role === 'assistant')
+        .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+      contextManager.restoreHistory(structuredHistory)
 
       // 恢复 provider/model
       if (snapshot.provider) setCurrentProvider(snapshot.provider)
@@ -580,6 +588,12 @@ export function useChat(): UseChatReturn {
       }))
       setMessages(restored)
 
+      // 恢复 LLM history（ContextManager）
+      const structuredHistory: Message[] = snapshot.messages
+        .filter(m => m.role === 'user' || m.role === 'assistant')
+        .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+      contextManager.restoreHistory(structuredHistory)
+
       // 将 lastEventUuid 设为分叉点，后续消息将从此处分支
       sessionLogger.bind(sid, messageId)
 
@@ -611,9 +625,8 @@ export function useChat(): UseChatReturn {
     const config = configManager.load()
     const provider = getOrCreateProvider(currentProvider, config)
 
-    // 构建当前 history
-    const llmMsgs = messages.filter(m => m.role === 'user' || m.role === 'assistant')
-    const history: Message[] = llmMsgs.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+    // 从 ContextManager 取完整 history（不从 UI ChatMessage 重建）
+    const history = contextManager.getHistoryRef()
 
     if (history.length === 0) {
       appendSystemMessage('No messages to compact.')
@@ -638,7 +651,8 @@ export function useChat(): UseChatReturn {
       setStreamingMessage(null)
       setIsStreaming(false)
 
-      // 用压缩后的 history 替换 messages
+      // 同步 ContextManager + UI messages
+      contextManager.replaceHistory(result.history)
       const compactedMsgs: ChatMessage[] = result.history.map(m => ({
         id: randomUUID(),
         role: m.role as 'user' | 'assistant',
