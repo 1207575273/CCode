@@ -38,7 +38,8 @@ export type ToolResultMeta =
   | { type: 'edit'; path: string; addedLines: number; removedLines: number; diff: string }
   | { type: 'write'; path: string; totalLines: number; preview: string }
   | { type: 'read'; path: string; totalLines: number }
-  | { type: 'grep'; matchCount: number; fileCount: number }
+  | { type: 'bash'; exitCode: number; command: string; timedOut: boolean }
+  | { type: 'grep'; totalMatches: number; displayedMatches: number; truncated: boolean; fileCount: number }
   | { type: 'glob'; fileCount: number }
   | { type: 'ask_user'; questionCount: number; answered: boolean; pairs?: Array<{ question: string; answer: string }> }
 

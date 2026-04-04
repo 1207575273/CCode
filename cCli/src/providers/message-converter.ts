@@ -1,20 +1,7 @@
 // src/providers/message-converter.ts
 import { HumanMessage, AIMessage, SystemMessage, ToolMessage, type BaseMessage } from '@langchain/core/messages'
-import type { Message, MessageContent, TextContent, ToolCallContent, ToolResultContent } from '@core/types.js'
-
-/** 将 content 统一为 MessageContent 数组 */
-function normalizeContent(content: Message['content']): MessageContent[] {
-  if (typeof content === 'string') return [{ type: 'text', text: content }]
-  if (Array.isArray(content)) return content
-  return [content as MessageContent]
-}
-
-function extractText(blocks: MessageContent[]): string {
-  return blocks
-    .filter((c): c is TextContent => c.type === 'text')
-    .map(c => c.text)
-    .join('')
-}
+import type { Message, ToolCallContent, ToolResultContent } from '@core/types.js'
+import { normalizeContent, extractText, findOrphanToolCalls } from '@core/message-utils.js'
 
 /**
  * 将内部 Message[] 转为 LangChain BaseMessage[]。
@@ -24,6 +11,11 @@ function extractText(blocks: MessageContent[]): string {
  * - user 消息中的 tool_result → ToolMessage（每个 tool_result 独立一条）
  */
 export function toLangChainMessages(messages: Message[]): BaseMessage[] {
+  // Debug 模式下检查消息格式完整性（tool_call/tool_result 成对、无孤儿）
+  if (process.env.CCODE_DEBUG) {
+    assertToolCallResultPairing(messages)
+  }
+
   const result: BaseMessage[] = []
 
   for (const msg of messages) {
@@ -73,4 +65,13 @@ export function toLangChainMessages(messages: Message[]): BaseMessage[] {
   }
 
   return result
+}
+
+/** Debug 断言：检查 tool_call/tool_result 成对关系（仅 CCODE_DEBUG 时执行） */
+function assertToolCallResultPairing(messages: Message[]): void {
+  const orphans = findOrphanToolCalls(messages)
+  if (orphans.length > 0) {
+    const desc = orphans.map(o => `${o.toolName}(${o.toolCallId})`).join(', ')
+    console.warn(`[MSG-INTEGRITY] ${orphans.length} tool_call(s) without matching tool_result: ${desc}`)
+  }
 }

@@ -13,10 +13,16 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { LLMProvider, ChatRequest, ProviderProtocol } from './provider.js'
 import type { Message, MessageContent, StreamChunk, ToolCallContent } from '@core/types.js'
 import type { ProviderConfig } from '@config/config-manager.js'
+import { findOrphanToolCalls } from '@core/message-utils.js'
 import { dbg } from '../debug.js'
 
 /** 将内部 Message 转为 Anthropic SDK 的消息格式 */
 function toAnthropicMessages(messages: Message[]): Anthropic.MessageParam[] {
+  // Debug 模式下检查 tool_call/tool_result 成对关系
+  if (process.env.CCODE_DEBUG) {
+    assertToolCallResultPairing(messages)
+  }
+
   const raw: Anthropic.MessageParam[] = []
 
   for (const msg of messages) {
@@ -229,5 +235,14 @@ export class AnthropicProvider implements LLMProvider {
 
   dispose(): void {
     // Anthropic SDK 无需清理
+  }
+}
+
+/** Debug 断言：检查 tool_call/tool_result 成对关系（仅 CCODE_DEBUG 时执行） */
+function assertToolCallResultPairing(messages: Message[]): void {
+  const orphans = findOrphanToolCalls(messages)
+  if (orphans.length > 0) {
+    const desc = orphans.map(o => `${o.toolName}(${o.toolCallId})`).join(', ')
+    console.warn(`[MSG-INTEGRITY][anthropic] ${orphans.length} tool_call(s) without matching tool_result: ${desc}`)
   }
 }

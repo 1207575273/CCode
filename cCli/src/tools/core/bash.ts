@@ -92,13 +92,20 @@ export class BashTool implements Tool {
       child.on('close', (code) => {
         clearTimeout(timer)
         const output = [stdout, stderr].filter(Boolean).join('\n')
+        // 结构化 meta：让 LLM 精确感知命令执行状态
+        const meta = {
+          type: 'bash' as const,
+          exitCode: code ?? -1,
+          command: command.length > 200 ? command.slice(0, 200) + '...' : command,
+          timedOut,
+        }
 
         if (timedOut) {
-          resolve({ success: false, output, error: `Command timed out after ${timeout} milliseconds` })
+          resolve({ success: false, output, error: `Command timed out after ${timeout}ms`, meta })
         } else if (code === 0) {
-          resolve({ success: true, output: output || '(no output)' })
+          resolve({ success: true, output: output || '(no output)', meta })
         } else {
-          resolve({ success: false, output: output || '', error: `Exit code ${code}` })
+          resolve({ success: false, output: output || '', error: `Exit code ${code}`, meta })
         }
       })
 

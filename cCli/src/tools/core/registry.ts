@@ -77,10 +77,13 @@ export class ToolRegistry {
     try {
       return await tool.execute(args, ctx)
     } catch (err) {
+      // 【雷区二】传完整 stack 让 LLM 能定位到文件和行号自我纠错
       return {
         success: false,
         output: '',
-        error: err instanceof Error ? err.message : String(err),
+        error: err instanceof Error
+          ? `${err.message}\n${err.stack ?? ''}`
+          : String(err),
       }
     }
   }

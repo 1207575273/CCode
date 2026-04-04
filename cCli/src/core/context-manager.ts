@@ -11,7 +11,7 @@
  */
 
 import type { LLMProvider } from '@providers/provider.js'
-import type { Message } from './types.js'
+import type { Message, MessageContent } from './types.js'
 import { contextTracker } from './context-tracker.js'
 import type { ContextWindowState, ContextLevel } from './context-tracker.js'
 import type { ICompactBridge } from '@memory/core/compact-bridge.js'
@@ -151,6 +151,11 @@ export class SummaryWithRecentStrategy implements CompactStrategy {
     // 至少保留最后 2 条
     splitIndex = Math.min(splitIndex, Math.max(0, history.length - 2))
 
+    // 【雷区一防御】调整 splitIndex 到完整工具调用轮次边界
+    // 如果 splitIndex 恰好落在 assistant(tool_calls) 和 user(tool_results) 之间，
+    // 必须向前移到 assistant 之前，确保不拆散成对关系。
+    splitIndex = adjustToCompleteRound(history, splitIndex)
+
     const olderHistory = history.slice(0, splitIndex)
     const recentHistory = history.slice(splitIndex)
     const compactedCount = olderHistory.length
@@ -202,7 +207,7 @@ export class ToolResultTrimStrategy implements CompactStrategy {
   readonly name = 'tool-trim'
   readonly description = '仅清理旧 tool 结果，不生成摘要（零 LLM 调用成本）'
 
-  /** 保留最近 N 个 tool 结果 */
+  /** 保留最近 N 个 tool 结果消息 */
   keepRecentToolResults = 5
 
   async compact(
@@ -211,31 +216,24 @@ export class ToolResultTrimStrategy implements CompactStrategy {
     _options: CompactOptions,
   ): Promise<CompactResult> {
     const tokensBefore = contextTracker.getState().lastInputTokens
-    const toolResultPattern = /^\[Tool \w+ result\]: /
 
-    // 找到所有 tool result 消息的索引
+    // 找到所有包含 tool_result 的消息索引（支持结构化格式 + 旧字符串格式兼容）
     const toolResultIndices: number[] = []
     for (let i = 0; i < history.length; i++) {
-      const c = history[i]!.content
-      if (history[i]!.role === 'user' && typeof c === 'string' && toolResultPattern.test(c)) {
+      if (isToolResultMessage(history[i]!)) {
         toolResultIndices.push(i)
       }
     }
 
-    // 保留最近 N 个，其余替换为占位符
-    const trimSet = new Set(toolResultIndices.slice(0, -this.keepRecentToolResults))
+    // 保留最近 N 个，其余替换内容为占位符
+    const trimCount = Math.max(0, toolResultIndices.length - this.keepRecentToolResults)
+    const trimSet = new Set(toolResultIndices.slice(0, trimCount))
     let compactedCount = 0
 
     const trimmedHistory = history.map((msg, i) => {
-      if (trimSet.has(i)) {
-        compactedCount++
-        // 保留 tool 名称前缀，替换内容
-        const msgContent = typeof msg.content === 'string' ? msg.content : ''
-        const toolNameMatch = msgContent.match(/^\[Tool (\w+) result\]/)
-        const toolName = toolNameMatch?.[1] ?? 'unknown'
-        return { ...msg, content: `[Tool ${toolName} result]: ${TOOL_RESULT_PLACEHOLDER}` }
-      }
-      return msg
+      if (!trimSet.has(i)) return msg
+      compactedCount++
+      return replaceToolResultContent(msg)
     })
 
     return {
@@ -245,6 +243,42 @@ export class ToolResultTrimStrategy implements CompactStrategy {
       compactedMessageCount: compactedCount,
     }
   }
+}
+
+/** 判断消息是否包含 tool_result（结构化格式 + 旧字符串格式兼容） */
+function isToolResultMessage(msg: Message): boolean {
+  // 结构化格式：content 为数组，包含 type:'tool_result' 的块
+  if (Array.isArray(msg.content)) {
+    return msg.content.some(b =>
+      typeof b === 'object' && b !== null && (b as MessageContent).type === 'tool_result',
+    )
+  }
+  // 旧字符串格式兼容（历史 JSONL 恢复场景）
+  if (msg.role === 'user' && typeof msg.content === 'string') {
+    return /^\[Tool \w+ result\]/.test(msg.content)
+  }
+  return false
+}
+
+/** 将 tool_result 消息的内容替换为占位符，保留 toolCallId 确保成对关系不断裂 */
+function replaceToolResultContent(msg: Message): Message {
+  if (Array.isArray(msg.content)) {
+    const replaced = msg.content.map(b => {
+      if (typeof b === 'object' && b !== null && (b as MessageContent).type === 'tool_result') {
+        const tr = b as import('./types.js').ToolResultContent
+        return { ...tr, result: TOOL_RESULT_PLACEHOLDER }
+      }
+      return b
+    })
+    return { ...msg, content: replaced }
+  }
+  // 旧字符串格式
+  if (typeof msg.content === 'string') {
+    const toolNameMatch = msg.content.match(/^\[Tool (\w+) result\]/)
+    const toolName = toolNameMatch?.[1] ?? 'unknown'
+    return { ...msg, content: `[Tool ${toolName} result]: ${TOOL_RESULT_PLACEHOLDER}` }
+  }
+  return msg
 }
 
 // ═══════════════════════════════════════════════
@@ -264,6 +298,51 @@ const DEFAULT_STRATEGY = 'full-replace'
 export class ContextManager {
   #strategyName: string = DEFAULT_STRATEGY
   #compactBridge: ICompactBridge | null = null
+
+  /**
+   * LLM 完整 history — 跨多次 AgentLoop.run() 持续累积的唯一 source of truth。
+   *
+   * 与 UI 的 ChatMessage[] 完全独立：
+   * - ChatMessage 为渲染设计（纯文本 content + 独立 toolCall 对象）
+   * - 此 history 为 LLM 设计（结构化 ToolCallContent / ToolResultContent）
+   *
+   * AgentLoop.run() 通过 getHistoryRef() 获取引用并直接追加消息，
+   * run() 结束后无需额外同步——ContextManager 自动拥有完整 history。
+   */
+  #history: Message[] = []
+
+  /** 获取内部 history 引用。AgentLoop.run() 直接在上面追加，零同步成本。 */
+  getHistoryRef(): Message[] {
+    return this.#history
+  }
+
+  /** 追加用户消息（useChat submit 时调用） */
+  pushUser(content: string): void {
+    this.#history.push({ role: 'user', content })
+  }
+
+  /**
+   * 原地替换 history（compact 后调用）。
+   * 用 length=0 + push 保持数组引用不变——如果 AgentLoop 正在持有引用不会断开。
+   */
+  replaceHistory(compacted: Message[]): void {
+    this.#history.length = 0
+    this.#history.push(...compacted)
+  }
+
+  /** /clear 时清空 */
+  clearHistory(): void {
+    this.#history.length = 0
+  }
+
+  /** /resume 从 JSONL 恢复结构化 history */
+  restoreHistory(messages: Message[]): void {
+    this.#history.length = 0
+    this.#history.push(...messages)
+  }
+
+  /** 当前 history 消息条数 */
+  get historyLength(): number { return this.#history.length }
 
   /** 注入 CompactBridge（记忆系统启用时由 bootstrap 调用） */
   setCompactBridge(bridge: ICompactBridge): void {
@@ -321,14 +400,16 @@ export class ContextManager {
     const effective = contextTracker.getState().effectiveWindow
 
     if (estimatedAfterTrim / effective < 0.70) {
-      // tool-trim 足够，不需要 LLM 摘要
-      return { history: trimResult.history, compacted: true, result: trimResult }
+      // tool-trim 足够，不需要 LLM 摘要 → 原地替换 #history
+      this.replaceHistory(trimResult.history)
+      return { history: this.#history, compacted: true, result: trimResult }
     }
 
     // tool-trim 不够，执行主策略（full-replace 或 summary-with-recent）
     const strategy = STRATEGIES.get(this.#strategyName) ?? STRATEGIES.get(DEFAULT_STRATEGY)!
     const result = await strategy.compact(rawHistory, provider, options)
-    return { history: result.history, compacted: true, result }
+    this.replaceHistory(result.history)
+    return { history: this.#history, compacted: true, result }
   }
 
   /**
@@ -366,6 +447,46 @@ export class ContextManager {
 
     return result
   }
+}
+
+/**
+ * 调整切分点到完整工具调用轮次边界。
+ *
+ * 如果 splitIndex 落在 assistant(tool_calls) 和 user(tool_results) 之间，
+ * 向前移到该 assistant 之前，确保不拆散成对关系。
+ *
+ * 【雷区一核心防御】：tool_call + tool_result 是不可分割的原子块。
+ */
+function adjustToCompleteRound(history: Message[], splitIndex: number): number {
+  if (splitIndex <= 0 || splitIndex >= history.length) return splitIndex
+
+  const msg = history[splitIndex]!
+
+  // Case 1: splitIndex 指向一条 tool_result 消息 → 它的 assistant(tool_calls) 在前面，必须一起保留
+  if (isToolResultMessage(msg)) {
+    // 向前找到对应的 assistant(tool_calls)
+    for (let i = splitIndex - 1; i >= 0; i--) {
+      if (history[i]!.role === 'assistant' && hasToolCalls(history[i]!)) {
+        return i // 切分点移到 assistant 之前
+      }
+      // 遇到非 tool_result 的 user 消息就停止回溯
+      if (history[i]!.role === 'user' && !isToolResultMessage(history[i]!)) break
+    }
+  }
+
+  // Case 2: splitIndex 指向一条 assistant(tool_calls) → 它后面的 tool_results 也要保留
+  // 这种情况 splitIndex 已经在 assistant 上，后面的 tool_results 在 recent 中，是完整的
+  // 不需要调整
+
+  return splitIndex
+}
+
+/** 检查消息是否包含 tool_call 块 */
+function hasToolCalls(msg: Message): boolean {
+  if (!Array.isArray(msg.content)) return false
+  return msg.content.some(b =>
+    typeof b === 'object' && b !== null && (b as MessageContent).type === 'tool_call',
+  )
 }
 
 /** 全局单例 */

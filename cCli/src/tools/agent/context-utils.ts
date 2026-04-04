@@ -3,6 +3,7 @@
  */
 
 import type { Message, MessageContent, ToolCallContent, ToolResultContent } from '@core/types.js'
+import { normalizeContent as normalizeContentUtil } from '@core/message-utils.js'
 
 export interface ContextPolicy {
   /** 'full' = 全量历史, 'trimmed' = 裁剪（默认）, 'none' = 不继承 */
@@ -133,11 +134,8 @@ function truncateLongContent(msg: Message): Message {
   return { ...msg, content: blocks }
 }
 
-function normalizeContent(content: Message['content']): MessageContent[] {
-  if (typeof content === 'string') return [{ type: 'text', text: content }]
-  if (Array.isArray(content)) return content
-  return [content as MessageContent]
-}
+// 复用 message-utils 的 normalizeContent（消除重复实现）
+const normalizeContent = normalizeContentUtil
 
 /** 粗略估算 token 数 */
 function estimateTokens(messages: ReadonlyArray<Message>): number {

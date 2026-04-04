@@ -66,13 +66,13 @@ export class GrepTool implements Tool {
       }
 
       if (results.length === 0) {
-        return { success: true, output: 'No matches found.', meta: { type: 'grep', matchCount: 0, fileCount: 0 } }
+        return { success: true, output: 'No matches found.', meta: { type: 'grep', totalMatches: 0, displayedMatches: 0, truncated: false, fileCount: 0 } }
       }
-      const truncated = results.length >= MAX_RESULTS
+      const truncated = totalMatches > results.length
       return {
         success: true,
-        output: results.join('\n') + (truncated ? '\n[结果已截断，仅显示前 50 条]' : ''),
-        meta: { type: 'grep', matchCount: totalMatches, fileCount: matchedFiles },
+        output: results.join('\n') + (truncated ? `\n[结果已截断，显示 ${results.length}/${totalMatches} 条]` : ''),
+        meta: { type: 'grep', totalMatches, displayedMatches: results.length, truncated, fileCount: matchedFiles },
       }
     } catch (err) {
       return { success: false, output: '', error: err instanceof Error ? err.message : String(err) }

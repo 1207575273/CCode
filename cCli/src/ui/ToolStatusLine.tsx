@@ -346,7 +346,7 @@ function buildMetaDisplay(toolCall: CompletedToolCall): { headerSummary: string;
       // 匹配统计 + resultSummary 做 ⎿ 预览
       const { lines, foldHint } = buildOutputPreview(toolCall.resultSummary ?? '')
       return {
-        headerSummary: `${meta.matchCount} matches in ${meta.fileCount} files`,
+        headerSummary: `${meta.totalMatches} matches in ${meta.fileCount} files${meta.truncated ? ` (showing ${meta.displayedMatches})` : ''}`,
         outputBlock: lines.length > 0 ? (
           <Box flexDirection="column" paddingLeft={2}>
             {lines.map((line, i) => (

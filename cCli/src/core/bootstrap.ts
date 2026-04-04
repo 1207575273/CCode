@@ -293,7 +293,32 @@ export function buildSystemPrompt(hookContext: string, memoryContext?: string): 
   if (hookContext) cachedSections.push({ name: 'Hooks', charLength: hookContext.length })
   if (memoryContext) cachedSections.push({ name: 'Memory', charLength: memoryContext.length })
 
-  const parts = [instructionsPrompt, skillsPrompt, hookContext, memoryContext].filter(Boolean)
+  /**
+   * 内置行为指导 — 告诉 LLM "该怎么干活"。
+   *
+   * 对比 Claude Code CLI 发现：cCli 之前只注入了 Instructions（用户规则）和 Skills（工具列表），
+   * 缺少对 LLM 工作方式的核心行为约束，导致 LLM 容易"干到一半停下来"或"说了不做"。
+   *
+   * 这段提示词解决五个问题：
+   *   1. 完成承诺 — 不要半途而废，做完再报告
+   *   2. 验证闭环 — 报告完成前先验证（跑命令、看输出）
+   *   3. 错误恢复 — 失败了先诊断再换方案，不要盲目重试或放弃
+   *   4. 工具优先 — 优先用专用工具（Read/Write/Edit/Grep），bash 只用于系统命令
+   *   5. 执行效率 — 独立的工具调用并行执行，不要串行等待
+   */
+  const behaviorGuidance = [
+    '# Task Execution Rules',
+    '',
+    '- Complete the task fully. Do NOT leave it half-done. Do NOT just describe what to do — actually do it by calling tools.',
+    '- Before reporting a task as complete, verify it actually works: run the code, check the output, confirm no errors.',
+    '- If an approach fails, diagnose WHY before switching tactics — read the error, check your assumptions, try a focused fix. Do not retry blindly, but do not abandon a viable approach after a single failure either.',
+    '- Use dedicated tools when available: Read (not cat), Write (not echo), Edit (not sed), Grep (not grep), Glob (not find). Use Bash only for system commands and operations that require shell execution.',
+    '- When multiple tool calls are independent, make them all in a single response to maximize parallelism.',
+    '- Keep working until the task is genuinely done. If you output text without tool calls, you are signaling that you are finished. Only do this when all work is verified complete.',
+  ].join('\n')
+
+  const parts = [behaviorGuidance, instructionsPrompt, skillsPrompt, hookContext, memoryContext].filter(Boolean)
+  if (behaviorGuidance) cachedSections.unshift({ name: 'Behavior', charLength: behaviorGuidance.length })
   cachedSystemPrompt = parts.length > 0 ? parts.join('\n\n') : undefined
 }
 
