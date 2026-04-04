@@ -10,9 +10,19 @@
  *
  * 所有中间状态通过 AsyncGenerator<AgentEvent> yield 出去，
  * 调用方（useChat）和观察者（SessionLogger）各取所需。
+ *
+ * ⚠️ 消息格式检查清单（修改本文件或 provider 转换时必查）：
+ *
+ *   □ 雷区一：每个 tool_call 都有对应的 tool_result？
+ *             assistant(tool_calls) → user(tool_results) 严格成对？
+ *             异常时也必须产生 tool_result（不能让 tool_call 成孤儿）？
+ *   □ 雷区二：工具异常时完整 stack 传回了 LLM（不是空字符串、不是只有 message）？
+ *   □ 雷区三：SystemPrompt 未被上下文裁剪截断？SubAgent 不继承主 Agent prompt？
+ *   □ 雷区四：循环退出条件只看 toolCalls.length === 0？不看 text 有没有内容？
  */
 
 import type { LLMProvider } from '@providers/provider.js'
+import { summarizeArgs } from './args-summarizer.js'
 import type { ToolRegistry } from '@tools/core/registry.js'
 import type { ToolResult, ToolResultMeta } from '@tools/core/types.js'
 import { isStreamableTool } from '@tools/core/types.js'
@@ -20,6 +30,7 @@ import type { Message, MessageContent, ToolCallContent, ToolResultContent, Strea
 import { classifyToolCalls, executeSafeToolsInParallel } from './parallel-executor.js'
 import type { HookManager } from '@hooks/hook-manager.js'
 import { contextTracker } from './context-tracker.js'
+import { RepetitionDetector } from './repetition-detector.js'
 import { dbg } from '../debug.js'
 
 // ═══════════════════════════════════════════════
@@ -120,7 +131,7 @@ export interface AgentConfig {
 // ═══════════════════════════════════════════════
 
 /** 主 Agent 默认最大轮次 */
-const DEFAULT_MAX_TURNS = 50
+const DEFAULT_MAX_TURNS = 100
 
 /** resultSummary 最大长度（CLI 展示用） */
 const RESULT_SUMMARY_MAX_LENGTH = 200
@@ -138,6 +149,8 @@ export class AgentLoop {
   /** 上一次 LLM 调用的参数指纹（用于 Prompt Cache 破裂检测） */
   #lastCacheFingerprint: string | null = null
   #llmCallIndex = 0
+  /** 工具调用重复检测器（防止弱模型陷入循环调用） */
+  readonly #repetitionDetector = new RepetitionDetector()
 
   constructor(
     provider: LLMProvider,
@@ -159,7 +172,9 @@ export class AgentLoop {
    * 主循环：LLM 调用 → [工具执行 → LLM 调用]* → 文本回复
    */
   async *run(messages: Message[]): AsyncIterable<AgentEvent> {
-    const history: Message[] = [...messages]
+    // 直接引用传入数组（不复制）。ContextManager 通过 getHistoryRef() 传入，
+    // run() 中追加的 assistant + tool_result 自动反映到 ContextManager 内部。
+    const history = messages
     const maxTurns = this.#config.maxTurns ?? DEFAULT_MAX_TURNS
     const minToolRounds = this.#config.minTurns ?? 0
     /** 实际执行了工具的轮次数（不含纯文本轮） */
@@ -181,7 +196,7 @@ export class AgentLoop {
           type: 'tool_call',
           toolCallId: tc.toolCallId,
           toolName: tc.toolName,
-          args: {},  // 不记录完整 args，避免 history 膨胀
+          args: summarizeArgs(tc.toolName, tc.args),  // 精简摘要：保留关键信息（命令/路径/模式），不含大段内容
         })
       }
       if (assistantContent.length > 0) {
@@ -262,7 +277,7 @@ export class AgentLoop {
             }
             yield makeLlmError(errorMsg, outputTokens)
             yield mapped
-            return { toolCalls: [], aborted: true }
+            return { toolCalls: [], text: '', aborted: true }
           }
           yield mapped
         }
@@ -355,7 +370,10 @@ export class AgentLoop {
       const toolResults: ToolResultContent[] = results.map(pr => ({
         type: 'tool_result' as const,
         toolCallId: pr.toolCallId,
-        result: pr.success ? pr.output : (pr.error ?? 'error'),
+        // 失败时合并 output + error（output 可能含 stderr 等诊断信息）
+        result: pr.success
+          ? pr.output
+          : [pr.output, pr.error].filter(Boolean).join('\n') || 'error',
         ...(pr.success === false ? { isError: true as const } : {}),
       }))
       if (toolResults.length > 0) {
@@ -379,6 +397,16 @@ export class AgentLoop {
    */
   async *#executeOneTool(tc: ToolCallContent, history: Message[]): AsyncGenerator<AgentEvent> {
     yield { type: 'tool_start', toolName: tc.toolName, toolCallId: tc.toolCallId, args: tc.args }
+
+    // ── 重复调用检测 ──
+    // 在权限检查之前执行，因为 block 级别的拦截根本不需要走后续流程
+    const verdict = this.#repetitionDetector.check(tc)
+    if (verdict.action === 'block') {
+      dbg(`[REPETITION-BLOCK] ${tc.toolName} × ${verdict.count}, skipping execution\n`)
+      history.push({ role: 'user', content: [{ type: 'tool_result', toolCallId: tc.toolCallId, result: verdict.message, isError: true }] })
+      yield { type: 'tool_done', toolName: tc.toolName, toolCallId: tc.toolCallId, durationMs: 0, success: false, resultSummary: `循环调用已拦截 (${tc.toolName} × ${verdict.count})` }
+      return
+    }
 
     // 权限检查：isSidechain 模式跳过弹窗（主 Agent 派发即授权）
     const allowed = yield* this.#checkPermission(tc)
@@ -416,26 +444,49 @@ export class AgentLoop {
     const start = Date.now()
     const tool = this.#registry.get(tc.toolName)
 
+    // 【雷区一防御】工具执行必须 try/catch，确保任何异常都产生 tool_result，
+    // 绝不能让 assistant 消息中的 tool_call 成为孤儿（无对应 tool_result）。
+    // registry.execute() 内部已有 catch，但 StreamableTool 的 yield* 没有。
     let result: ToolResult
-    if (tool && isStreamableTool(tool)) {
-      // 流式工具（如 dispatch_agent）：yield* 透传中间事件，return 值为最终结果
-      result = yield* (tool.stream(toolArgs, ctx) as AsyncGenerator<AgentEvent, ToolResult>)
-    } else {
-      // 普通工具：await execute()
-      result = await this.#registry.execute(tc.toolName, toolArgs, ctx)
+    try {
+      if (tool && isStreamableTool(tool)) {
+        // 流式工具（如 dispatch_agent）：yield* 透传中间事件，return 值为最终结果
+        result = yield* (tool.stream(toolArgs, ctx) as AsyncGenerator<AgentEvent, ToolResult>)
+      } else {
+        // 普通工具：await execute()
+        result = await this.#registry.execute(tc.toolName, toolArgs, ctx)
+      }
+    } catch (err) {
+      // 【雷区二防御】异常的完整 stack 传回 LLM，让模型能定位错误并自我纠错
+      const errDetail = err instanceof Error
+        ? `${err.message}\n${err.stack ?? ''}`
+        : String(err)
+      result = { success: false, output: '', error: errDetail }
     }
 
     const durationMs = Date.now() - start
+
+    // 失败时合并 output + error 传给 LLM（output 可能含 stderr 等诊断信息，不能丢）
+    const toolResultText = result.success
+      ? result.output
+      : [result.output, result.error].filter(Boolean).join('\n') || 'error'
 
     history.push({
       role: 'user',
       content: [{
         type: 'tool_result',
         toolCallId: tc.toolCallId,
-        result: result.success ? result.output : (result.error ?? 'error'),
+        result: toolResultText,
         ...(result.success === false ? { isError: true } : {}),
       }],
     })
+
+    // ── 重复调用 warn 级别：注入警告到 history，让 LLM 下一轮看到 ──
+    if (verdict.action === 'warn') {
+      const warning = this.#repetitionDetector.buildWarningMessage(verdict.toolName, verdict.count)
+      dbg(`[REPETITION-WARN] ${tc.toolName} × ${verdict.count}\n`)
+      history.push({ role: 'user', content: warning })
+    }
 
     // PostToolUse Hook：工具执行后通知 + 消费反馈（Reflection 闭环）
     // 放在 history.push(工具结果) 之后，这样 LLM 先看到工具结果，再看到验证反馈。

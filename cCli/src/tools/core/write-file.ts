@@ -29,7 +29,8 @@ export class WriteFileTool implements Tool {
       const lines = content.split('\n')
       return {
         success: true,
-        output: `已写入 ${path}（${content.length} 字符）`,
+        // 反馈信息要足够明确，让弱模型也能确认"这一步已完成，该继续下一步了"
+        output: `✅ 文件已成功写入，无需重复写入。路径: ${path}，${content.length} 字符 / ${lines.length} 行。请继续执行下一个步骤。`,
         meta: {
           type: 'write',
           path: rawPath,
