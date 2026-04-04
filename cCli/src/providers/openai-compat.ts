@@ -41,6 +41,9 @@ export class OpenAICompatProvider implements LLMProvider {
     this.#chatModel = new ChatOpenAI({
       apiKey: this.#config.apiKey,
       model,
+      // 开启流式 usage 返回，否则 stream 模式下 usage_metadata 为空
+      // LangChain 底层会自动在请求中加 stream_options: { include_usage: true }
+      streamUsage: true,
       ...(this.#config.baseURL !== undefined && {
         configuration: { baseURL: this.#config.baseURL, apiKey: this.#config.apiKey },
       }),
@@ -114,7 +117,62 @@ export class OpenAICompatProvider implements LLMProvider {
         }
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        for (const tc of (final.tool_calls ?? []) as any[]) {
+        let rawToolCalls = (final.tool_calls ?? []) as any[]
+        const inferredFinish = (final as any).response_metadata?.finish_reason ?? ''
+
+        // GLM 兼容性处理：流式模式下 tool_calls 可能丢失
+        // GLM-5.1 等模型在多轮工具调用场景下，finish_reason 返回 "tool_calls"
+        // 但流式 chunk 中工具调用数据完全缺失（LangChain 聚合后为空）。
+        // 分两级 fallback：
+        //   1. 从 additional_kwargs.tool_calls 提取（部分模型放在这里）
+        //   2. 如果仍为空，用 invoke（非流式）重试一次，绕过流式聚合 bug
+        if (rawToolCalls.length === 0 && inferredFinish === 'tool_calls') {
+          // fallback 1：从 additional_kwargs 提取
+          const fallbackCalls = ((final as any).additional_kwargs?.tool_calls ?? []) as any[]
+          if (fallbackCalls.length > 0) {
+            dbg(`[WARN][${this.name}] finish_reason=tool_calls but final.tool_calls empty, recovered from additional_kwargs (${fallbackCalls.length} calls)\n`)
+            for (const tc of fallbackCalls) {
+              const funcArgs = tc.function?.arguments
+              rawToolCalls.push({
+                id: tc.id ?? '',
+                name: tc.function?.name ?? '',
+                args: typeof funcArgs === 'string' ? JSON.parse(funcArgs) : (funcArgs ?? {}),
+              })
+            }
+          } else {
+            // fallback 2：流式完全丢失工具调用数据 → invoke 非流式重试
+            dbg(`[WARN][${this.name}] finish_reason=tool_calls but NO tool data in stream. Retrying with invoke (non-streaming)...\n`)
+            try {
+              const invokeOpts = request.signal !== undefined ? { signal: request.signal } : {}
+              const invokeResult = await model.invoke(langchainMsgs, invokeOpts)
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const invokeCalls = ((invokeResult as any).tool_calls ?? []) as any[]
+              if (invokeCalls.length > 0) {
+                dbg(`[INFO][${this.name}] invoke fallback recovered ${invokeCalls.length} tool_calls\n`)
+                rawToolCalls = invokeCalls
+              } else {
+                // invoke 也没有 → 从 additional_kwargs 最后一搏
+                const invokeKwargsCalls = ((invokeResult as any).additional_kwargs?.tool_calls ?? []) as any[]
+                for (const tc of invokeKwargsCalls) {
+                  const funcArgs = tc.function?.arguments
+                  rawToolCalls.push({
+                    id: tc.id ?? '',
+                    name: tc.function?.name ?? '',
+                    args: typeof funcArgs === 'string' ? JSON.parse(funcArgs) : (funcArgs ?? {}),
+                  })
+                }
+                if (rawToolCalls.length > 0) {
+                  dbg(`[INFO][${this.name}] invoke fallback recovered ${rawToolCalls.length} tool_calls from additional_kwargs\n`)
+                } else {
+                  dbg(`[WARN][${this.name}] invoke fallback also returned no tool_calls. Giving up.\n`)
+                }
+              }
+            } catch (retryErr) {
+              dbg(`[ERROR][${this.name}] invoke fallback failed: ${retryErr}\n`)
+            }
+          }
+        }
+        for (const tc of rawToolCalls) {
           yield {
             type: 'tool_call',
             toolCall: {
