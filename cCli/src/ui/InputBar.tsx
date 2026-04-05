@@ -65,6 +65,8 @@ export function InputBar({
 
   const valueRef = useRef(value)
   const cursorRef = useRef(cursorIndex)
+  // 标记：stdin raw listener 已处理当前按键（防止 useInput 重复处理 Delete 键）
+  const handledByRawRef = useRef(false)
   valueRef.current = value
   cursorRef.current = cursorIndex
 
@@ -74,26 +76,33 @@ export function InputBar({
     }
   }, [value, cursorIndex])
 
-  // ─── 【关键点2】硬核手动劫持：专治 Windows 奇葩扫描码 ───
+  // ─── 【关键点2】stdin raw 拦截：处理 Ink useInput 无法正确识别的特殊按键 ───
+  // 覆盖场景：
+  //   1. Home/End：Windows CMD/PowerShell 发送非标准扫描码 (e047/e04f)
+  //   2. Delete 键：Linux 上 \x1b[3~ 被 Ink 解析为 key.delete，与 Backspace(\x7f) 混淆
+  //      因此 useInput 中统一将 key.delete 当退格处理，真正的 Delete 在这里单独处理
   useEffect(() => {
     if (!stdin) return
 
     const onData = (data: Buffer) => {
-      // 拿到数据的十六进制表达和字符串表达
       const hex = data.toString('hex')
       const str = data.toString('utf8')
 
       const val = valueRef.current
       const cur = cursorRef.current
 
-      // 匹配 Linux/Mac 标准序列 + Windows Terminal 序列 + Windows 原生 CMD/PowerShell 扫描码 (e047, 0047)
+      // Home 键：Linux/Mac 标准序列 + Windows Terminal + Windows 原生 CMD/PowerShell 扫描码
       const isHome =
           str === '\x1b[H' || str === '\x1b[1~' || str === '\x1b[7~' || str === '\x1bOH' ||
           hex === 'e047' || hex === '0047' || hex === '1b5b48'
 
+      // End 键：同上多平台兼容
       const isEnd =
           str === '\x1b[F' || str === '\x1b[4~' || str === '\x1b[8~' || str === '\x1bOF' ||
           hex === 'e04f' || hex === '004f' || hex === '1b5b46'
+
+      // Delete 键（向右删除）：仅匹配 \x1b[3~ 序列，区别于 Backspace 的 \x7f
+      const isDelete = str === '\x1b[3~'
 
       if (isHome) {
         const lastNewline = findLastNewline(val, cur - 1)
@@ -101,13 +110,21 @@ export function InputBar({
       } else if (isEnd) {
         const nextNewline = findNextNewline(val, cur)
         setCursorIndex(nextNewline === -1 ? val.length : nextNewline)
+      } else if (isDelete) {
+        // 向右删除（光标位置不变，删除光标右侧字符）
+        // 设置 flag 防止 useInput 将这个事件再次当退格处理
+        handledByRawRef.current = true
+        if (cur < val.length) {
+          const newValue = val.slice(0, cur) + val.slice(cur + 1)
+          onChange(newValue)
+        }
       }
     }
 
-    // prependListener：抢在 Ink 解析器之前拦截数据！
+    // prependListener：抢在 Ink 解析器之前拦截数据
     stdin.prependListener('data', onData)
     return () => { stdin.removeListener('data', onData) }
-  }, [stdin])
+  }, [stdin, onChange])
 
   /** 用户编辑时：如果正在浏览历史，把当前内容设为新 draft 并回到最新页 */
   function onUserEdit(newValue: string) {
@@ -289,23 +306,25 @@ export function InputBar({
       return
     }
 
-    // Backspace
-    if (key.backspace) {
+    // Backspace / Delete 跨平台兼容
+    // Ink parse-keypress 的平台差异：
+    //   Windows: Backspace → \b(0x08) → key.backspace=true
+    //   Linux:   Backspace → \x7f(DEL) → key.delete=true（Ink 已知问题）
+    //   Linux:   Delete 键 → \x1b[3~ → key.delete=true
+    // 策略：key.backspace 一定是退格；key.delete 中真正的 Delete(\x1b[3~) 由 stdin raw
+    // listener 单独处理并设 handledByRawRef，剩余的 key.delete 都是 Linux 下的 Backspace。
+    if (key.backspace || key.delete) {
+      // 真正的 Delete 键已被 raw listener 处理，跳过
+      if (handledByRawRef.current) {
+        handledByRawRef.current = false
+        return
+      }
+      // 退格：向左删除
       if (cursorIndex > 0) {
         const newValue = value.slice(0, cursorIndex - 1) + value.slice(cursorIndex)
         onUserEdit(newValue)
         onChange(newValue)
         setCursorIndex(cursorIndex - 1)
-      }
-      return
-    }
-
-    // Delete
-    if (key.delete) {
-      if (cursorIndex < value.length) {
-        const newValue = value.slice(0, cursorIndex) + value.slice(cursorIndex + 1)
-        onUserEdit(newValue)
-        onChange(newValue)
       }
       return
     }

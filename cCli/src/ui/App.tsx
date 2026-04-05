@@ -1,6 +1,6 @@
 // src/ui/App.tsx
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
-import { Box, Text, useApp, useInput } from 'ink'
+import { Box, Text, useInput } from 'ink'
 import { WelcomeScreen } from './WelcomeScreen.js'
 import { ChatView } from './ChatView.js'
 import { InputBar } from './InputBar.js'
@@ -29,6 +29,7 @@ import { contextManager } from '@core/context-manager.js'
 import { contextTracker } from '@core/context-tracker.js'
 import { PluginsCommand } from '@commands/plugins.js'
 import { RememberCommand } from '@commands/remember.js'
+import { ExitCommand } from '@commands/exit.js'
 import { pluginRegistry } from '@core/bootstrap.js'
 import { getCleanupStats, executeCleanup } from '@core/cleanup-service.js'
 import { McpStatusView } from './McpStatusView.js'
@@ -77,7 +78,8 @@ export function App({
   showResumeOnStart,
   webEnabled,
 }: AppProps) {
-  const { exit } = useApp()
+  // 退出策略：不使用 Ink useApp().exit()（异步卸载某些场景会挂起）
+  // 改用 process.exit(0) 强制退出，ccli.ts 的 process.on('exit') 回调仍会执行清理
   // 订阅终端尺寸变化：debounce + 清屏，避免 Ink 差分渲染残留
   const terminalSize = useTerminalSize()
   const {
@@ -252,6 +254,7 @@ export function App({
     reg.register(new ContextCommand())
     reg.register(new PluginsCommand())
     reg.register(new RememberCommand())
+    reg.register(new ExitCommand())
     return reg
   }, [currentProvider, currentModel])
 
@@ -371,12 +374,6 @@ export function App({
     }
 
     if (!trimmed || trimmed === '/') return
-
-    // /exit 和 /quit 不通过 CommandRegistry，直接退出应用
-    if (trimmed === '/exit' || trimmed === '/quit') {
-      exit()
-      return
-    }
 
     // 斜杠指令分发（含 skill fallback）
     const result = registry.dispatch(trimmed)
@@ -697,6 +694,10 @@ export function App({
             }).catch(e => appendSystemMessage(`重建失败: ${e}`))
             return
           }
+          case 'force_exit':
+            // 强制退出：直接终止进程，process.on('exit') 回调仍会执行清理
+            process.exit(0)
+            return
           case 'error':
             appendSystemMessage(action.message)
             return
@@ -716,7 +717,7 @@ export function App({
     const { context, rawInput } = atResolver.resolve(trimmed)
     const finalMessage = context ? `${context}\n\n${rawInput}` : rawInput
     submit(finalMessage)
-  }, [registry, clearMessages, appendSystemMessage, switchModel, submit, modelItems, exit, getMcpInfo, atResolver])
+  }, [registry, clearMessages, appendSystemMessage, switchModel, submit, modelItems, getMcpInfo, atResolver])
 
   // 建议浮层按键：Arrow 导航、Tab 补全、Enter 提交选中项、Escape 取消
   useInput((_input, key) => {
@@ -804,27 +805,39 @@ export function App({
   })
 
   // 双击 Ctrl+C 退出计时器（参照 Claude Code：第一次提示，第二次退出）
+  // 核心原则：无论当前处于任何状态（空闲/streaming/权限确认），双击 Ctrl+C 都必须能退出
   const lastCtrlCRef = useRef(0)
   const DOUBLE_CTRLC_MS = 2000
 
   // Ctrl+C / Escape 全局处理
   useInput((input, key) => {
     const isCtrlC = input === 'c' && key.ctrl
-    if (isStreaming && pendingPermission == null) {
-      // streaming 期间：Escape 或 Ctrl+C 中断当前响应
-      if (key.escape || isCtrlC) {
-        abort()
-        appendSystemMessage('⏹ 已中断响应')
-      }
-    } else if (isCtrlC && !isStreaming) {
-      // 空闲时 Ctrl+C：双击退出
+
+    if (isCtrlC) {
       const now = Date.now()
+      // 双击检测优先于一切状态判断——无论 streaming/pending/空闲，双击必退出
       if (now - lastCtrlCRef.current < DOUBLE_CTRLC_MS) {
-        exit()
+        // 强制退出：直接 process.exit，不依赖 Ink exit() 的异步卸载
+        process.exit(0)
+        return
+      }
+      lastCtrlCRef.current = now
+
+      if (isStreaming && pendingPermission == null) {
+        // streaming 期间：第一次 Ctrl+C 中断响应，提示再按一次退出
+        abort()
+        appendSystemMessage('⏹ 已中断响应（再次 Ctrl+C 退出）')
       } else {
-        lastCtrlCRef.current = now
+        // 空闲或权限确认期间：提示再按一次退出
         appendSystemMessage('再次 Ctrl+C 退出')
       }
+      return
+    }
+
+    // Escape 仅在 streaming 期间中断响应（不参与退出逻辑）
+    if (key.escape && isStreaming && pendingPermission == null) {
+      abort()
+      appendSystemMessage('⏹ 已中断响应')
     }
   })
 

@@ -35,6 +35,7 @@ export type CommandAction =
   | { type: 'memory_delete'; id: string }
   | { type: 'memory_rebuild' }
   | { type: 'memory_write'; content: string }
+  | { type: 'force_exit' }
   | { type: 'error'; message: string }
 
 /**
