@@ -103,6 +103,10 @@ export interface UseChatReturn {
   forkFromEvent: (messageId: string) => void
   /** 压缩对话上下文 */
   compactMessages: (options?: { strategy?: string; focus?: string }) => Promise<void>
+  /** 历史累计运行时长 ms（跨 resume） */
+  accumulatedMs: number
+  /** 本次 session 启动时间戳 */
+  sessionStartTime: number
 }
 
 
@@ -124,6 +128,8 @@ export function useChat(): UseChatReturn {
   const [currentModel, setCurrentModel] = useState<string>(() => configManager.load().defaultModel ?? '')
   const [todos, setTodosState] = useState<Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed'; activeForm: string }>>([])
   const [contextState, setContextState] = useState<ContextWindowState | null>(null)
+  const [accumulatedMs, setAccumulatedMs] = useState(0)
+  const [sessionStartTime] = useState(() => Date.now())
 
   // useRef 双轨：xxxRef 供 async 回调读取最新值（避免闭包捕获陈旧 state）；
   // 对应的 state 驱动 UI 重渲染
@@ -525,6 +531,11 @@ export function useChat(): UseChatReturn {
       // 绑定 SessionLogger 到恢复的会话
       sessionLogger.bind(sessionId, snapshot.leafEventUuid)
 
+      // 提取历史累计时长
+      const lastAccMs = sessionStore.getLastAccumulatedMs(sessionId)
+      setAccumulatedMs(lastAccMs)
+      sessionLogger.setAccumulatedMs(lastAccMs)
+
       // 恢复消息列表（UI）
       const restored: ChatMessage[] = snapshot.messages.map(m => ({
         id: m.id,
@@ -554,6 +565,7 @@ export function useChat(): UseChatReturn {
         cwd: process.cwd(),
         provider: snapshot.provider,
         model: snapshot.model,
+        accumulatedMs: lastAccMs,
       })
       // 更新 logger 的 lastEventUuid
       sessionLogger.bind(sessionId, resumeEventId)
@@ -608,6 +620,7 @@ export function useChat(): UseChatReturn {
         cwd: process.cwd(),
         provider: currentProvider,
         model: currentModel,
+        accumulatedMs: 0, // 分叉时重置时间
       })
       sessionLogger.bind(sid, resumeEventId)
 
@@ -772,5 +785,7 @@ export function useChat(): UseChatReturn {
     loadSession,
     forkFromEvent,
     compactMessages,
+    accumulatedMs,
+    sessionStartTime,
   }
 }

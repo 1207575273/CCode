@@ -462,6 +462,40 @@ export class SessionStore {
     return results
   }
 
+  /**
+   * 从 JSONL 中提取最后一个 session_end 事件的 accumulatedMs。
+   * 用于 resume 时恢复累计运行时长。找不到则返回 0。
+   */
+  getLastAccumulatedMs(sessionId: string): number {
+    try {
+      // 复用已有的文件查找逻辑：遍历 projectDir 下的文件，用 extractSessionId 匹配
+      const dirs = readdirSync(this.baseDir, { withFileTypes: true }).filter(d => d.isDirectory())
+      for (const dir of dirs) {
+        const projectDir = join(this.baseDir, dir.name)
+        const files = readdirSync(projectDir).filter(f => f.endsWith('.jsonl'))
+        for (const file of files) {
+          if (extractSessionId(file) === sessionId) {
+            const content = readFileSync(join(projectDir, file), 'utf-8')
+            const lines = content.trim().split('\n').filter(Boolean)
+            // 从尾部向前找第一个 session_end
+            for (let i = lines.length - 1; i >= 0; i--) {
+              try {
+                const event = JSON.parse(lines[i]!) as SessionEvent
+                if (event.type === 'session_end' && event.accumulatedMs != null) {
+                  return event.accumulatedMs
+                }
+              } catch { continue }
+            }
+            return 0
+          }
+        }
+      }
+      return 0
+    } catch {
+      return 0
+    }
+  }
+
   /** Walk from leafUuid up to root via parentUuid, return chronological path */
   #buildEventPath(events: SessionEvent[], leafUuid: string): SessionEvent[] {
     const eventMap = new Map<string, SessionEvent>()
