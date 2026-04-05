@@ -9,6 +9,8 @@ import { PermissionCard } from '../components/PermissionCard'
 import { UserQuestionForm } from '../components/UserQuestionForm'
 import { TodoPanel } from '../components/TodoPanel'
 import { MemoryPanel } from '../components/MemoryPanel'
+import { StatusBar } from '../components/StatusBar'
+import type { StatusBarData } from '../components/StatusBar'
 import type { SubAgentInfo, SubAgentDetailEvent } from '../components/SubAgentCard'
 import type { ChatMessage, ToolEvent, ServerEvent, UserQuestion } from '../types'
 
@@ -36,11 +38,40 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
   const [compacting, setCompacting] = useState<{ strategy: string; message: string } | null>(null)
   /** 记忆全景面板 */
   const [memoryPanelOpen, setMemoryPanelOpen] = useState(false)
+  /** 状态栏数据（CLI 推送的系统/进程/token/上下文指标） */
+  const [statusBarData, setStatusBarData] = useState<StatusBarData | null>(null)
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const msgIdCounter = useRef(0)
   const turnTextRef = useRef('')
   const turnToolsRef = useRef<ToolEvent[]>([])
+
+  // 本地每秒更新 elapsed（基于服务端推送的基线值，让计时器平滑跳动而非等 3 秒推送）
+  const statusBarBaseRef = useRef<{ elapsedMs: number; receivedAt: number } | null>(null)
+
+  useEffect(() => {
+    if (!statusBarData) return
+    statusBarBaseRef.current = { elapsedMs: statusBarData.proc.elapsedMs, receivedAt: Date.now() }
+  }, [statusBarData?.proc.elapsedMs])
+
+  useEffect(() => {
+    if (!statusBarData) return
+    const id = setInterval(() => {
+      const base = statusBarBaseRef.current
+      if (!base) return
+      const delta = Date.now() - base.receivedAt
+      setStatusBarData(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          proc: { ...prev.proc, elapsedMs: base.elapsedMs + delta },
+        }
+      })
+    }, 1000)
+    return () => clearInterval(id)
+  // 仅在 statusBarData 从 null 变为非 null 时重建 interval
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusBarData !== null])
 
   const { connected, send } = useWebSocket({
     sessionId: targetSessionId,
@@ -258,6 +289,9 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
           setCompacting(null)
         }
         break
+      case 'status_bar':
+        setStatusBarData(event.data)
+        break
       case 'bridge_stop':
         setMessages(prev => [...prev, { id: nextId(), role: 'system', content: 'Bridge Server 已关闭' }])
         break
@@ -409,6 +443,8 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
       </div>
 
       <InputBar onSubmit={handleSubmit} disabled={!connected || !!compacting} />
+
+      <StatusBar data={statusBarData} />
 
       <MemoryPanel open={memoryPanelOpen} onClose={() => setMemoryPanelOpen(false)} />
     </div>

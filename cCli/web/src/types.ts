@@ -59,6 +59,15 @@ export type ServerEvent =
   | { type: 'subagent_progress'; agentId: string; name: string; agentType: string; description: string; turn: number; maxTurns: number; currentTool?: string }
   | { type: 'subagent_done'; agentId: string; name: string; description: string; success: boolean; output: string }
   | { type: 'subagent_event'; agentId: string; detail: { kind: 'tool_start'; toolName: string; toolCallId: string; args?: Record<string, unknown> } | { kind: 'tool_done'; toolName: string; toolCallId: string; durationMs?: number; success?: boolean; resultSummary?: string } | { kind: 'text'; text: string } | { kind: 'error'; error: string } }
+  | {
+      type: 'status_bar'
+      data: {
+        sys: { memPercent: number; memUsedBytes: number; memTotalBytes: number; cpuPercent: number }
+        proc: { memPercent: number; memUsedBytes: number; cpuPercent: number; elapsedMs: number }
+        token: { inputTokens: number; outputTokens: number; costByCurrency: Record<string, number>; callCount: number } | null
+        context: { usedPercentage: number; level: string } | null
+      }
+    }
 
 /** 客户端发送的消息 */
 export type ClientMessage =
