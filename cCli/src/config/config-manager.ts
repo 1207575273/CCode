@@ -36,6 +36,7 @@ const DEFAULT_CONFIG: CCodeConfig = {
       models: ['gpt-4o', 'gpt-4o-mini'],
     },
   },
+  statusBar: true,
 }
 
 export class ConfigManager {
@@ -66,7 +67,9 @@ export class ConfigManager {
 
     try {
       const raw = readFileSync(this.#configPath, 'utf-8')
-      this.#cached = JSON.parse(raw) as CCodeConfig
+      const loaded = JSON.parse(raw) as Partial<CCodeConfig>
+      // 与默认值合并：已有字段保留，缺失字段补充默认值（向前兼容旧配置）
+      this.#cached = { ...DEFAULT_CONFIG, ...loaded }
       return this.#cached
     } catch {
       this.#cached = { ...DEFAULT_CONFIG }
