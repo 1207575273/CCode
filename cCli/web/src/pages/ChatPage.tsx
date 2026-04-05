@@ -301,7 +301,7 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
     }
   }
 
-  const handleSubmit = useCallback((text: string) => {
+  const handleSubmit = useCallback((text: string, imageIds?: string[]) => {
     // 流式中发新消息 → 先中止再提交
     if (isStreaming) {
       if (turnTextRef.current) {
@@ -310,12 +310,20 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
       resetTurn()
       send({ type: 'abort' })
     }
-    setMessages(prev => [...prev, { id: nextId(), role: 'user' as const, content: text, source: 'web' as const }])
+    // 追加用户消息时带上 imageIds
+    setMessages(prev => [...prev, {
+      id: nextId(),
+      role: 'user' as const,
+      content: text,
+      source: 'web' as const,
+      ...(imageIds?.length ? { imageIds } : {}),
+    }])
     setStreaming('')
     setIsStreaming(true)
     turnTextRef.current = ''
     turnToolsRef.current = []
-    setTimeout(() => send({ type: 'chat', text }), 50)
+    // WS 发送时携带 imageIds
+    setTimeout(() => send({ type: 'chat', text, ...(imageIds?.length ? { imageIds } : {}) }), 50)
   }, [send, isStreaming])
 
   return (

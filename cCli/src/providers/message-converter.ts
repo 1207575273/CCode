@@ -1,7 +1,8 @@
 // src/providers/message-converter.ts
 import { HumanMessage, AIMessage, SystemMessage, ToolMessage, type BaseMessage } from '@langchain/core/messages'
-import type { Message, ToolCallContent, ToolResultContent } from '@core/types.js'
+import type { Message, ToolCallContent, ToolResultContent, ImageContent } from '@core/types.js'
 import { normalizeContent, extractText, findOrphanToolCalls } from '@core/message-utils.js'
+import { readImageBase64 } from '@core/image-store.js'
 
 /**
  * 将内部 Message[] 转为 LangChain BaseMessage[]。
@@ -54,7 +55,30 @@ export function toLangChainMessages(messages: Message[]): BaseMessage[] {
           const text = extractText(blocks)
           if (text) result.push(new HumanMessage(text))
         } else {
-          result.push(new HumanMessage(extractText(blocks)))
+          // 检查是否有图片内容
+          const images = blocks.filter((b): b is ImageContent => b.type === 'image')
+          const text = extractText(blocks)
+
+          if (images.length > 0) {
+            // 多模态消息：LangChain HumanMessage 支持 content 数组
+            const parts: Array<{ type: string; [k: string]: unknown }> = []
+            if (text) parts.push({ type: 'text', text })
+            for (const img of images) {
+              const data = readImageBase64(img.imageId)
+              if (data) {
+                parts.push({
+                  type: 'image_url',
+                  image_url: { url: `data:${data.mediaType};base64,${data.base64}` },
+                })
+              }
+              // 图片文件不存在时静默跳过
+            }
+            if (parts.length > 0) {
+              result.push(new HumanMessage({ content: parts }))
+            }
+          } else {
+            result.push(new HumanMessage(text))
+          }
         }
         break
       }

@@ -24,7 +24,7 @@ import {
   bootstrapAll,
 } from '@core/bootstrap.js'
 import type { ChatMessage } from './ChatView.js'
-import type { Message } from '@core/types.js'
+import type { Message, MessageContent } from '@core/types.js'
 import type { UserQuestion, UserQuestionResult } from '@core/agent-loop.js'
 import type { ToolEvent, SubAgentEvent } from './ToolStatusLine.js'
 import type { ServerInfo } from '@mcp/mcp-manager.js'
@@ -222,7 +222,7 @@ export function useChat(): UseChatReturn {
    * 发送用户消息并启动 AgentLoop。
    * system 消息在构建 history 前被过滤，不发送给 LLM。
    */
-  const submit = useCallback((text: string, _source: 'cli' | 'web' = 'cli') => {
+  const submit = useCallback((text: string, _source: 'cli' | 'web' = 'cli', imageIds?: string[]) => {
     if (isStreaming) return
 
     const config = configManager.load()
@@ -241,7 +241,28 @@ export function useChat(): UseChatReturn {
 
     // LLM history 由 ContextManager 管理（完整的结构化 Message[]），
     // 不再从 UI 的 ChatMessage[] 重建——ChatMessage 是渲染模型，有损转换会丢失工具过程。
-    contextManager.pushUser(text)
+    // 构建用户消息：有图片 + vision 启用时用结构化格式
+    const hasImages = imageIds && imageIds.length > 0
+    const visionEnabled = hasImages && configManager.isVisionEnabled(currentProvider, currentModel)
+
+    if (hasImages && visionEnabled) {
+      // 结构化内容：文本 + 图片引用（base64 延迟到 Provider 层加载）
+      const content: MessageContent[] = [
+        { type: 'text' as const, text },
+        ...imageIds.map(id => ({
+          type: 'image' as const,
+          imageId: id,
+          mediaType: 'image/jpeg' as const,  // 前端统一压缩为 JPEG
+        })),
+      ]
+      contextManager.pushUserContent(content)
+    } else {
+      contextManager.pushUser(text)
+      // vision 未启用但有图片 → 提示用户
+      if (hasImages && !visionEnabled) {
+        appendSystemMessage(`当前模型 ${currentModel} 未启用图片理解，${imageIds.length} 张图片已忽略`)
+      }
+    }
 
     setMessages(prev => [...prev, userMsg])
     // 只有 CLI 端直接输入时广播（Web 端触发的 submit 已由 EventBus 广播过）
@@ -279,7 +300,20 @@ export function useChat(): UseChatReturn {
         // 确保 session 已创建，记录用户消息
         const sid = sessionLogger.ensureSession(currentProvider, currentModel)
         if (sid) tokenMeter.bind(sid, currentProvider, currentModel)
-        sessionLogger.logUserMessage(text)
+        // 有图片且 vision 启用时记录结构化内容，否则只记录纯文本
+        if (hasImages && visionEnabled) {
+          const logContent: MessageContent[] = [
+            { type: 'text' as const, text },
+            ...imageIds.map(id => ({
+              type: 'image' as const,
+              imageId: id,
+              mediaType: 'image/jpeg' as const,
+            })),
+          ]
+          sessionLogger.logUserMessage(logContent)
+        } else {
+          sessionLogger.logUserMessage(text)
+        }
 
         // 等待核心模块就绪（App mount 时已启动，此处大概率已完成）
         // MCP 后台加载，已就绪则注册工具，未就绪不阻塞对话
@@ -710,7 +744,7 @@ export function useChat(): UseChatReturn {
   useEffect(() => {
     const off = eventBus.onType('user_input', (event) => {
       if (event.source === 'web' && event.text !== '__abort__') {
-        submit(event.text, 'web')
+        submit(event.text, 'web', event.imageIds)
       }
     })
     return off

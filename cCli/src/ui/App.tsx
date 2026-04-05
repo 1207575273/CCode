@@ -505,19 +505,25 @@ export function App({
                 `会话文件:  ${stats.sessions.totalFiles} 个文件, 共 ${fmtSize(stats.sessions.totalSizeBytes)}`,
                 `  过期:    ${stats.sessions.expiredFiles} 个文件 (${fmtSize(stats.sessions.expiredSizeBytes)})`,
                 '',
+                `图片文件:  ${stats.images.totalFiles} 个`,
+                `  过期:    ${stats.images.expiredFiles} 个`,
+                '',
                 `用量记录:  ${stats.usage.totalRows} 条`,
                 `  过期:    ${stats.usage.expiredRows} 条`,
               ]
               appendSystemMessage(lines.join('\n'))
             } else {
               const stats = getCleanupStats(opts)
-              if (stats.sessions.expiredFiles === 0 && stats.usage.expiredRows === 0) {
+              if (stats.sessions.expiredFiles === 0 && stats.usage.expiredRows === 0 && stats.images.expiredFiles === 0) {
                 appendSystemMessage('没有需要清理的过期数据。')
               } else {
                 const result = executeCleanup(opts)
                 const lines = ['── 清理完成 ──', '']
                 if (result.deletedSessionFiles > 0) {
                   lines.push(`✓ 已清理 ${result.deletedSessionFiles} 个会话文件 (${fmtSize(result.deletedSessionBytes)})`)
+                }
+                if (result.deletedImages > 0) {
+                  lines.push(`✓ 已清理 ${result.deletedImages} 个过期图片`)
                 }
                 if (result.deletedUsageRows > 0) {
                   lines.push(`✓ 已清理 ${result.deletedUsageRows} 条用量记录`)

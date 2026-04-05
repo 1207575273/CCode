@@ -15,6 +15,7 @@ import type { SessionStore } from '@persistence/session-store.js'
 import { sessionStore as defaultStore, generateEventId } from '@persistence/index.js'
 import type { SessionEvent, SessionEventType } from '@persistence/session-types.js'
 import type { AgentEvent } from '@core/agent-loop.js'
+import type { MessageContent } from '@core/types.js'
 import type { McpConnectEvent } from '@mcp/mcp-manager.js'
 
 /** assistant 消息的附加元数据 */
@@ -176,8 +177,8 @@ export class SessionLogger {
     }
   }
 
-  /** 记录用户消息 */
-  logUserMessage(content: string): void {
+  /** 记录用户消息（支持纯文本或包含图片引用的结构化内容） */
+  logUserMessage(content: string | MessageContent[]): void {
     this.#appendEvent('user', {
       message: { role: 'user', content },
     })

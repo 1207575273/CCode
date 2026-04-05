@@ -16,6 +16,9 @@
  * - POST /api/pricing/add — 新增规则
  * - POST /api/pricing/update — 更新规则
  * - POST /api/pricing/delete — 删除规则
+ * - POST /api/images/upload — 上传图片
+ * - GET  /api/images/:id — 获取图片
+ * - GET  /api/settings/vision-check — 查询 vision 支持
  */
 
 import { Hono } from 'hono'
@@ -30,6 +33,7 @@ import { getSystemPromptSections } from '@core/bootstrap.js'
 import { FileStore } from '@memory/storage/file-store.js'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { writeImage, readImageBase64 } from '@core/image-store.js'
 import { AnthropicProvider } from '@providers/anthropic.js'
 import { OpenAICompatProvider } from '@providers/openai-compat.js'
 import { ProviderWrapper } from '@providers/wrapper.js'
@@ -213,6 +217,7 @@ export function createApiRoutes(): Hono {
       const body = await c.req.json() as {
         provider: string
         config: { apiKey: string; baseURL?: string; protocol?: string; models: string[] }
+        model?: string  // 可选：指定测试哪个模型，不传则用 models[0]
       }
       const { provider: providerName, config: provCfg } = body
 
@@ -233,7 +238,8 @@ export function createApiRoutes(): Hono {
         : new OpenAICompatProvider(providerName, cfg)
       const llm = new ProviderWrapper(raw)
 
-      const model = provCfg.models[0]!
+      // 优先使用前端指定的模型，否则用列表第一个
+      const model = body.model && provCfg.models.includes(body.model) ? body.model : provCfg.models[0]!
       const startTime = Date.now()
 
       // 发一条简单消息测试，完整消费流
@@ -345,6 +351,43 @@ export function createApiRoutes(): Hono {
   // Plugins + MCP 管理
   api.route('/plugins', createPluginsRoutes())
   api.route('/mcp', createMcpRoutes())
+
+  // ═══ 图片管理 ═══
+
+  // 上传图片，接收 multipart/form-data，写入 ImageStore
+  api.post('/images/upload', async (c) => {
+    try {
+      const formData = await c.req.formData()
+      const file = formData.get('file')
+      if (!file || !(file instanceof File)) {
+        return c.json({ error: '缺少图片文件' }, 400)
+      }
+      const buffer = Buffer.from(await file.arrayBuffer())
+      const meta = writeImage(buffer, file.type || 'image/jpeg')
+      return c.json({ id: meta.id, url: `/api/images/${meta.id}` })
+    } catch (err) {
+      return c.json({ error: String(err) }, 500)
+    }
+  })
+
+  // 获取图片二进制，用于 Web 端 <img> 展示
+  api.get('/images/:id', (c) => {
+    const id = c.req.param('id')
+    const data = readImageBase64(id)
+    if (!data) return c.notFound()
+    const buffer = Buffer.from(data.base64, 'base64')
+    return new Response(buffer, {
+      headers: { 'Content-Type': data.mediaType, 'Cache-Control': 'public, max-age=86400' },
+    })
+  })
+
+  // 查询当前模型是否支持 vision
+  api.get('/settings/vision-check', (c) => {
+    const provider = c.req.query('provider') ?? ''
+    const model = c.req.query('model') ?? ''
+    const supported = configManager.isVisionEnabled(provider, model)
+    return c.json({ supported })
+  })
 
   // ═══ 记忆向量数据 ═══
 

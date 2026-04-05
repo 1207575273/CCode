@@ -321,6 +321,11 @@ export class ContextManager {
     this.#history.push({ role: 'user', content })
   }
 
+  /** 追加结构化用户消息（含图片等多模态内容） */
+  pushUserContent(content: MessageContent[]): void {
+    this.#history.push({ role: 'user', content })
+  }
+
   /**
    * 原地替换 history（compact 后调用）。
    * 用 length=0 + push 保持数组引用不变——如果 AgentLoop 正在持有引用不会断开。

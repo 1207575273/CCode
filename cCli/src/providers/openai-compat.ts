@@ -77,6 +77,7 @@ export class OpenAICompatProvider implements LLMProvider {
     dbg(`  model: ${request.model}\n`)
     dbg(`  baseURL: ${this.#config.baseURL ?? '(default)'}\n`)
     dbg(`  messages: ${JSON.stringify(request.messages, null, 2)}\n`)
+    dbg(`  langchainMsgs: ${JSON.stringify(langchainMsgs.map(m => ({ type: m._getType(), content: m.content })), null, 2)}\n`)
 
     try {
       const streamOpts = request.signal !== undefined ? { signal: request.signal } : {}

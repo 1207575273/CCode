@@ -71,7 +71,7 @@ export type ServerEvent =
 
 /** 客户端发送的消息 */
 export type ClientMessage =
-  | { type: 'chat'; text: string }
+  | { type: 'chat'; text: string; imageIds?: string[] }
   | { type: 'permission'; allow: boolean }
   | { type: 'question'; cancelled: boolean; answers?: Record<string, string | string[]> }
   | { type: 'abort' }
@@ -82,6 +82,8 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
   source?: 'cli' | 'web'
+  /** 用户消息附带的图片 ID 列表 */
+  imageIds?: string[]
   /** assistant 消息的工具执行记录（结构化，支持折叠渲染） */
   toolEvents?: ToolEvent[]
   /** assistant 消息的模型名 */

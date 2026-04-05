@@ -11,6 +11,7 @@ interface ProviderConfig {
   baseURL?: string
   protocol?: string
   models: string[]
+  visionModels?: string[]
 }
 
 interface CCodeConfig {
@@ -384,22 +385,30 @@ function ProviderCard({ name, provider, onChange, onDelete }: {
   const [newModel, setNewModel] = useState('')
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
+  // 选中的模型（用于测试连通性），默认选第一个
+  const [selectedModel, setSelectedModel] = useState<string | null>(provider.models[0] ?? null)
+  // 拖拽排序状态
+  const [dragIdx, setDragIdx] = useState<number | null>(null)
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
 
-  const handleTest = async () => {
+  // 测试指定模型的连通性
+  const handleTest = async (model?: string) => {
+    const targetModel = model ?? selectedModel ?? provider.models[0]
+    if (!targetModel) return
     setTesting(true)
     setTestResult(null)
     try {
       const res = await apiPost<{ success: boolean; model?: string; durationMs?: number; error?: string }>(
         '/api/settings/test-provider',
-        { provider: name, config: provider }
+        { provider: name, config: provider, model: targetModel }
       )
       if (res.success) {
-        setTestResult({ ok: true, msg: `连通成功（${res.model}, ${res.durationMs}ms）` })
+        setTestResult({ ok: true, msg: `✅ ${res.model} 连通成功（${res.durationMs}ms）` })
       } else {
-        setTestResult({ ok: false, msg: res.error ?? '未知错误' })
+        setTestResult({ ok: false, msg: `❌ ${targetModel}: ${res.error ?? '未知错误'}` })
       }
     } catch (e) {
-      setTestResult({ ok: false, msg: String(e) })
+      setTestResult({ ok: false, msg: `❌ ${targetModel}: ${String(e)}` })
     }
     setTesting(false)
   }
@@ -408,11 +417,30 @@ function ProviderCard({ name, provider, onChange, onDelete }: {
     const m = newModel.trim()
     if (!m || provider.models.includes(m)) return
     onChange({ ...provider, models: [...provider.models, m] })
+    // 新增后自动选中
+    setSelectedModel(m)
     setNewModel('')
   }
 
   const removeModel = (model: string) => {
-    onChange({ ...provider, models: provider.models.filter(m => m !== model) })
+    const updated = provider.models.filter(m => m !== model)
+    onChange({ ...provider, models: updated })
+    // 删除选中项时自动选第一个
+    if (selectedModel === model) {
+      setSelectedModel(updated[0] ?? null)
+    }
+  }
+
+  // 拖拽排序：交换位置
+  const handleDragEnd = () => {
+    if (dragIdx !== null && dragOverIdx !== null && dragIdx !== dragOverIdx) {
+      const models = [...provider.models]
+      const [moved] = models.splice(dragIdx, 1)
+      models.splice(dragOverIdx, 0, moved!)
+      onChange({ ...provider, models })
+    }
+    setDragIdx(null)
+    setDragOverIdx(null)
   }
 
   return (
@@ -431,9 +459,10 @@ function ProviderCard({ name, provider, onChange, onDelete }: {
           </select>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={handleTest} disabled={testing}
-            className="px-2 py-1 text-xs bg-emerald-700 text-white rounded hover:bg-emerald-600 disabled:opacity-50">
-            {testing ? '测试中...' : '测试连通'}
+          <button onClick={() => handleTest()} disabled={testing || !provider.models.length}
+            className="px-2 py-1 text-xs bg-emerald-700 text-white rounded hover:bg-emerald-600 disabled:opacity-50"
+            title={selectedModel ? `测试 ${selectedModel}` : '请先添加模型'}>
+            {testing ? '测试中...' : `测试${selectedModel ? ` ${selectedModel}` : ''}`}
           </button>
           <button onClick={() => { if (window.confirm(`确定删除供应商 "${name}"？`)) onDelete() }}
             className="px-2 py-1 text-xs bg-red-700/60 text-red-300 rounded hover:bg-red-600/60">
@@ -445,7 +474,7 @@ function ProviderCard({ name, provider, onChange, onDelete }: {
       {/* 测试结果 */}
       {testResult && (
         <div className={`text-xs mb-3 px-2 py-1 rounded ${testResult.ok ? 'bg-emerald-900/30 text-emerald-400' : 'bg-red-900/30 text-red-400'}`}>
-          {testResult.ok ? '✅' : '❌'} {testResult.msg}
+          {testResult.msg}
         </div>
       )}
 
@@ -479,16 +508,67 @@ function ProviderCard({ name, provider, onChange, onDelete }: {
           />
         </div>
 
-        {/* Models */}
+        {/* Models — 可选中 + 可拖拽排序 */}
         <div>
-          <label className="text-xs text-gray-400 block mb-1">模型列表</label>
-          <div className="flex flex-wrap gap-1 mb-1">
-            {provider.models.map(m => (
-              <span key={m} className="inline-flex items-center gap-1 bg-gray-700 text-gray-300 text-xs px-2 py-1 rounded">
-                {m}
-                <button onClick={() => removeModel(m)} className="text-gray-500 hover:text-red-400">×</button>
-              </span>
-            ))}
+          <label className="text-xs text-gray-400 block mb-1">
+            模型列表
+            <span className="text-gray-500 ml-2">点击选中测试 · 拖拽排序 · 首位为默认模型 · 👁 切换图片理解</span>
+          </label>
+          <div className="flex flex-wrap gap-1 mb-1 min-h-[28px]">
+            {provider.models.map((m, idx) => {
+              const isSelected = m === selectedModel
+              const isDragging = idx === dragIdx
+              const isDragOver = idx === dragOverIdx && dragIdx !== null && dragIdx !== idx
+              return (
+                <span
+                  key={m}
+                  draggable
+                  onDragStart={() => setDragIdx(idx)}
+                  onDragOver={(e) => { e.preventDefault(); setDragOverIdx(idx) }}
+                  onDragEnd={handleDragEnd}
+                  onClick={() => setSelectedModel(m)}
+                  onDoubleClick={() => handleTest(m)}
+                  className={[
+                    'inline-flex items-center gap-1 text-xs px-2 py-1 rounded cursor-pointer select-none transition-all',
+                    isSelected
+                      ? 'bg-blue-600/40 text-blue-300 ring-1 ring-blue-500/60'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600',
+                    isDragging ? 'opacity-40' : '',
+                    isDragOver ? 'ring-1 ring-yellow-400/60' : '',
+                  ].join(' ')}
+                  title={`点击选中 · 双击测试 · 拖拽排序${idx === 0 ? ' · 当前为默认模型' : ''}`}
+                >
+                  {/* 拖拽手柄 */}
+                  <span className="text-gray-500 cursor-grab active:cursor-grabbing mr-0.5">⠿</span>
+                  {idx === 0 && <span className="text-yellow-500 text-[10px]" title="默认模型">★</span>}
+                  {m}
+                  {/* vision 切换：点击将模型加入/移出 visionModels */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const visionModels = provider.visionModels ?? []
+                      const isVision = visionModels.includes(m)
+                      const updated = isVision
+                        ? visionModels.filter(v => v !== m)
+                        : [...visionModels, m]
+                      onChange({ ...provider, visionModels: updated })
+                    }}
+                    className={`text-xs ${
+                      (provider.visionModels ?? []).includes(m)
+                        ? 'text-blue-400 hover:text-blue-300'
+                        : 'text-gray-600 hover:text-gray-400'
+                    }`}
+                    title={`${(provider.visionModels ?? []).includes(m) ? '已启用' : '未启用'}图片理解`}
+                  >
+                    {(provider.visionModels ?? []).includes(m) ? '👁' : '🚫'}
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removeModel(m) }}
+                    className="text-gray-500 hover:text-red-400 ml-0.5"
+                  >×</button>
+                </span>
+              )
+            })}
           </div>
           <div className="flex gap-1">
             <input

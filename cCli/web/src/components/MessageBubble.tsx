@@ -1,5 +1,6 @@
 // src/components/MessageBubble.tsx
 
+import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
@@ -39,6 +40,23 @@ import type { SubAgentInfo } from './SubAgentCard'
 /** 格式化 token 数量：>1M 显示 M，>1K 显示 K，否则原始数字 */
 const fmtTokens = (n: number) =>
   n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n)
+
+/** 图片预览组件：加载失败时显示占位提示 */
+function ImagePreview({ imageId }: { imageId: string }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) {
+    return <span className="text-xs text-gray-500 bg-gray-800 rounded px-2 py-1">图片已过期</span>
+  }
+  return (
+    <img
+      src={`/api/images/${imageId}`}
+      alt="附件图片"
+      className="max-w-[300px] max-h-[200px] rounded-lg border border-gray-600 cursor-pointer hover:opacity-80 transition-opacity"
+      onClick={() => window.open(`/api/images/${imageId}`, '_blank')}
+      onError={() => setFailed(true)}
+    />
+  )
+}
 
 interface Props {
   message: ChatMessage
@@ -97,7 +115,17 @@ export function MessageBubble({ message, subAgents }: Props) {
           </details>
         )}
         {isUser ? (
-          <p className="whitespace-pre-wrap">{message.content}</p>
+          <>
+            <p className="whitespace-pre-wrap">{message.content}</p>
+            {/* 用户消息附带的图片 */}
+            {message.imageIds && message.imageIds.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {message.imageIds.map(id => (
+                  <ImagePreview key={id} imageId={id} />
+                ))}
+              </div>
+            )}
+          </>
         ) : (
           <div className="prose prose-invert prose-sm max-w-none prose-pre:bg-gray-900 prose-pre:border prose-pre:border-gray-700">
             <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>

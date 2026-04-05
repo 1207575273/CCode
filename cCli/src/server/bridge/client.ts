@@ -103,6 +103,8 @@ function handleBridgeMessage(msg: { type: string; [key: string]: unknown }): voi
         type: 'user_input',
         text: String(msg['text'] ?? ''),
         source: 'web',
+        // 透传图片 ID 列表（Web 端粘贴上传后携带）
+        ...(Array.isArray(msg['imageIds']) ? { imageIds: msg['imageIds'] as string[] } : {}),
       })
       break
     case 'permission':

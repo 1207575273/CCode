@@ -11,7 +11,8 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import type { LLMProvider, ChatRequest, ProviderProtocol } from './provider.js'
-import type { Message, MessageContent, StreamChunk, ToolCallContent } from '@core/types.js'
+import type { Message, MessageContent, StreamChunk, ToolCallContent, ImageContent } from '@core/types.js'
+import { readImageBase64 } from '@core/image-store.js'
 import type { ProviderConfig } from '@config/config-manager.js'
 import { findOrphanToolCalls } from '@core/message-utils.js'
 import { dbg } from '../debug.js'
@@ -62,6 +63,23 @@ function toAnthropicMessages(messages: Message[]): Anthropic.MessageParam[] {
             content: typeof tr.result === 'string' ? tr.result : JSON.stringify(tr.result),
             ...(tr.isError ? { is_error: true } : {}),
           })
+          break
+        }
+        case 'image': {
+          // 延迟加载：只在真正发送给 LLM 时才读取 base64
+          const img = block as ImageContent
+          const data = readImageBase64(img.imageId)
+          if (data) {
+            parts.push({
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: data.mediaType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+                data: data.base64,
+              },
+            })
+          }
+          // 图片文件不存在时静默跳过（已过期或被 GC 清理）
           break
         }
       }

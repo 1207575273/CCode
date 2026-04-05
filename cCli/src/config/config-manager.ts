@@ -9,6 +9,8 @@ export interface ProviderConfig {
   /** 协议类型：anthropic 原生 或 openai 兼容（默认 openai） */
   protocol?: 'anthropic' | 'openai'
   models: string[]
+  /** 支持多模态图片理解的模型子集（models 的子集），为空或不填 = 全部不支持 */
+  visionModels?: string[]
 }
 
 export interface CCodeConfig {
@@ -25,15 +27,18 @@ const DEFAULT_CONFIG: CCodeConfig = {
     anthropic: {
       apiKey: '',
       models: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
+      visionModels: [],  // 默认关闭，用户手动开启
     },
     glm: {
       apiKey: '',
       baseURL: 'https://open.bigmodel.cn/api/coding/paas/v4',
       models: ['glm-4-flash', 'glm-4-air', 'glm-4'],
+      visionModels: [],
     },
     openai: {
       apiKey: '',
       models: ['gpt-4o', 'gpt-4o-mini'],
+      visionModels: [],
     },
   },
   statusBar: true,
@@ -85,6 +90,15 @@ export class ConfigManager {
       this.#cached = { ...DEFAULT_CONFIG }
       return this.#cached
     }
+  }
+
+  /** 检查指定 provider + model 是否支持图片理解 */
+  isVisionEnabled(provider: string, model: string): boolean {
+    const config = this.load()
+    const prov = config.providers[provider]
+    if (!prov?.visionModels?.length) return false
+    // 双重检查：模型必须在 models 列表中，且在 visionModels 白名单中
+    return prov.models.includes(model) && prov.visionModels.includes(model)
   }
 
   save(config: CCodeConfig): void {

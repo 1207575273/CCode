@@ -9,9 +9,11 @@
 
 import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { homedir } from 'node:os'
 import type { Database } from 'libsql'
 import { sessionStore } from '@persistence/index.js'
 import { getDb } from '@persistence/db.js'
+import { cleanupImages } from '@core/image-store.js'
 
 const DEFAULT_SESSION_RETENTION_DAYS = 30
 const DEFAULT_USAGE_RETENTION_DAYS = 90
@@ -26,6 +28,11 @@ export interface CleanupStats {
   usage: {
     totalRows: number
     expiredRows: number
+  }
+  /** 图片文件统计 */
+  images: {
+    totalFiles: number
+    expiredFiles: number
   }
 }
 
@@ -47,6 +54,8 @@ export interface CleanupResult {
   deletedSessionFiles: number
   deletedSessionBytes: number
   deletedUsageRows: number
+  /** 清理的过期图片数量 */
+  deletedImages: number
 }
 
 /**
@@ -68,7 +77,11 @@ export function getCleanupStats(options: CleanupOptions = {}): CleanupStats {
       ? scanUsageLogs(usageDays, db)
       : { totalRows: 0, expiredRows: 0 }
 
-  return { sessions, usage }
+  const images = target === 'all' || target === 'sessions'
+    ? scanImageFiles(sessionDays)
+    : { totalFiles: 0, expiredFiles: 0 }
+
+  return { sessions, usage, images }
 }
 
 /**
@@ -83,13 +96,16 @@ export function executeCleanup(options: CleanupOptions = {}): CleanupResult {
   let deletedSessionFiles = 0
   let deletedSessionBytes = 0
   let deletedUsageRows = 0
+  let deletedImages = 0
 
-  // 清理会话文件
+  // 清理会话文件 + 过期图片
   if (target === 'all' || target === 'sessions') {
     const before = scanSessionFiles(sessionDays)
     sessionStore.cleanup(sessionDays)
     deletedSessionFiles = before.expiredFiles
     deletedSessionBytes = before.expiredSizeBytes
+    // 图片与会话同生命周期，使用相同保留天数
+    deletedImages = cleanupImages(sessionDays)
   }
 
   // 清理 usage_logs
@@ -97,7 +113,7 @@ export function executeCleanup(options: CleanupOptions = {}): CleanupResult {
     deletedUsageRows = deleteExpiredUsageLogs(usageDays, db)
   }
 
-  return { deletedSessionFiles, deletedSessionBytes, deletedUsageRows }
+  return { deletedSessionFiles, deletedSessionBytes, deletedUsageRows, deletedImages }
 }
 
 // ═══ 内部辅助 ═══
@@ -150,6 +166,34 @@ function scanUsageLogs(retentionDays: number, db: Database): CleanupStats['usage
     .prepare('SELECT COUNT(*) as cnt FROM usage_logs WHERE timestamp < ?')
     .get(cutoff) as { cnt: number }
   return { totalRows: totalRow.cnt, expiredRows: expiredRow.cnt }
+}
+
+/** 扫描图片目录，统计总文件数和过期文件数 */
+function scanImageFiles(retentionDays: number): CleanupStats['images'] {
+  // 图片存储在项目运行目录下（与 image-store.ts 保持一致）
+  const imagesDir = join(process.cwd(), '.ccode', 'images')
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000
+  let totalFiles = 0
+  let expiredFiles = 0
+
+  try {
+    const files = readdirSync(imagesDir)
+    for (const file of files) {
+      try {
+        const stat = statSync(join(imagesDir, file))
+        totalFiles++
+        if (stat.mtime.getTime() < cutoff) {
+          expiredFiles++
+        }
+      } catch {
+        continue
+      }
+    }
+  } catch {
+    // 目录不存在或无权限，返回空统计
+  }
+
+  return { totalFiles, expiredFiles }
 }
 
 function deleteExpiredUsageLogs(retentionDays: number, db: Database): number {

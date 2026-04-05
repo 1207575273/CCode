@@ -21,7 +21,14 @@ export interface ToolResultContent {
   isError?: boolean
 }
 
-export type MessageContent = TextContent | ToolCallContent | ToolResultContent
+/** 图片内容块（多模态消息，Provider 层读取 base64 时使用 imageId 查找文件） */
+export interface ImageContent {
+  type: 'image'
+  imageId: string     // 图片文件 UUID 引用
+  mediaType: string   // image/jpeg | image/png | image/webp
+}
+
+export type MessageContent = TextContent | ToolCallContent | ToolResultContent | ImageContent
 
 export interface Message {
   role: Role
