@@ -16,6 +16,8 @@
     "dev": "tsx bin/ccli.ts",
     "dev:pipe": "tsx bin/ccli.ts",
     "dev:web": "node scripts/ensure-web.cjs && tsx bin/ccli.ts --web",
+    "dev:bun": "bun run bin/bun-compat.ts",
+    "dev:bun:web": "bun run scripts/ensure-web.cjs && bun run bin/bun-compat.ts --web",
     "build": "tsup",
     "build:web": "node scripts/ensure-web.cjs && cd web && pnpm build",
     "build:all": "tsup && node scripts/ensure-web.cjs && cd web && pnpm build",
