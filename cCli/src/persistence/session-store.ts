@@ -465,18 +465,35 @@ export class SessionStore {
   /**
    * 从 JSONL 中提取最后一个 session_end 事件的 accumulatedMs。
    * 用于 resume 时恢复累计运行时长。找不到则返回 0。
+   *
+   * 优化：只读取文件尾部（最后 4KB），避免长会话全量加载到内存。
+   * session_end 事件是 JSONL 最后一行，4KB 足以覆盖。
    */
   getLastAccumulatedMs(sessionId: string): number {
     try {
-      // 复用已有的文件查找逻辑：遍历 projectDir 下的文件，用 extractSessionId 匹配
       const dirs = readdirSync(this.baseDir, { withFileTypes: true }).filter(d => d.isDirectory())
       for (const dir of dirs) {
         const projectDir = join(this.baseDir, dir.name)
         const files = readdirSync(projectDir).filter(f => f.endsWith('.jsonl'))
         for (const file of files) {
           if (extractSessionId(file) === sessionId) {
-            const content = readFileSync(join(projectDir, file), 'utf-8')
-            const lines = content.trim().split('\n').filter(Boolean)
+            const filePath = join(projectDir, file)
+            const fileSize = statSync(filePath).size
+
+            // 只读尾部 4KB（session_end 事件单行远小于此）
+            const TAIL_BYTES = 4096
+            const start = Math.max(0, fileSize - TAIL_BYTES)
+            const buf = Buffer.alloc(Math.min(TAIL_BYTES, fileSize))
+            const fd = require('node:fs').openSync(filePath, 'r')
+            try {
+              require('node:fs').readSync(fd, buf, 0, buf.length, start)
+            } finally {
+              require('node:fs').closeSync(fd)
+            }
+
+            const tail = buf.toString('utf-8')
+            const lines = tail.split('\n').filter(Boolean)
+
             // 从尾部向前找第一个 session_end
             for (let i = lines.length - 1; i >= 0; i--) {
               try {
@@ -484,7 +501,7 @@ export class SessionStore {
                 if (event.type === 'session_end' && event.accumulatedMs != null) {
                   return event.accumulatedMs
                 }
-              } catch { continue }
+              } catch { continue }  // 截断的首行 JSON 解析失败，跳过
             }
             return 0
           }

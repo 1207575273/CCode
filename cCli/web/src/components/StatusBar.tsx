@@ -1,4 +1,20 @@
-// src/components/StatusBar.tsx
+// web/src/components/StatusBar.tsx
+
+/**
+ * StatusBar — Web 端底部状态栏（三行布局，与 CLI 端保持一致）。
+ *
+ * 布局：
+ *   SYS  MEM [████░░░░] 62% 10.2/16GB | CPU [████░░░░] 45%
+ *   PROC MEM [████░░░░]  3%  256MB    | CPU [████░░░░]  8%
+ *   INFO ⏱ 03:25 | 1.2K/800 tok | Ctx 65% | $0.02
+ *
+ * 数据来源：CLI 通过 eventBus → Bridge Server → WebSocket 推送 status_bar 事件。
+ * 运行时间由本地 1s interval 平滑补偿（见 ChatPage.tsx）。
+ */
+
+// ═══════════════════════════════════════════════
+// 类型（与 CLI 端 StatusBarPayload 对齐）
+// ═══════════════════════════════════════════════
 
 interface StatusBarData {
   sys: {
@@ -29,21 +45,27 @@ interface StatusBarProps {
   data: StatusBarData | null
 }
 
-/** 进度条色阶 */
+// ═══════════════════════════════════════════════
+// 格式化函数
+// ═══════════════════════════════════════════════
+
+/** 进度条色阶：0-60% 绿、60-85% 黄、85%+ 红 */
 function barColorClass(percent: number): string {
   if (percent >= 85) return 'bg-red-500'
   if (percent >= 60) return 'bg-yellow-500'
   return 'bg-green-500'
 }
 
-/** 格式化字节 */
+/** 格式化字节为 MB/GB，负数兜底为 0MB */
 function formatBytes(bytes: number): string {
+  if (bytes <= 0) return '0MB'
   if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)}GB`
   return `${Math.round(bytes / (1024 * 1024))}MB`
 }
 
-/** 格式化时间 */
+/** 格式化毫秒为 MM:SS 或 HH:MM:SS，负数兜底为 00:00 */
 function formatElapsed(ms: number): string {
+  if (ms <= 0) return '00:00'
   const totalSeconds = Math.floor(ms / 1000)
   const hours = Math.floor(totalSeconds / 3600)
   const minutes = Math.floor((totalSeconds % 3600) / 60)
@@ -53,25 +75,38 @@ function formatElapsed(ms: number): string {
   return `${pad(minutes)}:${pad(seconds)}`
 }
 
-/** 格式化 token 数量 */
+/** 格式化 token 数值（K/M 自动缩写） */
 function formatTokenCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1000) return `${(n / 1000).toFixed(1)}K`
   return String(n)
 }
 
-/** 进度条组件 */
+// ═══════════════════════════════════════════════
+// 子组件
+// ═══════════════════════════════════════════════
+
+/** CSS 进度条（Tailwind 实现） */
 function ProgressBar({ percent, width = 'w-20' }: { percent: number; width?: string }) {
-  const clampedPercent = Math.min(100, Math.max(0, percent))
+  const clamped = Math.min(100, Math.max(0, percent))
   return (
     <div className={`${width} h-2.5 bg-gray-700 rounded-sm overflow-hidden inline-flex`}>
       <div
-        className={`h-full ${barColorClass(clampedPercent)} transition-all duration-300`}
-        style={{ width: `${clampedPercent}%` }}
+        className={`h-full ${barColorClass(clamped)} transition-all duration-300`}
+        style={{ width: `${clamped}%` }}
       />
     </div>
   )
 }
+
+/** 分隔符 */
+function Sep() {
+  return <span className="text-gray-600">|</span>
+}
+
+// ═══════════════════════════════════════════════
+// 主组件
+// ═══════════════════════════════════════════════
 
 export function StatusBar({ data }: StatusBarProps) {
   if (!data) return null
@@ -89,7 +124,7 @@ export function StatusBar({ data }: StatusBarProps) {
           <span>{Math.round(sys.memPercent)}%</span>
           <span className="text-gray-500">{formatBytes(sys.memUsedBytes)}/{formatBytes(sys.memTotalBytes)}</span>
         </span>
-        <span className="text-gray-600">|</span>
+        <Sep />
         <span className="flex items-center gap-1.5">
           <span>CPU</span>
           <ProgressBar percent={sys.cpuPercent} />
@@ -106,7 +141,7 @@ export function StatusBar({ data }: StatusBarProps) {
           <span>{Math.round(proc.memPercent)}%</span>
           <span className="text-gray-500">{formatBytes(proc.memUsedBytes)}</span>
         </span>
-        <span className="text-gray-600">|</span>
+        <Sep />
         <span className="flex items-center gap-1.5">
           <span>CPU</span>
           <ProgressBar percent={proc.cpuPercent} />
@@ -120,13 +155,13 @@ export function StatusBar({ data }: StatusBarProps) {
         <span>⏱ {formatElapsed(proc.elapsedMs)}</span>
         {token && token.callCount > 0 && (
           <>
-            <span className="text-gray-600">|</span>
+            <Sep />
             <span>{formatTokenCount(token.inputTokens)}/{formatTokenCount(token.outputTokens)} tok</span>
           </>
         )}
         {context && (
           <>
-            <span className="text-gray-600">|</span>
+            <Sep />
             <span className={
               context.level === 'overflow' || context.level === 'critical' ? 'text-red-400'
               : context.level === 'warning' ? 'text-yellow-400'
@@ -144,7 +179,7 @@ export function StatusBar({ data }: StatusBarProps) {
           if (parts.length === 0) return null
           return (
             <>
-              <span className="text-gray-600">|</span>
+              <Sep />
               <span>{parts.join('+')}</span>
             </>
           )
