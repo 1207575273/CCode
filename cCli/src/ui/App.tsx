@@ -116,6 +116,8 @@ export function App({
     enabled: statusBarEnabled,
     accumulatedMs,
     sessionStartTime,
+    getTokenStats: () => tokenMeter.getSessionStats(),
+    getContextState: () => contextState,
   })
 
   const [showModelPicker, setShowModelPicker] = useState(false)

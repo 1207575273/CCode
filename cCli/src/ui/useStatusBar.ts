@@ -49,6 +49,10 @@ interface UseStatusBarOptions {
   accumulatedMs: number
   /** 本次 session 启动时间戳 */
   sessionStartTime: number
+  /** 获取当前 token 统计（eventBus 推送用） */
+  getTokenStats?: () => { totalInputTokens: number; totalOutputTokens: number; costByCurrency: Record<string, number>; callCount: number } | null
+  /** 获取当前 context 状态（eventBus 推送用） */
+  getContextState?: () => { usedPercentage: number; level: string } | null
 }
 
 /** 采集所有 CPU 核心的 idle/total 时间（用于系统 CPU 使用率差值计算） */
@@ -63,7 +67,7 @@ export function sampleCpuTimes(): { idle: number; total: number } {
 }
 
 export function useStatusBar(options: UseStatusBarOptions): StatusBarData | null {
-  const { enabled, accumulatedMs, sessionStartTime } = options
+  const { enabled, accumulatedMs, sessionStartTime, getTokenStats, getContextState } = options
 
   const [data, setData] = useState<StatusBarData | null>(null)
   const prevCpuUsageRef = useRef<NodeJS.CpuUsage | null>(null)
@@ -135,6 +139,8 @@ export function useStatusBar(options: UseStatusBarOptions): StatusBarData | null
       setData(next)
 
       // eventBus 推送（Web 端消费）
+      const tokenStats = getTokenStats?.() ?? null
+      const ctxState = getContextState?.() ?? null
       const payload: StatusBarPayload = {
         sys: {
           memPercent: next.sysMemPercent,
@@ -148,8 +154,16 @@ export function useStatusBar(options: UseStatusBarOptions): StatusBarData | null
           cpuPercent: next.procCpuPercent,
           elapsedMs: next.elapsedMs,
         },
-        token: null,
-        context: null,
+        token: tokenStats && tokenStats.callCount > 0 ? {
+          inputTokens: tokenStats.totalInputTokens,
+          outputTokens: tokenStats.totalOutputTokens,
+          costByCurrency: tokenStats.costByCurrency,
+          callCount: tokenStats.callCount,
+        } : null,
+        context: ctxState ? {
+          usedPercentage: ctxState.usedPercentage,
+          level: ctxState.level,
+        } : null,
       }
       eventBus.emit({ type: 'status_bar', data: payload })
     }
