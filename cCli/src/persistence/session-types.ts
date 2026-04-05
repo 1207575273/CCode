@@ -118,6 +118,8 @@ export interface SessionEvent {
   totalLlmCalls?: number
   totalErrors?: number
   totalDurationMs?: number
+  /** 累计运行时长 ms（跨 resume 累加） */
+  accumulatedMs?: number
 }
 
 /** 工具执行记录（loadMessages 还原用） */
