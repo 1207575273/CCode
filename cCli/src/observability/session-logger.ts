@@ -47,10 +47,21 @@ export class SessionLogger {
   #lastEventUuid: string | null = null
   #turnStats: TurnStats = SessionLogger.#emptyStats()
   #cwd: string = process.cwd()
+  #accumulatedMs: number = 0
   readonly #store: SessionStore
 
   constructor(store?: SessionStore) {
     this.#store = store ?? defaultStore
+  }
+
+  /** 设置历史累计时长（resume 时调用） */
+  setAccumulatedMs(ms: number): void {
+    this.#accumulatedMs = ms
+  }
+
+  /** 获取历史累计时长 */
+  get accumulatedMs(): number {
+    return this.#accumulatedMs
   }
 
   /** 绑定到一个已有会话（恢复/分叉时调用） */
@@ -238,6 +249,7 @@ export class SessionLogger {
       totalLlmCalls: this.#turnStats.totalLlmCalls,
       totalErrors: this.#turnStats.totalErrors,
       totalDurationMs: durationMs,
+      accumulatedMs: this.#accumulatedMs + durationMs,
     })
   }
 
