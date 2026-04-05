@@ -113,7 +113,7 @@ export function App({
   const statusBarEnabled = config.statusBar !== false
 
   const statusBarData = useStatusBar({
-    hasMessages: statusBarEnabled && (messages.length > 0 || isStreaming),
+    enabled: statusBarEnabled,
     accumulatedMs,
     sessionStartTime,
   })
@@ -960,7 +960,7 @@ export function App({
           {statusBarEnabled && (
             <StatusBar
               data={statusBarData}
-              tokenStats={started ? tokenMeter.getSessionStats() : null}
+              tokenStats={tokenMeter.getSessionStats()}
               contextState={contextState}
               terminalWidth={terminalSize.columns}
             />

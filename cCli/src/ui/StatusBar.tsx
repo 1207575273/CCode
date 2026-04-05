@@ -1,11 +1,12 @@
 // src/ui/StatusBar.tsx
 
 /**
- * StatusBar — 统一底部状态栏（双行布局）。
+ * StatusBar — 统一底部状态栏（三行布局）。
  *
  * SYS 行：系统级内存 + CPU
- * PROC 行：进程级内存 + CPU + 耗时 + token + context + cost
- * 纯展示组件，所有数据由 props 注入。
+ * PROC 行：进程级内存 + CPU
+ * INFO 行：运行时间 + token + context + cost
+ * 纯展示组件，所有数据由 props 注入。一启动就展示，token/context 空时只显示运行时间。
  */
 
 import React from 'react'
@@ -110,15 +111,10 @@ function buildSysSegments(data: StatusBarData): Segment[] {
   return segments
 }
 
-/** 构建 PROC 行段落（进程级内存 + CPU + 耗时 + token + context + cost） */
-function buildProcSegments(
-  data: StatusBarData,
-  tokenStats: SessionCostStats | null,
-  contextState: ContextWindowState | null,
-): Segment[] {
+/** 构建 PROC 行段落（进程级内存 + CPU） */
+function buildProcSegments(data: StatusBarData): Segment[] {
   const segments: Segment[] = []
 
-  // PROC MEM
   const memBar = renderBar(data.procMemPercent, BAR_WIDTH)
   const memPct = `${Math.round(data.procMemPercent)}%`.padStart(4)
   const memAbs = formatBytes(data.procMemUsedBytes)
@@ -135,7 +131,6 @@ function buildProcSegments(
     ),
   })
 
-  // PROC CPU
   const cpuBar = renderBar(data.procCpuPercent, BAR_WIDTH)
   const cpuPct = `${Math.round(data.procCpuPercent)}%`.padStart(4)
   const cpuText = `CPU ${cpuBar} ${cpuPct}`
@@ -151,7 +146,18 @@ function buildProcSegments(
     ),
   })
 
-  // Elapsed
+  return segments
+}
+
+/** 构建 INFO 行段落（运行时间 + token + context + cost） */
+function buildInfoSegments(
+  data: StatusBarData,
+  tokenStats: SessionCostStats | null,
+  contextState: ContextWindowState | null,
+): Segment[] {
+  const segments: Segment[] = []
+
+  // 运行时间（始终显示）
   const elapsed = formatElapsed(data.elapsedMs)
   segments.push({
     key: 'elapsed',
@@ -159,7 +165,7 @@ function buildProcSegments(
     render: () => <Text dimColor>⏱ {elapsed}</Text>,
   })
 
-  // Token（仅在有调用时显示）
+  // Token（有调用时显示）
   if (tokenStats && tokenStats.callCount > 0) {
     const tokIn = formatTokenCount(tokenStats.totalInputTokens)
     const tokOut = formatTokenCount(tokenStats.totalOutputTokens)
@@ -171,7 +177,7 @@ function buildProcSegments(
     })
   }
 
-  // Context（仅在有数据时显示）
+  // Context（有数据时显示）
   if (contextState && contextState.lastInputTokens > 0) {
     const ctxPct = `${(contextState.usedPercentage * 100).toFixed(0)}%`
     const ctxText = `Ctx ${ctxPct}`
@@ -191,7 +197,7 @@ function buildProcSegments(
     })
   }
 
-  // Cost（仅在有费用时显示）
+  // Cost（有费用时显示）
   if (tokenStats && tokenStats.callCount > 0) {
     const sym = (c: string) => c === 'CNY' ? '¥' : '$'
     const costParts = Object.entries(tokenStats.costByCurrency)
@@ -248,18 +254,20 @@ function renderLine(segments: Segment[], prefix: string): React.ReactNode {
 export function StatusBar({ data, tokenStats, contextState, terminalWidth }: StatusBarProps): React.ReactNode {
   if (!data) return null
 
-  const prefixWidth = 5  // "SYS  " 或 "PROC "
+  const prefixWidth = 5  // "SYS  " / "PROC " / "INFO "
   const maxWidth = terminalWidth - 2 - prefixWidth
 
   const sysSegments = truncateSegments(buildSysSegments(data), maxWidth)
-  const procSegments = truncateSegments(buildProcSegments(data, tokenStats, contextState), maxWidth)
+  const procSegments = truncateSegments(buildProcSegments(data), maxWidth)
+  const infoSegments = truncateSegments(buildInfoSegments(data, tokenStats, contextState), maxWidth)
 
-  if (sysSegments.length === 0 && procSegments.length === 0) return null
+  if (sysSegments.length === 0 && procSegments.length === 0 && infoSegments.length === 0) return null
 
   return (
     <Box flexDirection="column">
       {renderLine(sysSegments, 'SYS  ')}
       {renderLine(procSegments, 'PROC ')}
+      {renderLine(infoSegments, 'INFO ')}
     </Box>
   )
 }

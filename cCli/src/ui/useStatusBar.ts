@@ -43,8 +43,8 @@ export interface StatusBarData {
 }
 
 interface UseStatusBarOptions {
-  /** 是否有消息（没消息时不采集） */
-  hasMessages: boolean
+  /** 是否启用（false 时不采集、不推送） */
+  enabled: boolean
   /** 历史累计时长（resume 带入） */
   accumulatedMs: number
   /** 本次 session 启动时间戳 */
@@ -63,7 +63,7 @@ export function sampleCpuTimes(): { idle: number; total: number } {
 }
 
 export function useStatusBar(options: UseStatusBarOptions): StatusBarData | null {
-  const { hasMessages, accumulatedMs, sessionStartTime } = options
+  const { enabled, accumulatedMs, sessionStartTime } = options
 
   const [data, setData] = useState<StatusBarData | null>(null)
   const prevCpuUsageRef = useRef<NodeJS.CpuUsage | null>(null)
@@ -76,7 +76,7 @@ export function useStatusBar(options: UseStatusBarOptions): StatusBarData | null
 
   // ── 资源采样（SYS + PROC MEM/CPU），每 3 秒 ──
   useEffect(() => {
-    if (!hasMessages) return
+    if (!enabled) return
 
     const sample = () => {
       const totalMem = totalMemRef.current
@@ -157,11 +157,11 @@ export function useStatusBar(options: UseStatusBarOptions): StatusBarData | null
     sample()
     const id = setInterval(sample, RESOURCE_INTERVAL_MS)
     return () => clearInterval(id)
-  }, [hasMessages, accumulatedMs, sessionStartTime])
+  }, [enabled, accumulatedMs, sessionStartTime])
 
   // ── 运行时间，每 1 秒 ──
   useEffect(() => {
-    if (!hasMessages) return
+    if (!enabled) return
 
     const tick = () => {
       setData(prev => {
@@ -172,8 +172,8 @@ export function useStatusBar(options: UseStatusBarOptions): StatusBarData | null
 
     const id = setInterval(tick, ELAPSED_INTERVAL_MS)
     return () => clearInterval(id)
-  }, [hasMessages, accumulatedMs, sessionStartTime])
+  }, [enabled, accumulatedMs, sessionStartTime])
 
-  if (!hasMessages) return null
+  if (!enabled) return null
   return data
 }
