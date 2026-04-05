@@ -15,6 +15,7 @@ export interface CCodeConfig {
   defaultProvider: string
   defaultModel: string
   providers: Record<string, ProviderConfig | undefined>
+  statusBar?: boolean
 }
 
 const DEFAULT_CONFIG: CCodeConfig = {
