@@ -1,9 +1,10 @@
 // src/ui/StatusBar.tsx
 
 /**
- * StatusBar — 统一底部状态栏。
+ * StatusBar — 统一底部状态栏（双行布局）。
  *
- * InputBar 下方固定一行，展示系统资源 + token/context/cost。
+ * SYS 行：系统级内存 + CPU
+ * PROC 行：进程级内存 + CPU + 耗时 + token + context + cost
  * 纯展示组件，所有数据由 props 注入。
  */
 
@@ -70,41 +71,81 @@ interface Segment {
   render: () => React.ReactNode
 }
 
-function buildSegments(
+/** 构建 SYS 行段落（系统级内存 + CPU） */
+function buildSysSegments(data: StatusBarData): Segment[] {
+  const segments: Segment[] = []
+
+  const memBar = renderBar(data.sysMemPercent, BAR_WIDTH)
+  const memPct = `${Math.round(data.sysMemPercent)}%`.padStart(4)
+  const memUsed = formatBytes(data.sysMemUsedBytes)
+  const memTotal = formatBytes(data.sysMemTotalBytes)
+  const memText = `MEM ${memBar} ${memPct} ${memUsed}/${memTotal}`
+  segments.push({
+    key: 'sys-mem',
+    width: memText.length,
+    render: () => (
+      <Text>
+        <Text dimColor>MEM </Text>
+        <Text color={barColor(data.sysMemPercent)}>{memBar}</Text>
+        <Text dimColor> {memPct} {memUsed}/{memTotal}</Text>
+      </Text>
+    ),
+  })
+
+  const cpuBar = renderBar(data.sysCpuPercent, BAR_WIDTH)
+  const cpuPct = `${Math.round(data.sysCpuPercent)}%`.padStart(4)
+  const cpuText = `CPU ${cpuBar} ${cpuPct}`
+  segments.push({
+    key: 'sys-cpu',
+    width: cpuText.length,
+    render: () => (
+      <Text>
+        <Text dimColor>CPU </Text>
+        <Text color={barColor(data.sysCpuPercent)}>{cpuBar}</Text>
+        <Text dimColor> {cpuPct}</Text>
+      </Text>
+    ),
+  })
+
+  return segments
+}
+
+/** 构建 PROC 行段落（进程级内存 + CPU + 耗时 + token + context + cost） */
+function buildProcSegments(
   data: StatusBarData,
   tokenStats: SessionCostStats | null,
   contextState: ContextWindowState | null,
 ): Segment[] {
   const segments: Segment[] = []
 
-  // MEM
-  const memBar = renderBar(data.memPercent, BAR_WIDTH)
-  const memPct = `${Math.round(data.memPercent)}%`
-  const memAbs = formatBytes(data.memUsedBytes)
+  // PROC MEM
+  const memBar = renderBar(data.procMemPercent, BAR_WIDTH)
+  const memPct = `${Math.round(data.procMemPercent)}%`.padStart(4)
+  const memAbs = formatBytes(data.procMemUsedBytes)
   const memText = `MEM ${memBar} ${memPct} ${memAbs}`
   segments.push({
-    key: 'mem',
+    key: 'proc-mem',
     width: memText.length,
     render: () => (
       <Text>
         <Text dimColor>MEM </Text>
-        <Text color={barColor(data.memPercent)}>{memBar}</Text>
+        <Text color={barColor(data.procMemPercent)}>{memBar}</Text>
         <Text dimColor> {memPct} {memAbs}</Text>
       </Text>
     ),
   })
 
-  // CPU
-  const cpuBar = renderBar(data.cpuPercent, BAR_WIDTH)
-  const cpuPct = `${Math.round(data.cpuPercent)}%`
+  // PROC CPU
+  const cpuBar = renderBar(data.procCpuPercent, BAR_WIDTH)
+  const cpuPct = `${Math.round(data.procCpuPercent)}%`.padStart(4)
   const cpuText = `CPU ${cpuBar} ${cpuPct}`
   segments.push({
-    key: 'cpu',
+    key: 'proc-cpu',
     width: cpuText.length,
     render: () => (
       <Text>
         <Text dimColor>CPU </Text>
-        <Text color={barColor(data.cpuPercent)}>{cpuBar}</Text>
+        <Text color={barColor(data.procCpuPercent)}>{cpuBar}</Text>
         <Text dimColor> {cpuPct}</Text>
       </Text>
     ),
@@ -112,10 +153,9 @@ function buildSegments(
 
   // Elapsed
   const elapsed = formatElapsed(data.elapsedMs)
-  const elapsedText = `⏱ ${elapsed}`
   segments.push({
     key: 'elapsed',
-    width: elapsedText.length + 1,
+    width: elapsed.length + 3,
     render: () => <Text dimColor>⏱ {elapsed}</Text>,
   })
 
@@ -136,9 +176,9 @@ function buildSegments(
     const ctxPct = `${(contextState.usedPercentage * 100).toFixed(0)}%`
     const ctxText = `Ctx ${ctxPct}`
     const ctxColor = contextState.level === 'overflow' || contextState.level === 'critical'
-      ? 'red'
+      ? 'red' as const
       : contextState.level === 'warning'
-        ? 'yellow'
+        ? 'yellow' as const
         : undefined
     segments.push({
       key: 'context',
@@ -170,15 +210,10 @@ function buildSegments(
   return segments
 }
 
-export function StatusBar({ data, tokenStats, contextState, terminalWidth }: StatusBarProps): React.ReactNode {
-  if (!data) return null
-
-  const segments = buildSegments(data, tokenStats, contextState)
+/** 按最大宽度截断段落列表 */
+function truncateSegments(segments: Segment[], maxWidth: number): Segment[] {
   const separator = ' | '
   const separatorWidth = separator.length
-
-  // 窄终端截断：从左到右累加宽度，超出时截断
-  const maxWidth = terminalWidth - 2
   const visible: Segment[] = []
   let totalWidth = 0
 
@@ -190,17 +225,41 @@ export function StatusBar({ data, tokenStats, contextState, terminalWidth }: Sta
     visible.push(seg)
     totalWidth += segWidth
   }
+  return visible
+}
 
-  if (visible.length === 0) return null
-
+/** 渲染单行带前缀标签的段落列表 */
+function renderLine(segments: Segment[], prefix: string): React.ReactNode {
+  const separator = ' | '
+  if (segments.length === 0) return null
   return (
     <Box paddingX={1}>
-      {visible.map((seg, i) => (
+      <Text dimColor>{prefix}</Text>
+      {segments.map((seg, i) => (
         <React.Fragment key={seg.key}>
           {i > 0 && <Text dimColor>{separator}</Text>}
           {seg.render()}
         </React.Fragment>
       ))}
+    </Box>
+  )
+}
+
+export function StatusBar({ data, tokenStats, contextState, terminalWidth }: StatusBarProps): React.ReactNode {
+  if (!data) return null
+
+  const prefixWidth = 5  // "SYS  " 或 "PROC "
+  const maxWidth = terminalWidth - 2 - prefixWidth
+
+  const sysSegments = truncateSegments(buildSysSegments(data), maxWidth)
+  const procSegments = truncateSegments(buildProcSegments(data, tokenStats, contextState), maxWidth)
+
+  if (sysSegments.length === 0 && procSegments.length === 0) return null
+
+  return (
+    <Box flexDirection="column">
+      {renderLine(sysSegments, 'SYS  ')}
+      {renderLine(procSegments, 'PROC ')}
     </Box>
   )
 }

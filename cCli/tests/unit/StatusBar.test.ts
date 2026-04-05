@@ -4,15 +4,15 @@ import { renderBar, barColor, formatBytes, formatElapsed, formatTokenCount } fro
 
 describe('renderBar', () => {
   it('0% 全空', () => {
-    expect(renderBar(0, 8)).toBe('░░░░░░░░')
+    expect(renderBar(0, 10)).toBe('░░░░░░░░░░')
   })
 
   it('100% 全满', () => {
-    expect(renderBar(100, 8)).toBe('████████')
+    expect(renderBar(100, 10)).toBe('██████████')
   })
 
   it('50% 半满', () => {
-    expect(renderBar(50, 8)).toBe('████░░░░')
+    expect(renderBar(50, 10)).toBe('█████░░░░░')
   })
 })
 
