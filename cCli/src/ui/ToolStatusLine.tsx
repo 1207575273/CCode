@@ -17,7 +17,7 @@
 import React from 'react'
 import { Box, Text } from 'ink'
 import Spinner from 'ink-spinner'
-import { formatDuration, truncate } from './format-utils.js'
+import { buildArgsSummary, formatDuration, truncate } from './format-utils.js'
 import type { CompletedToolCall } from './ChatView.js'
 import type { ToolResultMeta } from '@tools/core/types.js'
 
@@ -92,53 +92,8 @@ function runningLabel(toolName: string): string {
 // 参数摘要提取
 // ═══════════════════════════════════════════════
 
-/** 最大参数摘要长度 */
-const MAX_ARGS_LENGTH = 80
-
-/**
- * 从工具参数中提取人类可读的摘要。
- * 纯 UI 层函数，不依赖工具实现。
- */
-export function buildArgsSummary(toolName: string, args?: Record<string, unknown>): string {
-  if (!args) return ''
-
-  switch (toolName) {
-    case 'bash':
-      return truncate(String(args['command'] ?? ''), MAX_ARGS_LENGTH)
-
-    case 'read_file':
-    case 'write_file':
-    case 'edit_file':
-      return truncate(String(args['path'] ?? ''), MAX_ARGS_LENGTH)
-
-    case 'grep': {
-      const pattern = args['pattern'] ?? ''
-      const path = args['path'] ?? '.'
-      return truncate(`pattern: "${pattern}", path: ${path}`, MAX_ARGS_LENGTH)
-    }
-
-    case 'glob':
-      return truncate(String(args['pattern'] ?? ''), MAX_ARGS_LENGTH)
-
-    case 'dispatch_agent':
-      return truncate(String(args['description'] ?? ''), MAX_ARGS_LENGTH)
-
-    case 'ask_user_question': {
-      const questions = args['questions']
-      const count = Array.isArray(questions) ? questions.length : 0
-      return `${count} 个问题`
-    }
-
-    default: {
-      // MCP 等未知工具：提取第一个字符串参数作为摘要
-      const firstStringArg = Object.values(args).find(v => typeof v === 'string')
-      if (typeof firstStringArg === 'string') {
-        return truncate(firstStringArg, MAX_ARGS_LENGTH)
-      }
-      return ''
-    }
-  }
-}
+// buildArgsSummary 已迁移到 format-utils.ts（纯逻辑，不依赖 React），此处 re-export 保持兼容
+export { buildArgsSummary } from './format-utils.js'
 
 // ═══════════════════════════════════════════════
 // 输出预览处理

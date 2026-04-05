@@ -12,8 +12,7 @@
  * - --no-tools 禁用工具调用
  */
 
-import { buildArgsSummary } from '@ui/ToolStatusLine.js'
-import { formatDuration } from '@ui/format-utils.js'
+import { buildArgsSummary, formatDuration } from '../ui/format-utils.js'
 import { configManager } from '@config/config-manager.js'
 import { getOrCreateProvider } from '@providers/registry.js'
 import { AgentLoop } from './agent-loop.js'

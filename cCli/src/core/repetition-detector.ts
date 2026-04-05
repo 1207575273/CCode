@@ -29,10 +29,10 @@
  * 对每个工具调用计算指纹（toolName + args 的 hash），维护连续相同调用的计数。
  *
  * 三级响应：
- *   - 第 1-2 次：正常执行（可能是合理的重试）
- *   - 第 3 次（WARN_THRESHOLD）：正常执行，但在 tool_result 后注入一条警告消息
- *     → "⚠️ 你已经用相同参数调用了 {tool} 3 次且每次都成功。请执行不同的操作。"
- *   - 第 5 次及以后（BLOCK_THRESHOLD）：跳过实际执行，直接返回拦截消息
+ *   - 第 1 次：正常执行（可能是合理的重试）
+ *   - 第 2 次（WARN_THRESHOLD）：正常执行，但在 tool_result 后注入一条警告消息
+ *     → "⚠️ 你已经用相同参数调用了 {tool} 2 次且每次都成功。请执行不同的操作。"
+ *   - 第 4 次及以后（BLOCK_THRESHOLD）：跳过实际执行，直接返回拦截消息
  *     → "❌ 循环调用已被系统拦截。此操作已成功完成，不会再执行。请立即执行其他步骤。"
  *
  * 当模型调用了不同的工具（或相同工具但不同参数），连续计数自动重置。
@@ -41,10 +41,10 @@
 import type { ToolCallContent } from './types.js'
 
 /** 连续相同调用达到此次数时，注入警告消息（但仍执行工具） */
-const WARN_THRESHOLD = 3
+const WARN_THRESHOLD = 2
 
 /** 连续相同调用达到此次数时，跳过工具执行，直接返回拦截消息 */
-const BLOCK_THRESHOLD = 5
+const BLOCK_THRESHOLD = 4
 
 /** 检测结果 */
 export type RepetitionVerdict =
