@@ -69,7 +69,17 @@ export class ConfigManager {
       const raw = readFileSync(this.#configPath, 'utf-8')
       const loaded = JSON.parse(raw) as Partial<CCodeConfig>
       // 与默认值合并：已有字段保留，缺失字段补充默认值（向前兼容旧配置）
-      this.#cached = { ...DEFAULT_CONFIG, ...loaded }
+      const merged = { ...DEFAULT_CONFIG, ...loaded }
+      this.#cached = merged
+
+      // 检测是否有新增默认字段需要回写（让用户在文件中看到新配置项）
+      const defaultKeys = Object.keys(DEFAULT_CONFIG) as (keyof CCodeConfig)[]
+      const hasMissingKeys = defaultKeys.some(k => !(k in loaded))
+      if (hasMissingKeys) {
+        this.#write(merged)
+        try { this.#cachedMtime = statSync(this.#configPath).mtimeMs } catch { /* ignore */ }
+      }
+
       return this.#cached
     } catch {
       this.#cached = { ...DEFAULT_CONFIG }
