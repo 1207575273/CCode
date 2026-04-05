@@ -2,6 +2,32 @@
 
 import type { AgentEvent } from './agent-loop.js'
 
+/** 状态栏推送数据 */
+export interface StatusBarPayload {
+  sys: {
+    memPercent: number
+    memUsedBytes: number
+    memTotalBytes: number
+    cpuPercent: number
+  }
+  proc: {
+    memPercent: number
+    memUsedBytes: number
+    cpuPercent: number
+    elapsedMs: number
+  }
+  token: {
+    inputTokens: number
+    outputTokens: number
+    costByCurrency: Record<string, number>
+    callCount: number
+  } | null
+  context: {
+    usedPercentage: number
+    level: string
+  } | null
+}
+
 /** Bridge 层扩展事件 */
 export type BridgeEvent =
   | { type: 'user_input'; text: string; source: 'cli' | 'web' }
@@ -16,6 +42,7 @@ export type BridgeEvent =
   | { type: 'subagent_event'; agentId: string; detail: SubAgentDetail }
   | { type: 'context_update'; usedPercentage: number; lastInputTokens: number; effectiveWindow: number; level: string }
   | { type: 'compact_status'; status: 'start' | 'done' | 'error'; strategy?: string; message?: string }
+  | { type: 'status_bar'; data: StatusBarPayload }
 
 /** SubAgent 详细事件（透传到 Web 端展示） */
 export type SubAgentDetail =
