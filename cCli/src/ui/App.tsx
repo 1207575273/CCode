@@ -47,6 +47,8 @@ import type { AtSuggestionItem } from './AtSuggestion.js'
 import { TodoPanel, hasPendingTodos } from './TodoPanel.js'
 import { SubAgentPanel } from './SubAgentPanel.js'
 import { listSubAgents } from '@tools/agent/store.js'
+import { StatusBar } from './StatusBar.js'
+import { useStatusBar } from './useStatusBar.js'
 
 /**
  * App — cCli 根组件
@@ -77,7 +79,7 @@ export function App({
 }: AppProps) {
   const { exit } = useApp()
   // 订阅终端尺寸变化：debounce + 清屏，避免 Ink 差分渲染残留
-  useTerminalSize()
+  const terminalSize = useTerminalSize()
   const {
     messages,
     streamingMessage,
@@ -96,6 +98,8 @@ export function App({
     currentModel,
     todos,
     contextState,
+    accumulatedMs,
+    sessionStartTime,
     clearMessages,
     appendSystemMessage,
     switchModel,
@@ -104,6 +108,15 @@ export function App({
     forkFromEvent,
     compactMessages,
   } = useChat()
+
+  const config = configManager.load()
+  const statusBarEnabled = config.statusBar !== false
+
+  const statusBarData = useStatusBar({
+    hasMessages: statusBarEnabled && (messages.length > 0 || isStreaming),
+    accumulatedMs,
+    sessionStartTime,
+  })
 
   const [showModelPicker, setShowModelPicker] = useState(false)
   /** /mcp 指令触发后填充，展示 MCP Server 状态 */
@@ -913,31 +926,6 @@ export function App({
         <SubAgentPanel onClose={() => setShowSubAgentPanel(false)} />
       ) : (
         <>
-          {started && !isStreaming && (() => {
-            const s = tokenMeter.getSessionStats()
-            if (s.callCount === 0) return null
-            const fmt = (n: number) => n >= 1000 ? (n / 1000).toFixed(1) + 'K' : String(n)
-            const sym = (c: string) => c === 'CNY' ? '¥' : '$'
-            const costParts = Object.entries(s.costByCurrency).filter(([, v]) => v > 0).map(([c, v]) => `${sym(c)}${v.toFixed(4)}`)
-            const cost = costParts.length > 0 ? ` | ${costParts.join(' + ')}` : ''
-            const ctxInfo = contextState
-              ? ` | Context: ${(contextState.usedPercentage * 100).toFixed(0)}%`
-              : ''
-            const ctxColor = contextState?.level === 'overflow' ? 'red'
-              : contextState?.level === 'critical' ? 'red'
-              : contextState?.level === 'warning' ? 'yellow'
-              : undefined
-            return (
-              <Box paddingX={1}>
-                <Text dimColor>{fmt(s.totalInputTokens)} in / {fmt(s.totalOutputTokens)} out{cost}</Text>
-                {contextState && (
-                  <Text {...(ctxColor ? { color: ctxColor } : { dimColor: true })}>
-                    {ctxInfo}
-                  </Text>
-                )}
-              </Box>
-            )
-          })()}
           {isStreaming && (
             <Box paddingX={1}>
               <Text dimColor>Esc to interrupt</Text>
@@ -969,6 +957,14 @@ export function App({
             streaming={isStreaming}
             history={userHistory}
           />
+          {statusBarEnabled && (
+            <StatusBar
+              data={statusBarData}
+              tokenStats={started ? tokenMeter.getSessionStats() : null}
+              contextState={contextState}
+              terminalWidth={terminalSize.columns}
+            />
+          )}
         </>
       )}
 
