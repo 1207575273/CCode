@@ -97,7 +97,7 @@ export function StatusBar({ data }: StatusBarProps) {
         </span>
       </div>
 
-      {/* PROC 行：进程资源 + 运行时信息 */}
+      {/* PROC 行：进程资源 */}
       <div className="flex items-center gap-3 flex-wrap">
         <span className="text-gray-500 w-10">PROC</span>
         <span className="flex items-center gap-1.5">
@@ -112,7 +112,11 @@ export function StatusBar({ data }: StatusBarProps) {
           <ProgressBar percent={proc.cpuPercent} />
           <span>{Math.round(proc.cpuPercent)}%</span>
         </span>
-        <span className="text-gray-600">|</span>
+      </div>
+
+      {/* INFO 行：运行时间 + token + context + cost */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="text-gray-500 w-10">INFO</span>
         <span>⏱ {formatElapsed(proc.elapsedMs)}</span>
         {token && token.callCount > 0 && (
           <>

@@ -33,7 +33,6 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
   /** 当前活跃的 CLI session（不同于本页 session 时显示切换提示） */
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   /** 上下文窗口使用率 */
-  const [contextInfo, setContextInfo] = useState<{ usedPercentage: number; level: string } | null>(null)
   /** compact 状态 */
   const [compacting, setCompacting] = useState<{ strategy: string; message: string } | null>(null)
   /** 记忆全景面板 */
@@ -280,7 +279,7 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
         setCliConnected(event.connected)
         break
       case 'context_update':
-        setContextInfo({ usedPercentage: event.usedPercentage, level: event.level })
+        // context 信息已由 status_bar 事件统一推送到 StatusBar 组件展示
         break
       case 'compact_status':
         if (event.status === 'start') {
@@ -333,17 +332,6 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
           {connected && !cliConnected && (
             <span className="text-xs px-2 py-1 rounded bg-yellow-900 text-yellow-300">
               CLI 离线
-            </span>
-          )}
-          {contextInfo && (
-            <span className={`text-xs px-2 py-1 rounded ${
-              contextInfo.level === 'overflow' || contextInfo.level === 'critical'
-                ? 'bg-red-900 text-red-300'
-                : contextInfo.level === 'warning'
-                  ? 'bg-yellow-900 text-yellow-300'
-                  : 'bg-gray-700 text-gray-400'
-            }`}>
-              Context: {(contextInfo.usedPercentage * 100).toFixed(0)}%
             </span>
           )}
           <button
