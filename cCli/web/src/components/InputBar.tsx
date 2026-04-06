@@ -1,7 +1,9 @@
 // src/components/InputBar.tsx
 import { useState, useCallback } from 'react'
-import type { KeyboardEvent, ClipboardEvent } from 'react'
-import { compressImage } from '../utils/image-compress'
+import type { KeyboardEvent } from 'react'
+// TODO: 图片粘贴恢复时取消注释
+// import type { ClipboardEvent } from 'react'
+// import { compressImage } from '../utils/image-compress'
 
 interface Attachment {
   id: string
@@ -16,7 +18,8 @@ interface Props {
 export function InputBar({ onSubmit, disabled }: Props) {
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
-  const [uploading, setUploading] = useState(false)
+  // TODO: 图片粘贴恢复时取消注释
+  // const [uploading, setUploading] = useState(false)
 
   const handleSubmit = useCallback(() => {
     const trimmed = text.trim()
@@ -34,16 +37,16 @@ export function InputBar({ onSubmit, disabled }: Props) {
     }
   }, [handleSubmit])
 
-  /** 拦截粘贴事件，识别图片并压缩上传 */
+  // TODO: 图片粘贴功能暂屏蔽，待多模态策略完成后恢复
+  // 恢复时：取消下方 onPaste 注释 + 取消此块注释
+  /*
   const handlePaste = useCallback(async (e: ClipboardEvent) => {
     const items = Array.from(e.clipboardData.items)
     const imageItem = items.find(item => item.type.startsWith('image/'))
-    if (!imageItem) return // 非图片粘贴，走默认行为
-
+    if (!imageItem) return
     e.preventDefault()
     const blob = imageItem.getAsFile()
     if (!blob) return
-
     setUploading(true)
     try {
       const compressed = await compressImage(blob)
@@ -57,6 +60,7 @@ export function InputBar({ onSubmit, disabled }: Props) {
     }
     setUploading(false)
   }, [])
+  */
 
   /** 移除指定附件 */
   const removeAttachment = useCallback((id: string) => {
@@ -86,26 +90,17 @@ export function InputBar({ onSubmit, disabled }: Props) {
         </button>
       </div>
 
-      {/* 附件条：有附件或正在上传时显示 */}
-      {(attachments.length > 0 || uploading) && (
+      {/* TODO: 图片附件条暂屏蔽，待多模态策略完成后恢复 */}
+      {attachments.length > 0 && (
         <div className="px-4 pb-2 flex items-center gap-2 flex-wrap">
           <span className="text-xs text-gray-400">📎 {attachments.length} 张附件</span>
           {attachments.map(att => (
             <div key={att.id} className="relative group">
-              <img
-                src={att.url}
-                alt="附件"
-                className="w-16 h-16 object-cover rounded border border-gray-600"
-              />
-              <button
-                onClick={() => removeAttachment(att.id)}
-                className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-600 text-white text-[10px] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                ×
-              </button>
+              <img src={att.url} alt="附件" className="w-16 h-16 object-cover rounded border border-gray-600" />
+              <button onClick={() => removeAttachment(att.id)}
+                className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-600 text-white text-[10px] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">×</button>
             </div>
           ))}
-          {uploading && <span className="text-xs text-gray-500">上传中...</span>}
         </div>
       )}
     </div>

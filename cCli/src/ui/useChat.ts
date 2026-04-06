@@ -770,6 +770,16 @@ export function useChat(): UseChatReturn {
     return off
   }, [abort])
 
+  /** Web 端会话恢复 → 触发 loadSession（等同 CLI /resume 指令） */
+  useEffect(() => {
+    const off = eventBus.onType('resume_session', (event) => {
+      if (event.source === 'web' && event.sessionId) {
+        loadSession(event.sessionId)
+      }
+    })
+    return off
+  }, [loadSession])
+
   /** Web 端问卷响应 → 触发 resolveQuestion */
   useEffect(() => {
     const off = eventBus.onType('question_response', (event) => {

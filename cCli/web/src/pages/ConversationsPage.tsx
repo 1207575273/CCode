@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { apiGet } from '../hooks/useApi'
+import { apiGet, apiPost } from '../hooks/useApi'
 import { MessageBubble } from '../components/MessageBubble'
 import type { ChatMessage, SubagentSnapshot } from '../types'
 import type { SubAgentInfo, SubAgentDetailEvent } from '../components/SubAgentCard'
@@ -56,9 +56,11 @@ export function ConversationsPage() {
 }
 
 function ConversationList() {
+  const navigate = useNavigate()
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [resumingId, setResumingId] = useState<string | null>(null)
 
   useEffect(() => {
     apiGet<{ sessions: SessionSummary[] }>('/api/conversations?limit=100')
@@ -99,12 +101,12 @@ function ConversationList() {
       ) : (
         <div className="space-y-2">
           {filtered.map(s => (
-            <Link
+            <div
               key={s.sessionId}
-              to={`/conversations/${s.sessionId}`}
               className="flex items-center justify-between p-4 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
             >
-              <div className="min-w-0 flex-1 mr-4">
+              {/* 左侧：点击跳转到回放详情 */}
+              <Link to={`/conversations/${s.sessionId}`} className="min-w-0 flex-1 mr-4">
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-sm text-gray-400">{s.sessionId.slice(0, 12)}</span>
                   {s.provider && <span className="text-xs bg-gray-700 px-1.5 py-0.5 rounded text-gray-400">{s.provider}</span>}
@@ -112,11 +114,28 @@ function ConversationList() {
                 {s.firstMessage && (
                   <p className="text-sm text-gray-300 mt-1 truncate">{s.firstMessage}</p>
                 )}
-              </div>
-              <div className="text-right shrink-0">
+              </Link>
+              {/* 右侧：时间 + 恢复按钮 */}
+              <div className="flex items-center gap-3 shrink-0">
                 <div className="text-xs text-gray-500">{new Date(s.updatedAt).toLocaleString()}</div>
+                <button
+                  onClick={async () => {
+                    setResumingId(s.sessionId)
+                    try {
+                      await apiPost('/api/session/resume', { sessionId: s.sessionId })
+                      navigate(`/session/${s.sessionId}`)
+                    } catch {
+                      setResumingId(null)
+                    }
+                  }}
+                  disabled={resumingId === s.sessionId}
+                  className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50 whitespace-nowrap"
+                  title="恢复此对话继续聊天"
+                >
+                  {resumingId === s.sessionId ? '恢复中...' : '恢复'}
+                </button>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       )}
@@ -287,6 +306,20 @@ function ConversationDetail({ sessionId }: { sessionId: string }) {
 
         {/* 进度 */}
         <span className="text-xs text-gray-500 ml-auto">{visibleCount} / {messages.length} ({progress}%)</span>
+
+        {/* 恢复对话：跳转到实时聊天继续 */}
+        <button
+          onClick={async () => {
+            try {
+              await apiPost('/api/session/resume', { sessionId })
+              navigate(`/session/${sessionId}`)
+            } catch { /* ignore */ }
+          }}
+          className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-500 whitespace-nowrap"
+          title="恢复此对话，跳转到实时聊天继续提问"
+        >
+          恢复对话
+        </button>
       </div>
 
       {/* 消息区域 */}

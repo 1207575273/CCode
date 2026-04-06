@@ -34,6 +34,7 @@ import { FileStore } from '@memory/storage/file-store.js'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { writeImage, readImageBase64 } from '@core/image-store.js'
+import { eventBus } from '@core/event-bus.js'
 import { AnthropicProvider } from '@providers/anthropic.js'
 import { OpenAICompatProvider } from '@providers/openai-compat.js'
 import { ProviderWrapper } from '@providers/wrapper.js'
@@ -177,6 +178,21 @@ export function createApiRoutes(): Hono {
       const snapshot = sessionStore.loadMessages(sessionId)
       const subagents = sessionStore.loadSubagents(sessionId, snapshot.cwd)
       return c.json({ ...snapshot, subagents })
+    } catch (err) {
+      return c.json({ error: String(err) }, 500)
+    }
+  })
+
+  // 恢复历史会话（Web 端触发，等同于 CLI /resume 命令）
+  api.post('/session/resume', async (c) => {
+    try {
+      const { sessionId } = await c.req.json() as { sessionId: string }
+      if (!sessionId) {
+        return c.json({ error: '缺少 sessionId' }, 400)
+      }
+      // 通过 eventBus 通知 CLI 执行 loadSession
+      eventBus.emit({ type: 'resume_session', sessionId, source: 'web' })
+      return c.json({ success: true, sessionId })
     } catch (err) {
       return c.json({ error: String(err) }, 500)
     }

@@ -43,6 +43,7 @@ export type BridgeEvent =
   | { type: 'context_update'; usedPercentage: number; lastInputTokens: number; effectiveWindow: number; level: string }
   | { type: 'compact_status'; status: 'start' | 'done' | 'error'; strategy?: string; message?: string }
   | { type: 'status_bar'; data: StatusBarPayload }
+  | { type: 'resume_session'; sessionId: string; source: 'web' }
 
 /** SubAgent 详细事件（透传到 Web 端展示） */
 export type SubAgentDetail =
