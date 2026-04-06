@@ -173,9 +173,15 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
         turnTextRef.current = ''
         turnToolsRef.current = []
         break
+      case 'llm_start':
+        // 每轮 LLM 调用开始时显示思考提示
+        setStreaming('⏳ 思考中...')
+        break
       case 'text':
+        // 首次收到文字时覆盖"思考中"占位
+        if (turnTextRef.current === '') setStreaming('')
         turnTextRef.current += event.text
-        setStreaming(prev => prev + event.text)
+        setStreaming(prev => prev === '⏳ 思考中...' ? event.text : prev + event.text)
         break
       case 'tool_start':
         setStreaming('')

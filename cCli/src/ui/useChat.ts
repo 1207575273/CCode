@@ -381,6 +381,10 @@ export function useChat(): UseChatReturn {
               effectiveWindow: ctxState.effectiveWindow,
               level: ctxState.level,
             })
+          } else if (event.type === 'llm_start') {
+            // 每轮 LLM 调用开始时显示思考提示（多轮工具调用间隙用户能看到 loading 态）
+            accumulated = ''
+            setStreamingMessage('⏳ 思考中...')
           } else if (event.type === 'text') {
             accumulated += event.text
             setStreamingMessage(accumulated)
