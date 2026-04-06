@@ -608,6 +608,11 @@ export function useChat(): UseChatReturn {
       if (isBridgeConnected()) {
         updateBridgeSession(sessionId)
       }
+
+      // CLI 端显示恢复提示（让用户明确感知到会话已切换）
+      const msgCount = snapshot.messages.length
+      const modelInfo = snapshot.model ? ` (${snapshot.model})` : ''
+      appendSystemMessage(`已恢复会话 ${sessionId.slice(0, 8)}...${modelInfo}，${msgCount} 条历史消息已加载`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       appendSystemMessage(`Failed to load session: ${msg}`)

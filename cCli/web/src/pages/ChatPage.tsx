@@ -109,9 +109,9 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
         if (!targetSessionId && event.sessionId) {
           window.history.replaceState(null, '', `/session/${event.sessionId}`)
         }
-        setMessages(event.messages.map(m => ({
+        const restoredMsgs = event.messages.map(m => ({
           id: m.id,
-          role: m.role,
+          role: m.role as 'user' | 'assistant' | 'system',
           content: m.content,
           ...(m.toolEvents && m.toolEvents.length > 0 ? { toolEvents: m.toolEvents } : {}),
           ...(m.model ? { model: m.model } : {}),
@@ -120,8 +120,17 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
           ...(m.usage ? { usage: m.usage } : {}),
           ...(m.llmCallCount ? { llmCallCount: m.llmCallCount } : {}),
           ...(m.toolCallCount ? { toolCallCount: m.toolCallCount } : {}),
-        })))
-        msgIdCounter.current = event.messages.length
+        }))
+        // 有历史消息时追加恢复提示，让用户明确感知会话已切换
+        if (restoredMsgs.length > 0) {
+          restoredMsgs.push({
+            id: `resume-${Date.now()}`,
+            role: 'system',
+            content: `已恢复会话 ${event.sessionId.slice(0, 8)}...，${restoredMsgs.length} 条历史消息已加载`,
+          })
+        }
+        setMessages(restoredMsgs)
+        msgIdCounter.current = restoredMsgs.length
 
         // 恢复 SubAgent 数据（从 JSONL 回放）
         if (event.subagents && event.subagents.length > 0) {
