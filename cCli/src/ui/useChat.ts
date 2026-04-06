@@ -584,11 +584,10 @@ export function useChat(): UseChatReturn {
         .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
       contextManager.restoreHistory(structuredHistory)
 
-      // 恢复 provider/model
-      if (snapshot.provider) setCurrentProvider(snapshot.provider)
-      if (snapshot.model) setCurrentModel(snapshot.model)
+      // 不恢复 provider/model — 使用当前配置的模型继续对话
+      // 历史消息中的 model/provider 仅用于展示，不影响后续请求
 
-      // 追加 session_resume 事件
+      // 追加 session_resume 事件（记录当前使用的 provider/model，而非历史的）
       const resumeEventId = generateEventId()
       sessionStore.append(sessionId, {
         sessionId,
@@ -597,8 +596,8 @@ export function useChat(): UseChatReturn {
         uuid: resumeEventId,
         parentUuid: sessionLogger.lastEventUuid,
         cwd: process.cwd(),
-        provider: snapshot.provider,
-        model: snapshot.model,
+        provider: currentProvider,
+        model: currentModel,
         accumulatedMs: lastAccMs,
       })
       // 更新 logger 的 lastEventUuid
@@ -611,8 +610,7 @@ export function useChat(): UseChatReturn {
 
       // CLI 端显示恢复提示（让用户明确感知到会话已切换）
       const msgCount = snapshot.messages.length
-      const modelInfo = snapshot.model ? ` (${snapshot.model})` : ''
-      appendSystemMessage(`已恢复会话 ${sessionId.slice(0, 8)}...${modelInfo}，${msgCount} 条历史消息已加载`)
+      appendSystemMessage(`已恢复会话 ${sessionId.slice(0, 8)}...，${msgCount} 条历史消息已加载，当前模型: ${currentModel}`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       appendSystemMessage(`Failed to load session: ${msg}`)
