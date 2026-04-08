@@ -255,7 +255,7 @@ if (args.prompt != null) {
     if (entry.endsWith('ccli.js') || entry.endsWith('ccode') || entry.endsWith('ccli')) {
       return `ccode --resume ${sessionId}`
     }
-    return `pnpm dev -- --resume ${sessionId}`
+    return `pnpm run dev -- --resume ${sessionId}`
   }
 
   /** 打印 resume 提示（幂等，只打印一次） */
