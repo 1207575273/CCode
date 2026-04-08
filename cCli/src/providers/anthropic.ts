@@ -16,6 +16,7 @@ import { readImageBase64 } from '@core/image-store.js'
 import type { ProviderConfig } from '@config/config-manager.js'
 import { findOrphanToolCalls } from '@core/message-utils.js'
 import { dbg } from '../debug.js'
+import { withRetry, friendlyErrorMessage } from './retry.js'
 
 /** 将内部 Message 转为 Anthropic SDK 的消息格式 */
 function toAnthropicMessages(messages: Message[]): Anthropic.MessageParam[] {
@@ -169,74 +170,81 @@ export class AnthropicProvider implements LLMProvider {
     dbg(`  model: ${request.model}\n`)
     dbg(`  messages: ${JSON.stringify(anthropicMessages, null, 2)}\n`)
 
+    // withRetry 包装：在连接建立阶段自动重试 429/5xx/网络错误
+    const createStream = () => this.#chatOnce(request.model, anthropicMessages, tools, systemPrompt, request)
     try {
-      const stream = this.#client.messages.stream({
-        model: request.model,
-        max_tokens: request.maxTokens ?? 8192,
-        ...(request.temperature !== undefined && { temperature: request.temperature }),
-        ...(systemPrompt ? { system: systemPrompt } : {}),
-        messages: anthropicMessages,
-        ...(tools && tools.length > 0 ? { tools } : {}),
-      }, {
-        ...(request.signal !== undefined ? { signal: request.signal } : {}),
-      })
+      yield* withRetry(createStream, this.name)
+    } catch (err) {
+      dbg(`[DEBUG][anthropic] error after retries: ${err}\n`)
+      yield { type: 'error', error: friendlyErrorMessage(err instanceof Error ? err : new Error(String(err))) }
+    }
+  }
 
-      dbg(`[DEBUG][anthropic] stream opened, receiving events...\n`)
+  /** 单次 LLM 调用（不含重试），供 withRetry 包装 */
+  async *#chatOnce(
+    model: string,
+    anthropicMessages: Anthropic.MessageParam[],
+    tools: Anthropic.Tool[] | undefined,
+    systemPrompt: string | undefined,
+    request: ChatRequest,
+  ): AsyncIterable<StreamChunk> {
+    const stream = this.#client.messages.stream({
+      model,
+      max_tokens: request.maxTokens ?? 8192,
+      ...(request.temperature !== undefined && { temperature: request.temperature }),
+      ...(systemPrompt ? { system: systemPrompt } : {}),
+      messages: anthropicMessages,
+      ...(tools && tools.length > 0 ? { tools } : {}),
+    }, {
+      ...(request.signal !== undefined ? { signal: request.signal } : {}),
+    })
 
-      // 逐事件处理流式响应
-      for await (const event of stream) {
-        dbg(`[DEBUG][anthropic] event: ${JSON.stringify(event)}\n`)
+    dbg(`[DEBUG][anthropic] stream opened, receiving events...\n`)
 
-        if (event.type === 'content_block_delta') {
-          if (event.delta.type === 'text_delta') {
-            yield { type: 'text', text: event.delta.text }
-          } else if ((event.delta as { type: string; thinking?: string }).type === 'thinking_delta') {
-            // extended thinking 支持（SDK 版本可能无类型定义，用类型断言兼容）
-            const thinkingDelta = (event.delta as { type: string; thinking?: string }).thinking ?? ''
-            if (thinkingDelta) yield { type: 'thinking', thinking: thinkingDelta }
-          }
-          // input_json_delta 由 finalMessage 统一处理 tool_call
+    for await (const event of stream) {
+      dbg(`[DEBUG][anthropic] event: ${JSON.stringify(event)}\n`)
+
+      if (event.type === 'content_block_delta') {
+        if (event.delta.type === 'text_delta') {
+          yield { type: 'text', text: event.delta.text }
+        } else if ((event.delta as { type: string; thinking?: string }).type === 'thinking_delta') {
+          const thinkingDelta = (event.delta as { type: string; thinking?: string }).thinking ?? ''
+          if (thinkingDelta) yield { type: 'thinking', thinking: thinkingDelta }
         }
       }
+    }
 
-      // 从最终消息中提取 tool_calls 和 usage
-      const finalMsg = await stream.finalMessage()
+    const finalMsg = await stream.finalMessage()
 
-      // usage
-      if (finalMsg.usage) {
+    if (finalMsg.usage) {
+      yield {
+        type: 'usage',
+        usage: {
+          inputTokens: finalMsg.usage.input_tokens,
+          outputTokens: finalMsg.usage.output_tokens,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          cacheReadTokens: (finalMsg.usage as any)['cache_read_input_tokens'] ?? 0,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          cacheWriteTokens: (finalMsg.usage as any)['cache_creation_input_tokens'] ?? 0,
+        },
+      }
+    }
+
+    for (const block of finalMsg.content) {
+      if (block.type === 'tool_use') {
         yield {
-          type: 'usage',
-          usage: {
-            inputTokens: finalMsg.usage.input_tokens,
-            outputTokens: finalMsg.usage.output_tokens,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            cacheReadTokens: (finalMsg.usage as any)['cache_read_input_tokens'] ?? 0,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            cacheWriteTokens: (finalMsg.usage as any)['cache_creation_input_tokens'] ?? 0,
+          type: 'tool_call',
+          toolCall: {
+            type: 'tool_call',
+            toolCallId: block.id,
+            toolName: block.name,
+            args: block.input as Record<string, unknown>,
           },
         }
       }
-
-      // tool_use blocks
-      for (const block of finalMsg.content) {
-        if (block.type === 'tool_use') {
-          yield {
-            type: 'tool_call',
-            toolCall: {
-              type: 'tool_call',
-              toolCallId: block.id,
-              toolName: block.name,
-              args: block.input as Record<string, unknown>,
-            },
-          }
-        }
-      }
-
-      yield { type: 'done', stopReason: finalMsg.stop_reason ?? 'end_turn' }
-    } catch (err) {
-      dbg(`[DEBUG][anthropic] error: ${err}\n`)
-      yield { type: 'error', error: err instanceof Error ? err.message : String(err) }
     }
+
+    yield { type: 'done', stopReason: finalMsg.stop_reason ?? 'end_turn' }
   }
 
   async countTokens(messages: Message[]): Promise<number> {
