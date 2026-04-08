@@ -1,6 +1,6 @@
 # CCode
 
-**开源多模型 AI 编程 CLI 助手** — 支持 Claude / OpenAI / GLM / DeepSeek / Ollama
+**开源多模型 AI 编程 CLI 助手** — 支持 GLM / Claude / DeepSeek / GPT / Gemini / Ollama 及任意 OpenAI 兼容模型
 
 > **C** = **C**odeYang（作者）· **C**hina（中国开发者出品）· **C**ode Agent
 
@@ -13,16 +13,9 @@
 npm install -g ccode-cli
 ```
 
-安装后执行 `ccode` 进入交互式对话。
-
-```bash
-# 或 npx 直接运行（不安装）
-npx ccode-cli
-```
-
 ## 快速配置
 
-首次启动自动创建 `~/.ccode/config.json`，填入你的 API Key 即可使用：
+首次启动自动创建 `~/.ccode/config.json`，填入 API Key 即可使用：
 
 ```jsonc
 {
@@ -38,54 +31,245 @@ npx ccode-cli
 }
 ```
 
-支持任意 OpenAI 兼容协议的模型（GLM、DeepSeek、Ollama 等），也支持 Anthropic 原生协议（Claude）。
+> 本项目全程在智谱 GLM 模型下开发与测试。只要模型服务支持 **OpenAI Chat Completion** 或 **Anthropic Messages** 协议，配置 `baseURL` + `apiKey` 即可接入，无需任何代码改动。
+
+<details>
+<summary>更多 Provider 配置示例</summary>
+
+```jsonc
+{
+  "providers": {
+    "anthropic": {
+      "apiKey": "sk-ant-xxx",
+      "protocol": "anthropic",
+      "models": ["claude-sonnet-4-20250514"]
+    },
+    "deepseek": {
+      "apiKey": "sk-xxx",
+      "baseURL": "https://api.deepseek.com/v1",
+      "models": ["deepseek-chat", "deepseek-reasoner"]
+    },
+    "openai": {
+      "apiKey": "sk-xxx",
+      "models": ["gpt-4o", "gpt-4o-mini"]
+    },
+    "ollama": {
+      "apiKey": "ollama",
+      "baseURL": "http://localhost:11434/v1",
+      "models": ["qwen2.5:7b", "deepseek-r1:14b"]
+    }
+  }
+}
+```
+
+</details>
+
+---
+
+## 三种运行模式
+
+### 交互模式（默认）
+
+```bash
+ccode                # 进入交互式终端对话
+ccode --web          # 交互模式 + Web Dashboard
+ccode --resume       # 恢复上一次会话
+```
+
+### 管道模式（非交互，适用于脚本 / CI）
+
+```bash
+ccode "这段代码有什么问题"                     # 单次问答
+cat error.log | ccode "分析这个错误日志"        # stdin 管道输入
+ccode -p "生成 API 文档" --json                # JSON 结构化输出
+ccode "跑测试并修复" --yes                     # 自动批准工具（CI 场景）
+ccode "解释这个函数" --no-tools                # 纯对话，不调用工具
+```
+
+| 参数 | 说明 |
+|------|------|
+| `-p / --prompt` | 指定问题 |
+| `-m / --model` | 指定模型 |
+| `--provider` | 指定供应商 |
+| `--yes / -y` | 自动批准所有工具调用 |
+| `--no-tools` | 禁用工具，纯对话 |
+| `--json` | 结构化输出（response + usage + cost） |
+| `--verbose / -v` | stderr 输出工具执行进度 |
+
+### Web Dashboard 模式
+
+```bash
+ccode --web          # 启动 CLI + Bridge Server + Web UI
+```
+
+浏览器打开 `http://localhost:9800`，提供：
+
+- **总览大盘** — Token 消耗/费用统计、趋势图表、模型分布
+- **实时对话** — Web 端聊天，消息/工具/权限双向实时同步
+- **对话历史** — 会话列表、消息回放、一键恢复对话
+- **设置管理** — Provider 配置、模型管理、计价规则、MCP 管理
+- **系统日志** — 诊断与调试
+
+多个 CLI 实例可同时连接同一个 Bridge Server，按 sessionId 隔离。
+
+---
 
 ## 核心能力
 
-- **多模型切换** — 运行时 `/model` 一键切换，不重启、不丢上下文
-- **16 个内置工具** — 文件读写、Shell 执行、代码搜索、子 Agent 派发、任务规划
-- **MCP 协议** — 动态注册外部工具（stdio / SSE / streamable-http）
-- **Skills 生态** — 对接 [skills.sh](https://skills.sh/) 275+ 开放 skill
+### Agent 引擎
+
+- **多轮自动循环** — LLM → 工具执行 → 下一轮，AsyncGenerator 事件驱动
+- **16 个内置工具** — 文件读写/编辑、glob/grep 搜索、bash 执行、子 Agent 派发、任务管理
+- **并行工具执行** — 多个 tool_calls 自动并行，安全/危险分类策略
+- **子 Agent (SubAgent)** — general / explore / plan 三种类型，`Ctrl+B` 实时查看执行面板
 - **上下文管理** — `/compact` 三种压缩策略 + auto-compact
-- **对话持久化** — `--resume` 恢复历史会话 + `/fork` 分支
-- **SubAgent** — 后台并行运行，`Ctrl+B` 实时查看
-- **Claude Code 兼容** — CLAUDE.md、.mcp.json、插件目录零迁移
+
+### 多模型运行时切换
+
+运行时 `/model` 一键切换，不重启、不丢上下文：
+
+| Provider | 协议 | 模型示例 |
+|----------|------|---------|
+| 智谱 GLM | OpenAI 兼容 | GLM-5 / GLM-4.7 |
+| Anthropic | Anthropic 原生 | Claude Opus / Sonnet / Haiku 4.x |
+| DeepSeek | OpenAI 兼容 | deepseek-chat / deepseek-reasoner |
+| OpenAI | OpenAI 兼容 | GPT-4o / GPT-4o-mini |
+| Google Gemini | OpenAI 兼容 | gemini-2.5-pro / gemini-2.5-flash |
+| Ollama | OpenAI 兼容 | 任意本地模型 |
+| **任意服务** | OpenAI 兼容 | 配置 `baseURL` 即可接入 |
+
+### 对话持久化与恢复
+
+- **自动持久化** — 每次对话写入 JSONL 事件链
+- **会话恢复** — `ccode --resume` 或 `/resume` 面板恢复历史会话
+- **对话分支** — `/fork` 从任意节点创建新分支
+- **Web 恢复** — 历史页面一键恢复对话
+
+### Memory / RAG 记忆系统
+
+- **混合检索** — BM25 关键词 + 向量相似度，中文 jieba 分词
+- **双层存储** — `~/.ccode/memory/`（全局）+ `<项目>/.ccode/memory/`（项目级）
+- **LLM 工具** — `memory_write` / `memory_search` / `memory_delete`，Agent 自动读写
+- **命令管理** — `/remember` 查看、搜索、删除、重建索引
+- **System Prompt 注入** — 冷启动自动检索相关记忆注入上下文
+
+### Token 计量与计费
+
+- 四维统计：input / output / cache_read / cache_write
+- 多币种（USD / CNY），按 provider + model 匹配计价规则
+- `/usage` 查看会话/今日/本月统计
+- Web Dashboard 趋势图表
+
+---
+
+## 扩展生态
+
+### MCP 协议
+
+动态注册外部工具，支持 4 种传输：stdio / SSE / streamable-http / http
+
+```jsonc
+// ~/.ccode/mcp.json
+{
+  "mcpServers": {
+    "my-server": {
+      "command": "npx",
+      "args": ["-y", "my-mcp-server"],
+      "transport": "stdio"
+    }
+  }
+}
+```
+
+### Skills 系统（兼容 Claude Code Skill 生态）
+
+- 四源发现：内置 → 插件 → 用户级(`~/.ccode/skills/`) → 项目级(`<cwd>/.ccode/skills/`)
+- **SKILL.md 格式与 Claude Code 完全兼容**，社区 Skill（如 [skills.sh](https://skills.sh/) 275+ Skill）可直接使用
+- LLM 自动触发或 `/skills <name>` 手动调用
+
+> 迁移方式：将 Claude Code 的 `~/.claude/skills/` 复制到 `~/.ccode/skills/` 即可
+
+### Runtime Plugin
+
+```
+~/.ccode/plugins/<name>/runtime/index.js    # 用户级
+<cwd>/.ccode/plugins/<name>/runtime/index.js # 项目级
+```
+
+扩展点：注册命令、工具、UI 按钮、状态栏、事件监听、持久化存储。
+
+### Hooks 事件钩子
+
+三层配置（项目 > 用户 > 插件），三类事件：
+
+| 事件 | 时机 | 用途 |
+|------|------|------|
+| SessionStart | 会话启动 | 注入上下文 |
+| PreToolUse | 工具调用前 | 权限控制、参数修改 |
+| PostToolUse | 工具执行后 | 日志、后处理 |
+
+---
+
+## Claude Code 兼容性
+
+| 特性 | CCode | Claude Code | 兼容 |
+|------|-------|------------|------|
+| 指令文件 | CCODE.md | CLAUDE.md | 两者均识别 |
+| MCP 配置 | ~/.ccode/mcp.json | ~/.claude.json | 均可读取 |
+| SKILL.md 格式 | 相同 | 相同 | 直接使用 |
+| 项目设置 | .ccode/settings.local.json | .claude/settings.local.json | 格式兼容 |
+
+---
+
+## 全部指令
+
+| 指令 | 别名 | 说明 |
+|------|------|------|
+| `/help` | — | 显示所有命令 |
+| `/model` | `/m` | 切换模型 |
+| `/clear` | — | 清空对话 |
+| `/compact` | — | 压缩上下文 |
+| `/context` | — | 上下文使用率 |
+| `/resume` | — | 恢复历史会话 |
+| `/fork` | — | 对话分支 |
+| `/usage` | `/cost` | Token 用量统计 |
+| `/gc` | `/cleanup` | 清理过期数据 |
+| `/skills` | `/skill` | Skills 管理 |
+| `/remember` | `/mem` | 记忆管理 |
+| `/mcp` | — | MCP 状态 |
+| `/bridge` | — | Bridge 管理 |
+| `/plugins` | — | 插件列表 |
+| `/exit` | `/quit` | 强制退出 |
 
 ## 快捷键
 
-| 操作 | 按键 | 备用按键 |
-|------|------|----------|
+| 操作 | 按键 | 备用 |
+|------|------|------|
 | 提交输入 | Enter | — |
-| 换行（多行输入） | Alt+Enter | Shift+Alt+Enter |
+| 换行 | Alt+Enter | Shift+Alt+Enter |
 | 光标移动 | ↑ ↓ ← → | — |
-| 跳到当前行首 | Home | Ctrl+A |
-| 跳到当前行尾 | End | Ctrl+E |
-| 查看 SubAgent 面板 | Ctrl+B | — |
+| 跳到行首/行尾 | Home / End | Ctrl+A / Ctrl+E |
+| 中断流式 | Escape | Ctrl+C |
+| 强制退出 | Ctrl+C × 2 | /exit |
+| SubAgent 面板 | Ctrl+B | — |
 
-## 常用指令
+---
 
-| 指令 | 说明 |
-|------|------|
-| `/model` | 切换模型 |
-| `/compact` | 压缩上下文 |
-| `/context` | 查看上下文使用率 |
-| `/resume` | 恢复历史会话 |
-| `/usage` | Token 用量统计 |
-| `/help` | 查看所有指令 |
+## 配置文件一览
 
-## 支持的模型
-
-| Provider | 模型 | 协议 |
-|----------|------|------|
-| Anthropic | Claude Opus/Sonnet/Haiku 4.x | Anthropic 原生 |
-| OpenAI | GPT-4o / GPT-4o-mini | OpenAI 兼容 |
-| 智谱 GLM | GLM-5 / GLM-4.7 | OpenAI 兼容 |
-| DeepSeek | deepseek-chat / deepseek-reasoner | OpenAI 兼容 |
-| Ollama | 任意本地模型 | OpenAI 兼容 |
+| 文件 | 路径 | 用途 |
+|------|------|------|
+| 主配置 | `~/.ccode/config.json` | Provider / Model / Shell |
+| MCP | `~/.ccode/mcp.json` | MCP Server 连接 |
+| 指令文件 | CCODE.md / CLAUDE.md（多层级） | System Prompt 注入 |
+| 项目权限 | `<cwd>/.ccode/settings.local.json` | 工具白名单 |
+| Hooks | `hooks.json`（项目/用户/插件） | 事件钩子 |
+| 记忆 | `~/.ccode/memory/` + `<cwd>/.ccode/memory/` | RAG 记忆存储 |
+| 调试日志 | `<cwd>/.ccode/debug.log` | Debug 日志 |
 
 ## 文档
 
-详细文档见 [GitHub](https://github.com/1207575273/CCode)
+详细架构与能力文档见 [GitHub docs/](https://github.com/1207575273/CCode/tree/main/docs)
 
 ## License
 
