@@ -33,16 +33,57 @@ npm install -g ccode-cli
 
 > 本项目全程在智谱 GLM 模型下开发与测试。只要模型服务支持 **OpenAI Chat Completion** 或 **Anthropic Messages** 协议，配置 `baseURL` + `apiKey` 即可接入，无需任何代码改动。
 
-<details>
-<summary>更多 Provider 配置示例</summary>
+### config.json 完整字段说明
 
 ```jsonc
 {
+  // ────── 全局设置 ──────
+  "defaultProvider": "glm",          // 默认使用的 Provider 名称
+  "defaultModel": "glm-5",           // 默认模型（必须在对应 provider.models 列表中）
+  "statusBar": true,                 // 是否显示底部状态栏（token 消耗、模型名等）
+
+  // ────── Provider 配置 ──────
   "providers": {
+    "<provider-name>": {             // 自定义名称，如 "glm"、"anthropic"、"my-proxy"
+      "apiKey": "sk-xxx",            // [必填] API 密钥
+      "baseURL": "https://...",      // [可选] 自定义 API 端点（OpenAI 兼容协议必填）
+      "protocol": "openai",          // [可选] 协议类型："openai"(默认) | "anthropic"
+      "models": ["model-a", "model-b"],  // [必填] 该 provider 可用的模型列表
+      "visionModels": ["model-a"]    // [可选] 支持图片理解的模型子集（默认空 = 全不支持）
+    }
+  }
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `defaultProvider` | string | 是 | 启动时默认使用的 Provider |
+| `defaultModel` | string | 是 | 启动时默认使用的模型 |
+| `statusBar` | boolean | 否 | 底部状态栏开关，默认 `true` |
+| `providers.<name>.apiKey` | string | 是 | API 密钥 |
+| `providers.<name>.baseURL` | string | 否 | 自定义端点。Anthropic 可省略，OpenAI 兼容协议必填 |
+| `providers.<name>.protocol` | string | 否 | `"openai"`（默认）或 `"anthropic"`。仅 Anthropic 官方需设为 `"anthropic"` |
+| `providers.<name>.models` | string[] | 是 | 可用模型列表，`/model` 切换时从此列表选择 |
+| `providers.<name>.visionModels` | string[] | 否 | 支持多模态图片理解的模型子集（必须是 `models` 的子集），默认空数组 |
+
+<details>
+<summary>多 Provider 配置示例</summary>
+
+```jsonc
+{
+  "defaultProvider": "glm",
+  "defaultModel": "glm-5",
+  "providers": {
+    "glm": {
+      "apiKey": "your-zhipu-api-key",
+      "baseURL": "https://open.bigmodel.cn/api/coding/paas/v4",
+      "models": ["glm-5", "glm-4.7"]
+    },
     "anthropic": {
       "apiKey": "sk-ant-xxx",
       "protocol": "anthropic",
-      "models": ["claude-sonnet-4-20250514"]
+      "models": ["claude-sonnet-4-20250514"],
+      "visionModels": ["claude-sonnet-4-20250514"]
     },
     "deepseek": {
       "apiKey": "sk-xxx",
@@ -51,7 +92,8 @@ npm install -g ccode-cli
     },
     "openai": {
       "apiKey": "sk-xxx",
-      "models": ["gpt-4o", "gpt-4o-mini"]
+      "models": ["gpt-4o", "gpt-4o-mini"],
+      "visionModels": ["gpt-4o"]
     },
     "ollama": {
       "apiKey": "ollama",
