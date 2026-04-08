@@ -419,11 +419,23 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
           <MessageBubble key={msg.id} message={msg} subAgents={subAgents} />
         ))}
 
-        {/* 流式输出：纯文本渲染（不走 ReactMarkdown，避免不完整 Markdown 渲染乱码） */}
+        {/* 流式输出 */}
         {streaming && (
           <div className="flex justify-start mb-3">
             <div className="max-w-[80%] rounded-lg px-4 py-3 bg-gray-800 text-gray-100">
-              <p className="whitespace-pre-wrap text-sm">{streaming}</p>
+              {streaming === '⏳ 思考中...' ? (
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <span className="inline-block animate-spin" style={{ animationDuration: '1.2s' }}>⏳</span>
+                  <span>思考中</span>
+                  <span className="inline-flex gap-[2px]">
+                    <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms', animationDuration: '1s' }} />
+                    <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '200ms', animationDuration: '1s' }} />
+                    <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '400ms', animationDuration: '1s' }} />
+                  </span>
+                </div>
+              ) : (
+                <p className="whitespace-pre-wrap text-sm">{streaming}</p>
+              )}
             </div>
           </div>
         )}
