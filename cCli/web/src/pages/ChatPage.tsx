@@ -268,25 +268,38 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
           const existing = next.get(event.agentId)
           if (existing) {
             const d = event.detail
-            const newEvent: SubAgentDetailEvent = { type: d.kind }
-            if (d.kind === 'tool_start' || d.kind === 'tool_done') {
-              newEvent.toolName = d.toolName
-            }
-            if (d.kind === 'tool_done') {
-              newEvent.durationMs = d.durationMs
-              newEvent.success = d.success
-              newEvent.resultSummary = d.resultSummary
-            }
+
+            // 流式 text chunk 合并：连续的 text 事件追加到同一条，避免每个 chunk 独占一行
             if (d.kind === 'text') {
-              newEvent.text = d.text
+              const lastEvent = existing.events[existing.events.length - 1]
+              if (lastEvent?.type === 'text') {
+                const merged = [...existing.events]
+                merged[merged.length - 1] = { ...lastEvent, text: (lastEvent.text ?? '') + (d.text ?? '') }
+                next.set(event.agentId, { ...existing, events: merged })
+              } else {
+                next.set(event.agentId, {
+                  ...existing,
+                  events: [...existing.events, { type: 'text', text: d.text }],
+                })
+              }
+            } else {
+              const newEvent: SubAgentDetailEvent = { type: d.kind }
+              if (d.kind === 'tool_start' || d.kind === 'tool_done') {
+                newEvent.toolName = d.toolName
+              }
+              if (d.kind === 'tool_done') {
+                newEvent.durationMs = d.durationMs
+                newEvent.success = d.success
+                newEvent.resultSummary = d.resultSummary
+              }
+              if (d.kind === 'error') {
+                newEvent.error = d.error
+              }
+              next.set(event.agentId, {
+                ...existing,
+                events: [...existing.events, newEvent],
+              })
             }
-            if (d.kind === 'error') {
-              newEvent.error = d.error
-            }
-            next.set(event.agentId, {
-              ...existing,
-              events: [...existing.events, newEvent],
-            })
           }
           return next
         })

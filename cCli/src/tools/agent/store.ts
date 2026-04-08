@@ -211,13 +211,21 @@ export function consumeAgentEvent(agentId: string, event: AgentEvent): void {
       break
     }
 
-    case 'text':
-      appendSubAgentEvent(agentId, {
-        type: 'text',
-        timestamp: now,
-        text: event.text,
-      })
+    case 'text': {
+      // 流式 text chunk 合并：连续的 text 事件追加到同一条，避免每个 2-3 字的 chunk 独占一行
+      const state = store.get(agentId)
+      const lastEvent = state?.events[state.events.length - 1]
+      if (lastEvent?.type === 'text') {
+        lastEvent.text = (lastEvent.text ?? '') + event.text
+      } else {
+        appendSubAgentEvent(agentId, {
+          type: 'text',
+          timestamp: now,
+          text: event.text,
+        })
+      }
       break
+    }
 
     case 'error':
       appendSubAgentEvent(agentId, {
