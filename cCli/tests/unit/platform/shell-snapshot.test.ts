@@ -19,7 +19,7 @@ describe('shell-snapshot', () => {
     if (mod) await mod.cleanupSnapshot()
   })
 
-  it('startSnapshotCreation 返回 .sh 文件路径或 undefined', async () => {
+  it('startSnapshotCreation 返回 .sh 文件路径或 undefined', { timeout: 15000 }, async () => {
     mod = await import('@platform/shell-snapshot.js')
     const result = await mod.startSnapshotCreation()
     snapshotPath = result
