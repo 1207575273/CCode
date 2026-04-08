@@ -1,0 +1,282 @@
+// web/src/components/SubAgentDrawer.tsx
+
+/**
+ * SubAgentDrawer — 悬浮按钮 + 右侧抽屉面板，全局查看所有 SubAgent 实时状态。
+ *
+ * 组成：
+ * 1. FAB 悬浮按钮（fixed right-bottom）— 有 agent 时显示，badge 标注运行中数量
+ * 2. Drawer 抽屉面板（fixed right-side）— Agent 列表 + 可展开的事件流
+ *
+ * 数据来源：ChatPage 的 subAgents state，通过 props 传入，零后端改动。
+ */
+
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import type { SubAgentInfo, SubAgentDetailEvent } from '../types'
+
+// ═══════════════════════════════════════════════
+// Props
+// ═══════════════════════════════════════════════
+
+interface SubAgentDrawerProps {
+  agents: Map<string, SubAgentInfo>
+}
+
+// ═══════════════════════════════════════════════
+// 主组件
+// ═══════════════════════════════════════════════
+
+export function SubAgentDrawer({ agents }: SubAgentDrawerProps) {
+  const [open, setOpen] = useState(false)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  const agentList = useMemo(() => {
+    const list = Array.from(agents.values())
+    // running 置顶 → done → error，同状态保持插入顺序
+    const order: Record<string, number> = { running: 0, done: 1, error: 2 }
+    return list.sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9))
+  }, [agents])
+
+  const runningCount = useMemo(
+    () => agentList.filter(a => a.status === 'running').length,
+    [agentList],
+  )
+
+  // 无 agent 时完全隐藏
+  if (agentList.length === 0) return null
+
+  return (
+    <>
+      {/* FAB 悬浮按钮 */}
+      <button
+        onClick={() => setOpen(prev => !prev)}
+        className={`
+          fixed right-6 bottom-20 z-50
+          w-12 h-12 rounded-full
+          bg-gray-800/90 border border-gray-600
+          flex items-center justify-center
+          hover:bg-gray-700 active:scale-95
+          transition-all duration-200 cursor-pointer
+          ${runningCount > 0 ? 'animate-pulse' : ''}
+        `}
+        title={`SubAgents (${agentList.length})`}
+      >
+        <span className="text-lg">🤖</span>
+        {/* Badge */}
+        {runningCount > 0 && (
+          <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-yellow-500 text-gray-900 text-xs font-bold flex items-center justify-center">
+            {runningCount}
+          </span>
+        )}
+        {runningCount === 0 && agentList.length > 0 && (
+          <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gray-600 text-gray-300 text-xs font-bold flex items-center justify-center">
+            {agentList.length}
+          </span>
+        )}
+      </button>
+
+      {/* 遮罩层 */}
+      {open && (
+        <div
+          className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm"
+          onClick={() => setOpen(false)}
+        />
+      )}
+
+      {/* 抽屉面板 */}
+      <div
+        className={`
+          fixed top-0 right-0 h-full z-40
+          w-96 max-w-full
+          bg-gray-900 border-l border-gray-700
+          transform transition-transform duration-300 ease-in-out
+          flex flex-col
+          ${open ? 'translate-x-0' : 'translate-x-full'}
+        `}
+      >
+        {/* 标题栏 */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-base font-semibold text-gray-100">SubAgents</span>
+            <span className="text-xs text-gray-500">({agentList.length})</span>
+            {runningCount > 0 && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-900/50 text-yellow-300">
+                {runningCount} running
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => setOpen(false)}
+            className="text-gray-500 hover:text-gray-300 transition-colors text-lg leading-none cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Agent 列表 */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+          {agentList.map(agent => (
+            <AgentRow
+              key={agent.agentId}
+              agent={agent}
+              expanded={expandedId === agent.agentId}
+              onToggle={() => setExpandedId(prev =>
+                prev === agent.agentId ? null : agent.agentId,
+              )}
+            />
+          ))}
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ═══════════════════════════════════════════════
+// Agent 行组件
+// ═══════════════════════════════════════════════
+
+interface AgentRowProps {
+  agent: SubAgentInfo
+  expanded: boolean
+  onToggle: () => void
+}
+
+function AgentRow({ agent, expanded, onToggle }: AgentRowProps) {
+  const statusIcon = agent.status === 'running'
+    ? '⟳'
+    : agent.status === 'done'
+      ? '✓'
+      : '✗'
+  const statusColor = agent.status === 'running'
+    ? 'text-yellow-400'
+    : agent.status === 'done'
+      ? 'text-green-400'
+      : 'text-red-400'
+
+  return (
+    <div className="border border-gray-700 rounded-lg overflow-hidden">
+      {/* 折叠头 */}
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-3 py-2.5 bg-gray-800/50 hover:bg-gray-700/50 transition-colors text-left cursor-pointer"
+      >
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className={`${statusColor} font-mono text-sm shrink-0`}>
+            {agent.status === 'running' ? <Spinner /> : statusIcon}
+          </span>
+          {agent.agentType && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-400 font-mono shrink-0">
+              {agent.agentType}
+            </span>
+          )}
+          <span className="text-sm font-medium text-gray-200 truncate">
+            {agent.name ?? agent.description}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0 ml-2">
+          {agent.status === 'running' && (
+            <span className="text-[10px] text-gray-500">
+              turn {agent.turn}/{agent.maxTurns}
+              {agent.currentTool && (
+                <span className="text-yellow-400/70"> ▸ {agent.currentTool}</span>
+              )}
+            </span>
+          )}
+          <span className="text-gray-600 text-[10px]">{expanded ? '▲' : '▼'}</span>
+        </div>
+      </button>
+
+      {/* 展开详情：事件流 */}
+      {expanded && <EventList events={agent.events} />}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════
+// 事件列表组件
+// ═══════════════════════════════════════════════
+
+function EventList({ events }: { events: SubAgentDetailEvent[] }) {
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  // 新事件自动滚到底部
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [events.length])
+
+  if (events.length === 0) {
+    return (
+      <div className="px-3 py-2 bg-gray-900/50">
+        <p className="text-xs text-gray-500 italic">(等待事件...)</p>
+      </div>
+    )
+  }
+
+  // tool_start 和 tool_done 合并：tool_start 不单独显示，等 tool_done 一起展示
+  const filtered = events.filter(e => e.type !== 'tool_start')
+
+  return (
+    <div className="px-3 py-2 bg-gray-900/50 space-y-1 max-h-80 overflow-y-auto">
+      {filtered.map((evt, i) => (
+        <EventLine key={i} event={evt} />
+      ))}
+      <div ref={bottomRef} />
+    </div>
+  )
+}
+
+/** 渲染单条事件 */
+function EventLine({ event }: { event: SubAgentDetailEvent }) {
+  switch (event.type) {
+    case 'tool_done':
+      return (
+        <div className="flex items-start gap-2 text-xs">
+          <span className={event.success ? 'text-green-400' : 'text-red-400'} shrink-0>
+            {event.success ? '✓' : '✗'}
+          </span>
+          <span className="text-gray-300 font-mono">{event.toolName}</span>
+          {event.durationMs != null && (
+            <span className="text-gray-500">{formatDuration(event.durationMs)}</span>
+          )}
+          {event.resultSummary && (
+            <span className="text-gray-500 truncate max-w-[250px]">
+              ⎿ {event.resultSummary.split('\n')[0]}
+            </span>
+          )}
+        </div>
+      )
+    case 'text':
+      return (
+        <div className="text-xs text-gray-300 pl-4 py-0.5 border-l-2 border-cyan-800 whitespace-pre-wrap break-all">
+          {event.text}
+        </div>
+      )
+    case 'error':
+      return (
+        <div className="text-xs text-red-400 pl-1">✗ {event.error}</div>
+      )
+    default:
+      return null
+  }
+}
+
+// ═══════════════════════════════════════════════
+// 辅助组件 & 函数
+// ═══════════════════════════════════════════════
+
+/** CSS 动画 Spinner（避免引入额外依赖） */
+function Spinner() {
+  return (
+    <span className="inline-block animate-spin text-yellow-400" style={{ animationDuration: '1s' }}>
+      ⟳
+    </span>
+  )
+}
+
+/** 格式化耗时 */
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`
+  const min = Math.floor(ms / 60_000)
+  const sec = Math.floor((ms % 60_000) / 1000)
+  return `${min}m${sec}s`
+}
