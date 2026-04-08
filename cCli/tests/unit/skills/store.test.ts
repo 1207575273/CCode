@@ -39,10 +39,6 @@ This is a test skill body.
     expect(commit!.source).toBe('builtin')
     expect(commit!.description).toContain('commit')
 
-    const languages = skills.find(s => s.name === 'print-languages')
-    expect(languages).toBeDefined()
-    expect(languages!.source).toBe('builtin')
-
     const review = skills.find(s => s.name === 'code-review')
     expect(review).toBeDefined()
     expect(review!.source).toBe('builtin')

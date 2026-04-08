@@ -137,6 +137,8 @@ const DEFAULT_MAX_TURNS = 100
 const RESULT_SUMMARY_MAX_LENGTH = 200
 /** resultFull 最大长度（Web 展示 + JSONL 持久化用，超过此长度截断） */
 const RESULT_FULL_MAX_LENGTH = 100_000
+/** 回传 LLM history 的工具结果最大字符数（兜底截断，防 bash/task_output 极端场景） */
+const LLM_RESULT_MAX_CHARS = 40_000
 
 // ═══════════════════════════════════════════════
 // AgentLoop 类
@@ -367,15 +369,18 @@ export class AgentLoop {
       // yield 收集到的事件
       for (const e of events) { yield e }
       // 所有并行工具结果合并到一条 user 消息（Anthropic 要求同一条消息包含所有 tool_result）
-      const toolResults: ToolResultContent[] = results.map(pr => ({
-        type: 'tool_result' as const,
-        toolCallId: pr.toolCallId,
+      const toolResults: ToolResultContent[] = results.map(pr => {
         // 失败时合并 output + error（output 可能含 stderr 等诊断信息）
-        result: pr.success
+        const raw = pr.success
           ? pr.output
-          : [pr.output, pr.error].filter(Boolean).join('\n') || 'error',
-        ...(pr.success === false ? { isError: true as const } : {}),
-      }))
+          : [pr.output, pr.error].filter(Boolean).join('\n') || 'error'
+        return {
+          type: 'tool_result' as const,
+          toolCallId: pr.toolCallId,
+          result: truncateForLLM(raw, pr.toolName),
+          ...(pr.success === false ? { isError: true as const } : {}),
+        }
+      })
       if (toolResults.length > 0) {
         history.push({ role: 'user', content: toolResults })
       }
@@ -467,9 +472,11 @@ export class AgentLoop {
     const durationMs = Date.now() - start
 
     // 失败时合并 output + error 传给 LLM（output 可能含 stderr 等诊断信息，不能丢）
-    const toolResultText = result.success
+    const toolResultRaw = result.success
       ? result.output
       : [result.output, result.error].filter(Boolean).join('\n') || 'error'
+    // 兜底截断：防 bash/task_output 等工具返回超长结果膨胀 history
+    const toolResultText = truncateForLLM(toolResultRaw, tc.toolName)
 
     history.push({
       role: 'user',
@@ -548,6 +555,25 @@ function truncate(text: string, maxLength: number): string {
   return maxLength >= 10000
     ? text.slice(0, maxLength) + `\n... (truncated, total ${text.length} chars)`
     : text.slice(0, maxLength) + '...'
+}
+
+/** 工具专属的截断后引导提示 */
+const TRUNCATION_HINTS: Record<string, string> = {
+  bash: '请用 grep/head/tail 过滤输出，或拆分为更小的命令',
+  task_output: '输出过长，请用 bash 配合 grep/tail 过滤关键信息',
+  grep: '请缩小 pattern 范围或指定更精确的搜索路径',
+  read_file: '请指定行号范围读取特定区域',
+}
+
+/**
+ * 截断工具结果后塞入 LLM history（兜底层）。
+ * 大部分工具内部已有截断（read_file 20K / grep 50 条），此处防 bash/task_output 极端场景。
+ */
+function truncateForLLM(output: string, toolName: string): string {
+  if (output.length <= LLM_RESULT_MAX_CHARS) return output
+  const hint = TRUNCATION_HINTS[toolName] ?? '结果过长已截断，请尝试缩小查询范围'
+  return output.slice(0, LLM_RESULT_MAX_CHARS) +
+    `\n\n[结果已截断：共 ${output.length} 字符，仅保留前 ${LLM_RESULT_MAX_CHARS} 字符。${hint}]`
 }
 
 /**
