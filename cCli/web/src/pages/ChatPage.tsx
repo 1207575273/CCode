@@ -24,6 +24,7 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streaming, setStreaming] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
+  const [thinking, setThinking] = useState(false)
   const [toolEvents, setToolEvents] = useState<ToolEvent[]>([])
   const [pendingPermission, setPendingPermission] = useState<{ toolName: string; args: Record<string, unknown> } | null>(null)
   const [pendingQuestions, setPendingQuestions] = useState<UserQuestion[] | null>(null)
@@ -90,6 +91,7 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
   /** 重置本轮状态 */
   function resetTurn(): void {
     setStreaming('')
+    setThinking(false)
     setToolEvents([])
     setIsStreaming(false)
     setPendingPermission(null)
@@ -175,16 +177,19 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
         turnToolsRef.current = []
         break
       case 'llm_start':
-        // 每轮 LLM 调用开始时显示思考提示
-        setStreaming('⏳ 思考中...')
+        // 每轮 LLM 调用开始时显示思考动效
+        setThinking(true)
+        setStreaming('')
         break
       case 'text':
-        // 首次收到文字时覆盖"思考中"占位
+        // 首次收到文字时关闭思考动效
+        setThinking(false)
         if (turnTextRef.current === '') setStreaming('')
         turnTextRef.current += event.text
-        setStreaming(prev => prev === '⏳ 思考中...' ? event.text : prev + event.text)
+        setStreaming(prev => prev + event.text)
         break
       case 'tool_start':
+        setThinking(false)
         setStreaming('')
         setToolEvents(prev => [...prev, {
           toolCallId: event.toolCallId, toolName: event.toolName, args: event.args, status: 'running',
@@ -419,15 +424,20 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
           <MessageBubble key={msg.id} message={msg} subAgents={subAgents} />
         ))}
 
+        {/* 思考中动效 */}
+        {thinking && !streaming && (
+          <div className="flex justify-start mb-3">
+            <div className="max-w-[80%] rounded-lg px-4 py-3 bg-gray-800 text-gray-100">
+              <ThinkingDots />
+            </div>
+          </div>
+        )}
+
         {/* 流式输出 */}
         {streaming && (
           <div className="flex justify-start mb-3">
             <div className="max-w-[80%] rounded-lg px-4 py-3 bg-gray-800 text-gray-100">
-              {streaming === '⏳ 思考中...' ? (
-                <ThinkingDots />
-              ) : (
-                <p className="whitespace-pre-wrap text-sm">{streaming}</p>
-              )}
+              <p className="whitespace-pre-wrap text-sm">{streaming}</p>
             </div>
           </div>
         )}
