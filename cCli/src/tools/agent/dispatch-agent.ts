@@ -56,19 +56,16 @@ export class DispatchAgentTool implements StreamableTool {
   get description(): string {
     const typeList = agentDefinitionRegistry.buildTypeDescriptions()
     return [
-      'Dispatch a sub-agent to handle a task independently.',
+      '派发子 Agent 独立执行任务。子 Agent 拥有完整的多轮对话和工具调用能力。',
       '',
-      'Agent types:',
+      '可用类型：',
       typeList,
       '',
-      'Each sub-agent has a name (auto-generated or specified) for tracking.',
-      'Set run_in_background=true for parallel execution.',
-      '',
-      'Output is a JSON object with fields: status, agentId, name, agentType, result.',
-      '',
-      'IMPORTANT: The sub-agent result is ALREADY VERIFIED.',
-      'Do NOT re-verify or re-run commands the sub-agent completed.',
-      'Simply relay the result to the user.',
+      '注意事项：',
+      '• 子 Agent 的结果已经过验证，不要重复验证或重新执行子 Agent 已完成的命令',
+      '• 直接将子 Agent 的结果转述给用户即可',
+      '• run_in_background=true 时后台执行，用 task_output 读取结果',
+      '• 多个独立任务可以同时派发多个子 Agent 并行执行',
     ].join('\n')
   }
 
@@ -78,33 +75,30 @@ export class DispatchAgentTool implements StreamableTool {
       properties: {
         description: {
           type: 'string' as const,
-          description: 'Short task description (3-5 words)',
+          description: '任务简述（3-5 个词，如"搜索认证逻辑"、"分析目录结构"）',
         },
         prompt: {
           type: 'string' as const,
-          description: 'Complete instructions for the sub-agent',
+          description: '给子 Agent 的完整指令（需包含足够上下文，子 Agent 看不到父对话历史）',
         },
         subagent_type: {
           type: 'string' as const,
           enum: agentDefinitionRegistry.getTypeNames(),
           description:
-            'Agent type — determines tools and behavior:\n' +
+            'Agent 类型，决定可用工具和行为模式：\n' +
             agentDefinitionRegistry.buildTypeDescriptions(),
         },
         name: {
           type: 'string' as const,
-          description:
-            'Human-readable name for this sub-agent (e.g. "search-auth", "plan-refactor"). ' +
-            'Used in logs, UI, and progress tracking. Auto-generated if omitted.',
+          description: '子 Agent 名称（如 "search-auth"、"plan-refactor"），用于日志和进度追踪，不传则自动生成',
         },
         model: {
           type: 'string' as const,
-          description:
-            'Override model (e.g. "glm-5", "claude-sonnet-4-6"). Inherits parent model if omitted.',
+          description: '指定模型（如 "glm-5"），不传则继承父 Agent 当前模型',
         },
         run_in_background: {
           type: 'boolean' as const,
-          description: 'Run in background, return immediately with agentId',
+          description: '后台执行，立即返回 agentId。用 task_output 读取结果',
         },
       },
       required: ['description', 'prompt'] as const,

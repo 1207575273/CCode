@@ -9,13 +9,22 @@ const MAX_RESULTS = 50
 export class GrepTool implements Tool {
   readonly name = 'grep'
   readonly dangerous = false
-  readonly description = '在文件中搜索文本模式，返回匹配的行（含行号）。'
+  readonly description = [
+    '在文件中搜索文本模式（支持正则表达式），返回匹配行及行号。',
+    '',
+    '注意事项：',
+    '• pattern 支持 JavaScript 正则语法（默认忽略大小写）',
+    '• 搜索目录时默认递归子目录，自动排除 node_modules 和 .git',
+    '• 最多返回 50 条匹配结果，超出时请缩小搜索范围（指定更精确的 path 或 pattern）',
+    '• 定位代码位置的推荐流程：先 grep 搜索关键词 → 再 read_file 阅读具体文件',
+    '• 搜索文件名请用 glob，grep 用于搜索文件内容',
+  ].join('\n')
   readonly parameters = {
     type: 'object',
     properties: {
-      pattern: { type: 'string', description: '搜索关键词或正则表达式' },
-      path: { type: 'string', description: '搜索路径（文件或目录）' },
-      recursive: { type: 'boolean', description: '是否递归搜索子目录' },
+      pattern: { type: 'string', description: '搜索关键词或正则表达式（如 "functionName"、"import.*xxx"）' },
+      path: { type: 'string', description: '搜索路径（文件或目录，默认当前目录）' },
+      recursive: { type: 'boolean', description: '是否递归子目录（默认 true）' },
     },
     required: ['pattern'],
   }

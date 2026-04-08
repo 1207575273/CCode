@@ -6,12 +6,21 @@ import type { Tool, ToolContext, ToolResult, ToolResultMeta } from './types.js'
 export class EditFileTool implements Tool {
   readonly name = 'edit_file'
   readonly dangerous = true
-  readonly description = '精确替换文件中的字符串。old_str 必须在文件中唯一存在，否则报错。'
+  readonly description = [
+    '精确替换文件中的一段字符串，修改已有文件的首选工具。',
+    '',
+    '注意事项：',
+    '• old_str 必须与文件中的内容完全一致（包括缩进、空格、换行），且只能匹配到一处',
+    '• 匹配失败的常见原因：缩进不一致（Tab vs 空格）、多余/缺少空行、内容已被修改',
+    '• 匹配失败时：先用 read_file 查看文件当前内容，复制准确的原文再重试',
+    '• 如果 old_str 出现多次，需要包含更多上下文使其唯一（多包含几行）',
+    '• 修改文件前必须先用 read_file 阅读相关区域',
+  ].join('\n')
   readonly parameters = {
     type: 'object',
     properties: {
-      path: { type: 'string', description: '文件路径' },
-      old_str: { type: 'string', description: '要替换的原始字符串（必须唯一）' },
+      path: { type: 'string', description: '文件路径（绝对路径或相对路径）' },
+      old_str: { type: 'string', description: '要替换的原始字符串，必须在文件中唯一匹配' },
       new_str: { type: 'string', description: '替换后的新字符串' },
     },
     required: ['path', 'old_str', 'new_str'],

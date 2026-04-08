@@ -26,23 +26,27 @@ const POLL_INTERVAL_MS = 200
 export class TaskOutputTool implements Tool {
   readonly name = 'task_output'
   readonly dangerous = false
-  readonly description =
-    '读取后台任务的输出。支持两种 ID：\n' +
-    '- pid（数字）：bash run_in_background 启动的进程\n' +
-    '- agentId（字符串）：dispatch_agent run_in_background 启动的子 Agent\n' +
-    'block=true 时阻塞等待任务结束。'
+  readonly description = [
+    '读取后台任务的输出，支持 bash 后台进程和子 Agent 两种任务类型。',
+    '',
+    '使用方式：',
+    '• 传 pid（数字）读取 bash run_in_background 启动的进程输出',
+    '• 传 agent_id（字符串）读取 dispatch_agent run_in_background 启动的子 Agent 结果',
+    '• block=true 阻塞等待任务结束再返回（默认 false，立即返回已有输出）',
+    '• 阻塞超时默认 10 秒，最大 5 分钟',
+  ].join('\n')
   readonly parameters = {
     type: 'object',
     properties: {
-      pid: { type: 'number', description: '后台进程 PID（bash 后台任务）' },
-      agent_id: { type: 'string', description: '子 Agent ID（dispatch_agent 后台任务）' },
+      pid: { type: 'number', description: '后台进程 PID（与 agent_id 二选一）' },
+      agent_id: { type: 'string', description: '子 Agent ID（与 pid 二选一）' },
       block: {
         type: 'boolean',
-        description: '是否阻塞等待任务结束（默认 false，立即返回已有输出）',
+        description: '是否阻塞等待任务结束（默认 false）',
       },
       timeout: {
         type: 'number',
-        description: '阻塞超时（毫秒），仅 block=true 时生效，默认 10000，上限 300000',
+        description: '阻塞超时毫秒数（默认 10000，上限 300000），仅 block=true 时生效',
       },
     },
   }

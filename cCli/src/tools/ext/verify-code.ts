@@ -90,20 +90,25 @@ function findProjectRoot(filePath: string, configFile: string): string | null {
 
 export class VerifyCodeTool implements Tool {
   readonly name = 'verify_code'
-  readonly description =
-    'Run code verification on a file (type checking, linting, etc). ' +
-    'Auto-detects project type from file extension and project config. ' +
-    'Use this after writing or editing code to catch errors early. ' +
-    'Call proactively when you have made significant changes.'
+  readonly description = [
+    '对文件执行代码验证（类型检查、lint 等），自动检测项目类型。',
+    '',
+    '支持语言：TypeScript、JavaScript、Python、Rust、Go、Java',
+    '',
+    '注意事项：',
+    '• 根据文件扩展名和项目配置（tsconfig.json、pyproject.toml 等）自动选择检查器',
+    '• 写入或修改代码后主动调用，尽早发现错误',
+    '• 大量修改后建议验证，避免累积错误',
+  ].join('\n')
   readonly dangerous = false
   readonly parameters = {
     type: 'object',
     properties: {
-      file_path: { type: 'string', description: 'Path of the file to verify' },
+      file_path: { type: 'string', description: '要验证的文件路径' },
       check_type: {
         type: 'string',
         enum: ['auto', 'typescript', 'javascript', 'python', 'rust', 'go', 'java'],
-        description: 'Type of check to run. Default "auto" detects from file extension.',
+        description: '检查类型（默认 auto，根据文件扩展名自动检测）',
       },
     },
     required: ['file_path'],

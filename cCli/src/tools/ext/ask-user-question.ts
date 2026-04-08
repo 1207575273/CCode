@@ -15,38 +15,43 @@ import type { AgentEvent, UserQuestion, UserQuestionResult } from '@core/agent-l
 
 export class AskUserQuestionTool implements StreamableTool {
   readonly name = 'ask_user_question'
-  readonly description =
-    'Ask the user a series of structured questions (single-select, multi-select, or free text) ' +
-    'and collect their answers. Use this when you need to gather specific information from the user ' +
-    'in a structured way, such as clarifying requirements, choosing between options, or collecting preferences.\n\n' +
-    'The tool presents a multi-step form with Tab navigation between steps. ' +
-    'Each step can be a single-select list, multi-select checkboxes, or free text input. ' +
-    'The user can cancel at any step, in which case the tool returns an error with "cancelled".'
+  readonly description = [
+    '向用户提出结构化问题并收集答案，支持单选、多选和文本输入。',
+    '',
+    '适用场景：',
+    '• 需要用户在多个方案中做选择时',
+    '• 需要澄清需求或收集偏好时',
+    '• 需要用户确认关键决策时',
+    '',
+    '注意事项：',
+    '• 用户可以随时取消（返回 "cancelled" 错误）',
+    '• 尽量减少问题数量，避免过多打扰用户',
+  ].join('\n')
   readonly parameters = {
     type: 'object',
     properties: {
       questions: {
         type: 'array',
-        description: 'List of questions to ask the user, presented as a multi-step form',
+        description: '问题列表，按顺序逐步展示给用户',
         items: {
           type: 'object',
           properties: {
-            key: { type: 'string', description: 'Unique key for this answer (e.g., "domain", "focus")' },
-            title: { type: 'string', description: 'The question text shown to the user' },
-            type: { type: 'string', enum: ['select', 'multiselect', 'text'], description: 'Question type' },
+            key: { type: 'string', description: '答案的唯一标识（如 "domain"、"focus"）' },
+            title: { type: 'string', description: '展示给用户的问题文本' },
+            type: { type: 'string', enum: ['select', 'multiselect', 'text'], description: '问题类型：单选 / 多选 / 文本输入' },
             options: {
               type: 'array',
-              description: 'Options for select/multiselect questions',
+              description: 'select/multiselect 的选项列表',
               items: {
                 type: 'object',
                 properties: {
-                  label: { type: 'string', description: 'Option text' },
-                  description: { type: 'string', description: 'Optional description shown below the label' },
+                  label: { type: 'string', description: '选项文本' },
+                  description: { type: 'string', description: '选项补充说明（可选）' },
                 },
                 required: ['label'],
               },
             },
-            placeholder: { type: 'string', description: 'Placeholder text for text input questions' },
+            placeholder: { type: 'string', description: '文本输入的占位提示（仅 text 类型）' },
           },
           required: ['key', 'title', 'type'],
         },

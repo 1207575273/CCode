@@ -15,20 +15,28 @@ const MAX_TIMEOUT_MS = 600_000
 export class BashTool implements Tool {
   readonly name = 'bash'
   readonly dangerous = true
-  readonly description =
-    '执行 Shell 命令。支持 timeout（毫秒，默认 120000，上限 600000）和 run_in_background（后台运行，立即返回 PID）。'
+  readonly description = [
+    '执行 Shell 命令并返回 stdout + stderr 输出。',
+    '',
+    '注意事项：',
+    '• 有专用工具的操作请优先使用专用工具：读文件用 read_file，改文件用 edit_file，搜索用 grep/glob',
+    '• bash 适合运行构建、测试、git、安装依赖等系统命令',
+    '• 长时间运行的命令（如 dev server）请设置 run_in_background=true，之后用 task_output 查看输出',
+    '• 超时默认 120 秒，最大 600 秒（10 分钟），超时后进程会被终止',
+    '• 避免执行破坏性命令（rm -rf /、git push --force 等），除非用户明确要求',
+  ].join('\n')
   readonly parameters = {
     type: 'object',
     properties: {
       command: { type: 'string', description: '要执行的 shell 命令' },
-      cwd: { type: 'string', description: '工作目录，默认为当前目录' },
+      cwd: { type: 'string', description: '工作目录（默认当前目录）' },
       timeout: {
         type: 'number',
-        description: '超时时间（毫秒），默认 120000，上限 600000',
+        description: '超时毫秒数（默认 120000，上限 600000）',
       },
       run_in_background: {
         type: 'boolean',
-        description: '后台运行，立即返回进程 PID，不等待命令结束',
+        description: '后台运行，立即返回 PID。用 task_output 读取输出，用 kill_shell 终止进程',
       },
     },
     required: ['command'],

@@ -7,12 +7,20 @@ import type { Tool, ToolContext, ToolResult, ToolResultMeta } from './types.js'
 export class WriteFileTool implements Tool {
   readonly name = 'write_file'
   readonly dangerous = true
-  readonly description = '将内容写入文件（覆盖）。自动创建父目录。'
+  readonly description = [
+    '创建新文件或完全覆盖已有文件，自动创建不存在的父目录。',
+    '',
+    '注意事项：',
+    '• 此操作会覆盖文件全部内容，修改已有文件请优先使用 edit_file（只改需要改的部分）',
+    '• 仅在创建新文件或需要完全重写时使用 write_file',
+    '• 写入前确认路径正确，避免误覆盖重要文件',
+    '• 支持绝对路径或相对于 cwd 的相对路径',
+  ].join('\n')
   readonly parameters = {
     type: 'object',
     properties: {
-      path: { type: 'string', description: '文件路径（绝对路径）' },
-      content: { type: 'string', description: '写入内容' },
+      path: { type: 'string', description: '文件路径（绝对路径或相对路径）' },
+      content: { type: 'string', description: '写入的完整文件内容' },
     },
     required: ['path', 'content'],
   }

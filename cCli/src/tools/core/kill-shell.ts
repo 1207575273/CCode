@@ -18,17 +18,21 @@ import { listProcesses, killProcess, isTracked } from './process-tracker.js'
 
 export class KillShellTool implements Tool {
   readonly name = 'kill_shell'
-  readonly description =
-    'Terminate a background process started by the bash tool, or list all tracked background processes. ' +
-    'Can only kill processes that were started with bash run_in_background. ' +
-    'If no pid is provided, lists all active background processes.'
+  readonly description = [
+    '终止由 bash 后台启动的进程，或列出所有追踪中的后台进程。',
+    '',
+    '注意事项：',
+    '• 只能终止通过 bash run_in_background 启动的进程，不能终止任意系统进程',
+    '• 不传 pid 时列出所有活跃的后台进程及其状态',
+    '• 传入 pid 时终止该进程并返回其最终输出',
+  ].join('\n')
   readonly dangerous = false
   readonly parameters = {
     type: 'object',
     properties: {
       pid: {
         type: 'number',
-        description: 'PID of the background process to kill. Omit to list all tracked processes.',
+        description: '要终止的后台进程 PID。不传则列出所有后台进程',
       },
     },
     required: [],

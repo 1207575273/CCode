@@ -15,23 +15,27 @@ import { setTodos, getTodos } from './todo-store.js'
 
 export class TodoWriteTool implements Tool {
   readonly name = 'todo_write'
-  readonly description =
-    'Create or update the task plan. Pass the complete list of tasks with their current status. ' +
-    'Use this to track progress on multi-step tasks. Each call replaces the entire list. ' +
-    'Set activeForm to describe what is currently being done (in present tense, e.g. "Reading config file").'
+  readonly description = [
+    '创建或更新任务计划列表，用于追踪多步骤任务的进度。',
+    '',
+    '注意事项：',
+    '• 每次调用传入完整的任务列表（全量替换，非增量更新）',
+    '• 复杂任务开始前先创建计划，每完成一步更新状态',
+    '• activeForm 描述当前正在做的事（如"正在读取配置文件"），仅 in_progress 状态有意义',
+  ].join('\n')
   readonly dangerous = false
   readonly parameters = {
     type: 'object',
     properties: {
       todos: {
         type: 'array',
-        description: 'The complete task list (replaces previous list)',
+        description: '完整的任务列表（全量替换上一次的列表）',
         items: {
           type: 'object',
           properties: {
-            content: { type: 'string', description: 'Task description' },
-            status: { type: 'string', enum: ['pending', 'in_progress', 'completed'], description: 'Task status' },
-            activeForm: { type: 'string', description: 'What is currently being done (present tense). Only meaningful when status is in_progress.' },
+            content: { type: 'string', description: '任务描述' },
+            status: { type: 'string', enum: ['pending', 'in_progress', 'completed'], description: '任务状态' },
+            activeForm: { type: 'string', description: '当前进行中的动作描述（仅 in_progress 时有意义）' },
           },
           required: ['content', 'status'],
         },
