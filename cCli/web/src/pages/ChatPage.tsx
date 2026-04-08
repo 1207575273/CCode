@@ -12,6 +12,7 @@ import { MemoryPanel } from '../components/MemoryPanel'
 import { StatusBar } from '../components/StatusBar'
 import type { StatusBarData } from '../components/StatusBar'
 import type { SubAgentInfo, SubAgentDetailEvent } from '../components/SubAgentCard'
+import { SubAgentDrawer } from '../components/SubAgentDrawer'
 import type { ChatMessage, ToolEvent, ServerEvent, UserQuestion } from '../types'
 
 interface ChatPageProps {
@@ -458,6 +459,8 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
       <StatusBar data={statusBarData} />
 
       <MemoryPanel open={memoryPanelOpen} onClose={() => setMemoryPanelOpen(false)} />
+
+      <SubAgentDrawer agents={subAgents} />
     </div>
   )
 }
