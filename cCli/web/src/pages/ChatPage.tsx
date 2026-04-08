@@ -424,15 +424,7 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
           <div className="flex justify-start mb-3">
             <div className="max-w-[80%] rounded-lg px-4 py-3 bg-gray-800 text-gray-100">
               {streaming === '⏳ 思考中...' ? (
-                <div className="flex items-center gap-2 text-sm text-gray-400">
-                  <span className="inline-block animate-spin" style={{ animationDuration: '1.2s' }}>⏳</span>
-                  <span>思考中</span>
-                  <span className="inline-flex gap-[2px]">
-                    <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms', animationDuration: '0.6s' }} />
-                    <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '100ms', animationDuration: '0.6s' }} />
-                    <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '200ms', animationDuration: '0.6s' }} />
-                  </span>
-                </div>
+                <ThinkingDots />
               ) : (
                 <p className="whitespace-pre-wrap text-sm">{streaming}</p>
               )}
@@ -486,6 +478,25 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
       <MemoryPanel open={memoryPanelOpen} onClose={() => setMemoryPanelOpen(false)} />
 
       <SubAgentDrawer agents={subAgents} />
+    </div>
+  )
+}
+
+/** 思考中动效 — 与 CLI 端 Ink Spinner dots 一致的 braille 旋转 */
+const DOTS_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+
+function ThinkingDots() {
+  const [frame, setFrame] = useState(0)
+
+  useEffect(() => {
+    const id = setInterval(() => setFrame(f => (f + 1) % DOTS_FRAMES.length), 80)
+    return () => clearInterval(id)
+  }, [])
+
+  return (
+    <div className="flex items-center gap-1.5 text-sm text-gray-400">
+      <span className="font-mono text-cyan-400">{DOTS_FRAMES[frame]}</span>
+      <span>思考中...</span>
     </div>
   )
 }
