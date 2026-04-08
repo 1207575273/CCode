@@ -36,7 +36,7 @@ for (const warn of initResult.warnings) {
 
 // ═══ --help / -h ═══
 
-const VERSION = '0.8.1'
+const VERSION = '0.8.2'
 
 function printHelp(): void {
   const help = `
