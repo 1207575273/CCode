@@ -50,7 +50,7 @@ export function SubAgentDrawer({ agents }: SubAgentDrawerProps) {
       <button
         onClick={() => setOpen(prev => !prev)}
         className={`
-          fixed right-6 bottom-32 z-50
+          fixed right-6 bottom-40 z-50
           w-12 h-12 rounded-full
           bg-gray-800/90 border border-gray-600
           flex items-center justify-center
