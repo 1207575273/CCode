@@ -140,9 +140,10 @@ export function ChatView({ messages, streamingMessage, toolEvents, subAgentEvent
       {streamingMessage != null && (
         <Box marginBottom={1} flexDirection="column">
           <Text color="cyan" bold>◆ CCode</Text>
-          {streamingMessage === '' ? (
+          {streamingMessage === '' || streamingMessage === '⏳ 思考中...' ? (
             <Box>
               <Spinner type="dots" />
+              <Text dimColor> 思考中...</Text>
             </Box>
           ) : (
             <Text>{streamingMessage}</Text>
