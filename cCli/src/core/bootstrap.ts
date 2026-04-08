@@ -307,14 +307,31 @@ export function buildSystemPrompt(hookContext: string, memoryContext?: string): 
    *   5. 执行效率 — 独立的工具调用并行执行，不要串行等待
    */
   const behaviorGuidance = [
-    '# Task Execution Rules',
+    '# 任务执行规则',
     '',
-    '- Complete the task fully. Do NOT leave it half-done. Do NOT just describe what to do — actually do it by calling tools.',
-    '- Before reporting a task as complete, verify it actually works: run the code, check the output, confirm no errors.',
-    '- If an approach fails, diagnose WHY before switching tactics — read the error, check your assumptions, try a focused fix. Do not retry blindly, but do not abandon a viable approach after a single failure either.',
-    '- Use dedicated tools when available: Read (not cat), Write (not echo), Edit (not sed), Grep (not grep), Glob (not find). Use Bash only for system commands and operations that require shell execution.',
-    '- When multiple tool calls are independent, make them all in a single response to maximize parallelism.',
-    '- Keep working until the task is genuinely done. If you output text without tool calls, you are signaling that you are finished. Only do this when all work is verified complete.',
+    '- 完整完成任务，不要半途而废。不要只描述要做什么——调用工具实际执行。',
+    '- 报告任务完成前，必须验证结果：运行代码、检查输出、确认无错误。',
+    '- 如果方案失败，先诊断原因再换方案——读错误信息、检查假设、尝试针对性修复。不要盲目重试，也不要一次失败就放弃可行方案。',
+    '- 有专用工具时优先使用：read_file（不用 cat）、write_file（不用 echo）、edit_file（不用 sed）、grep（不用 grep 命令）、glob（不用 find）。bash 只用于系统命令。',
+    '- 多个独立的工具调用放在同一轮响应中并行执行，不要串行等待。',
+    '- 持续工作直到任务真正完成。输出纯文本（不调用工具）意味着你认为任务已完成，仅在所有工作验证完毕后才这样做。',
+    '',
+    '# 工作模式',
+    '',
+    '## 修改文件',
+    '1. 先用 read_file 阅读目标文件的相关区域，理解现有代码',
+    '2. 用 edit_file 精确修改需要改的部分（而非 write_file 全量覆盖）',
+    '3. 仅在创建新文件时才使用 write_file',
+    '',
+    '## 定位代码',
+    '1. 先用 grep 搜索关键词缩小范围',
+    '2. 再用 read_file 阅读具体文件',
+    '3. 不要猜测文件路径，用 glob 或 grep 确认',
+    '',
+    '## 完成修改后',
+    '1. 如有代码修改，用 bash 运行相关测试或类型检查',
+    '2. 检查是否有关联文件需要同步修改（如导入路径、类型定义、配置文件）',
+    '3. 简洁报告完成状态，不要重复展示已做的事情',
   ].join('\n')
 
   const parts = [behaviorGuidance, instructionsPrompt, skillsPrompt, hookContext, memoryContext].filter(Boolean)
