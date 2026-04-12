@@ -116,13 +116,13 @@ function runCli(prompt: string, cwd: string): Promise<{ exitCode: number; stdout
     let stdout = ''
     let stderr = ''
 
-    child.stdout.on('data', (chunk: Buffer) => {
+    child.stdout!.on('data', (chunk: Buffer) => {
       const text = chunk.toString()
       stdout += text
       process.stdout.write(text)
     })
 
-    child.stderr.on('data', (chunk: Buffer) => {
+    child.stderr!.on('data', (chunk: Buffer) => {
       const text = chunk.toString()
       stderr += text
       process.stderr.write(text)

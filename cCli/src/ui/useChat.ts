@@ -80,7 +80,7 @@ export interface UseChatReturn {
   /** 中止当前流式请求 */
   abort: () => void
   /** 中断当前流式请求并发送新消息 */
-  interruptAndSubmit: (text: string) => void
+  interruptAndSubmit: (text: string, source?: 'cli' | 'web') => void
   /**
    * 解决权限确认。
    * @param allow  是否允许工具执行
@@ -136,6 +136,11 @@ export function useChat(): UseChatReturn {
   const allowedToolsRef = useRef<Set<string>>(new Set())
   const toolEventsRef = useRef<ToolEvent[]>([])
   const abortRef = useRef<AbortController | null>(null)
+  // Ref 守卫：同步判断是否处于 streaming，避免 React state 异步更新导致的闭包陷阱
+  const isStreamingRef = useRef(false)
+  // 每次 submit 分配递增 generation，finally 只清除属于自己 generation 的 ref，
+  // 防止旧 loop 的 finally 覆盖新 loop 已设为 true 的 ref
+  const submitGenerationRef = useRef(0)
 
   // 项目级权限白名单（lazy 初始化：首次 submit 时基于实际注册工具构建）
   const permissionManagerRef = useRef<PermissionManager | null>(null)
@@ -223,7 +228,9 @@ export function useChat(): UseChatReturn {
    * system 消息在构建 history 前被过滤，不发送给 LLM。
    */
   const submit = useCallback((text: string, _source: 'cli' | 'web' = 'cli', imageIds?: string[]) => {
-    if (isStreaming) return
+    if (isStreamingRef.current) return
+    isStreamingRef.current = true
+    const generation = ++submitGenerationRef.current
 
     const config = configManager.load()
     // 使用 state 中的 provider/model（可能已通过 /model 切换，与 config 文件不同）
@@ -519,19 +526,24 @@ export function useChat(): UseChatReturn {
       } finally {
         provider.dispose?.()
         setStreamingMessage(null)
-        setIsStreaming(false)
-        abortRef.current = null
+        // 只有当前 generation 才清除 ref，防止旧 loop finally 覆盖新 loop 的状态
+        if (submitGenerationRef.current === generation) {
+          isStreamingRef.current = false
+          setIsStreaming(false)
+          abortRef.current = null
+        }
       }
     })()
-  }, [isStreaming, messages, currentProvider, currentModel])
+  }, [messages, currentProvider, currentModel])
 
   /** 中止当前 AgentLoop 请求（用户主动取消或超时） */
   const abort = useCallback(() => { abortRef.current?.abort() }, [])
 
   /** 中断当前流并提交新消息 */
-  const interruptAndSubmit = useCallback((text: string) => {
+  const interruptAndSubmit = useCallback((text: string, source: 'cli' | 'web' = 'cli') => {
     abortRef.current?.abort()
-    setTimeout(() => submit(text), 0)
+    isStreamingRef.current = false  // 同步清除，确保 submit 不被 ref 守卫拦截
+    setTimeout(() => submit(text, source), 0)
   }, [submit])
 
   /** 清空消息列表（/clear 指令） */
@@ -674,7 +686,7 @@ export function useChat(): UseChatReturn {
 
   /** 压缩对话上下文 */
   const compactMessages = useCallback(async (options?: { strategy?: string; focus?: string }) => {
-    if (isStreaming) return
+    if (isStreamingRef.current) return
 
     const config = configManager.load()
     const provider = getOrCreateProvider(currentProvider, config)
@@ -743,19 +755,23 @@ export function useChat(): UseChatReturn {
       appendSystemMessage(errMsg)
       eventBus.emit({ type: 'compact_status', status: 'error', message: errMsg })
     }
-  }, [isStreaming, messages, currentProvider, currentModel, appendSystemMessage])
+  }, [messages, currentProvider, currentModel, appendSystemMessage])
 
   // ── Web 端输入回流：监听 EventBus，将 Web 侧事件桥接到 CLI hook ──
 
-  /** Web 端聊天输入 → 触发 submit（过滤 source=web，避免 CLI submit 循环） */
+  /** Web 端聊天输入 → 触发 submit 或 interruptAndSubmit（过滤 source=web，避免 CLI submit 循环） */
   useEffect(() => {
     const off = eventBus.onType('user_input', (event) => {
       if (event.source === 'web' && event.text !== '__abort__') {
-        submit(event.text, 'web', event.imageIds)
+        if (isStreamingRef.current) {
+          interruptAndSubmit(event.text, 'web')
+        } else {
+          submit(event.text, 'web', event.imageIds)
+        }
       }
     })
     return off
-  }, [submit])
+  }, [submit, interruptAndSubmit])
 
   /** Web 端权限响应 → 触发 resolvePermission */
   useEffect(() => {

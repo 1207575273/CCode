@@ -269,7 +269,7 @@ async function testRawHTTP() {
       }),
     })
 
-    const data = await res.json()
+    const data = await res.json() as Record<string, unknown>
     if (data.usage) {
       console.log(`  ✓ 非流式 usage:`)
       console.log(`    ${JSON.stringify(data.usage)}`)
