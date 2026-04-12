@@ -35,3 +35,11 @@ Thumbs.db
 
 # 日志 (运行时产生，不提交)
 *.log
+
+# 运行时生成的项目级配置/缓存（不提交）
+.ccode/
+cCli/.ccode/
+.specstory/
+
+# Windows 残留
+nul
