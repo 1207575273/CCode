@@ -12,6 +12,7 @@
       "Task(*)",
       "NotebookEdit(*)",
       "LSP(*)",
+      "Git(*)",
       "mcp__*",
       "mcp__web-search-prime__web_search_prime",
       "mcp__plugin_context7_context7__resolve-library-id",
