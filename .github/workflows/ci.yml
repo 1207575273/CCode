@@ -1,9 +1,13 @@
-# CI Pipeline — 类型检查 + 单元测试 + 构建验证 + Release Notes 生成
+# CI Pipeline — 类型检查 + 单元测试 + 构建验证 + Release Notes
 #
 # 触发条件:
 #   - release/* 分支 push（发版准备分支）
 #   - v* tag push（打版本标签时）
 #   - 任何分支向 main 的 PR（合并前门控）
+#
+# Release Notes 策略:
+#   - release/* 分支 → 生成 Draft Release（预览，可随时编辑/删除）
+#   - v* tag push    → 正式发布 Release（含 CHANGELOG + git log + 统计）
 #
 # 不包含 npm publish:
 #   npm 发包需要人工确认（版本号、changelog、构建产物检查），
@@ -107,28 +111,32 @@ jobs:
 
       - name: Verify Web build output
         run: |
-          test -f web/dist/index.html || (echo "ERROR: web/dist/index.html not found" && exit 1)
-          echo "Web build OK: $(find web/dist -type f | wc -l) files"
+          # Vite outDir 配置为 ../dist/web（与 CLI 统一在 dist/ 下）
+          test -f dist/web/index.html || (echo "ERROR: dist/web/index.html not found" && exit 1)
+          echo "Web build OK: $(find dist/web -type f | wc -l) files"
 
-      # tag push 时上传构建产物，方便手动发包前检查
+      # tag push 或 release 分支：上传构建产物
       - name: Upload build artifacts
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/')
         uses: actions/upload-artifact@v4
         with:
           name: ccode-cli-${{ github.ref_name }}
           path: |
-            cCli/dist/
+            cCli/dist/bin/
+            cCli/dist/web/
             cCli/package.json
           retention-days: 30
 
   # ═══════════════════════════════════════
-  # Job 3: 自动生成 Release Notes（仅 tag push）
+  # Job 3: Release Notes
+  #   - release/* 分支 → Draft 预览
+  #   - v* tag        → 正式发布
   # ═══════════════════════════════════════
   release-notes:
     name: Release Notes
     runs-on: ubuntu-latest
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/')
     permissions:
       contents: write
 
@@ -137,33 +145,43 @@ jobs:
         with:
           fetch-depth: 0  # 完整历史，用于 git log 生成 changelog
 
-      - name: Extract version from tag
-        id: version
-        run: echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+      - name: Determine release mode
+        id: mode
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "is_tag=true" >> "$GITHUB_OUTPUT"
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            # release 分支：从分支名提取版本号 release/0.11.0 → 0.11.0
+            BRANCH_VERSION="${GITHUB_REF_NAME#release/}"
+            echo "is_tag=false" >> "$GITHUB_OUTPUT"
+            echo "tag=v${BRANCH_VERSION}" >> "$GITHUB_OUTPUT"
+            echo "version=${BRANCH_VERSION}" >> "$GITHUB_OUTPUT"
+          fi
         working-directory: .
 
       - name: Find previous tag
         id: prev_tag
         run: |
-          PREV=$(git tag --sort=-version:refname | grep '^v' | sed -n '2p')
+          PREV=$(git tag --sort=-version:refname | grep '^v' | head -1)
           echo "prev=${PREV:-$(git rev-list --max-parents=0 HEAD)}" >> "$GITHUB_OUTPUT"
         working-directory: .
 
       - name: Generate release notes
-        id: notes
         run: |
-          TAG="${{ steps.version.outputs.tag }}"
+          TAG="${{ steps.mode.outputs.tag }}"
+          VERSION="${{ steps.mode.outputs.version }}"
+          IS_TAG="${{ steps.mode.outputs.is_tag }}"
           PREV="${{ steps.prev_tag.outputs.prev }}"
 
           # 从 CHANGELOG.md 提取当前版本段落
-          VERSION_NUM="${TAG#v}"
           CHANGELOG_SECTION=""
           if [ -f CHANGELOG.md ]; then
-            # 提取 ## [x.y.z] 到下一个 ## [ 之间的内容
-            CHANGELOG_SECTION=$(awk "/^## \[${VERSION_NUM}\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md)
+            CHANGELOG_SECTION=$(awk "/^## \[${VERSION}\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md)
           fi
 
-          # 生成 git commit 列表
+          # 生成 git commit 列表（从上一个 tag 到当前）
           COMMITS=$(git log "${PREV}..HEAD" --pretty=format:"- %s (%h)" --no-merges 2>/dev/null || echo "- 初始发布")
 
           # 统计数据
@@ -171,13 +189,15 @@ jobs:
           FILES_CHANGED=$(git diff "${PREV}..HEAD" --stat 2>/dev/null | tail -1 || echo "N/A")
 
           # 组装 release notes
-          cat > /tmp/release-notes.md << 'NOTES_EOF'
-          NOTES_EOF
-
           {
+            if [ "$IS_TAG" = "false" ]; then
+              echo "> **Draft** — 此为 \`${GITHUB_REF_NAME}\` 分支的预览版本，正式发布前可能继续变更。"
+              echo ""
+            fi
+
             echo "## CCode CLI ${TAG}"
             echo ""
-            echo "**npm:** \`npm install -g ccode-cli@${VERSION_NUM}\`"
+            echo "**npm:** \`npm install -g ccode-cli@${VERSION}\`"
             echo ""
 
             if [ -n "$CHANGELOG_SECTION" ]; then
@@ -189,7 +209,7 @@ jobs:
 
             echo "---"
             echo ""
-            echo "### Commits (${COMMIT_COUNT})"
+            echo "### Commits since ${PREV} (${COMMIT_COUNT})"
             echo ""
             echo "$COMMITS"
             echo ""
@@ -205,14 +225,16 @@ jobs:
             echo "</details>"
           } > /tmp/release-notes.md
 
+          echo "=== Generated Release Notes ==="
           cat /tmp/release-notes.md
         working-directory: .
 
-      - name: Create GitHub Release
+      - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: ${{ steps.version.outputs.tag }}
+          tag_name: ${{ steps.mode.outputs.tag }}
+          name: ${{ steps.mode.outputs.tag }}
           body_path: /tmp/release-notes.md
-          draft: false
-          prerelease: ${{ contains(steps.version.outputs.tag, '-') }}
+          # release 分支 → draft 预览；tag push → 正式发布
+          draft: ${{ steps.mode.outputs.is_tag == 'false' }}
+          prerelease: ${{ contains(steps.mode.outputs.tag, '-') }}
