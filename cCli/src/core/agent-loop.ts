@@ -333,7 +333,8 @@ export class AgentLoop {
 
       yield { type: 'llm_done', inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, stopReason: doneStopReason }
       // 更新上下文窗口追踪（精确值来自 API 返回的 inputTokens）
-      if (inputTokens > 0) {
+      // 仅主 Agent 更新 — 子 Agent（isSidechain）有独立上下文，不应覆盖主 Agent 的追踪值
+      if (inputTokens > 0 && !this.#config.isSidechain) {
         contextTracker.update(inputTokens)
       }
       return { toolCalls: pendingToolCalls, text: accumulatedText, aborted: false }

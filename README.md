@@ -93,6 +93,7 @@ pnpm dev
 {
   "defaultProvider": "glm",
   "defaultModel": "glm-5",
+  "subAgentModel": "glm-4.7",          // [可选] 子 Agent 使用的模型，不配则继承主 Agent
   "providers": {
     "glm": {
       "apiKey": "your-zhipu-api-key",
@@ -116,6 +117,7 @@ pnpm dev
   // ────── 全局设置 ──────
   "defaultProvider": "glm",          // 默认使用的 Provider 名称
   "defaultModel": "glm-5",           // 默认模型（必须在对应 provider.models 列表中）
+  "subAgentModel": "glm-4.7",       // [可选] 子 Agent 独立模型，不配则继承主 Agent 当前模型
   "statusBar": true,                 // 是否显示底部状态栏（token 消耗、模型名等）
 
   // ────── Provider 配置 ──────
@@ -135,6 +137,7 @@ pnpm dev
 |------|------|------|------|
 | `defaultProvider` | string | 是 | 启动时默认使用的 Provider |
 | `defaultModel` | string | 是 | 启动时默认使用的模型 |
+| `subAgentModel` | string | 否 | 子 Agent 独立模型，不配则继承主 Agent 当前模型。模型优先级：LLM 显式指定 > `subAgentModel` > 继承父 Agent。必须在同 Provider 的 `models` 列表中 |
 | `statusBar` | boolean | 否 | 底部状态栏开关，默认 `true` |
 | `providers.<name>.apiKey` | string | 是 | API 密钥 |
 | `providers.<name>.baseURL` | string | 否 | 自定义端点。Anthropic 可省略，OpenAI 兼容协议必填 |
@@ -149,6 +152,7 @@ pnpm dev
 {
   "defaultProvider": "glm",
   "defaultModel": "glm-5",
+  "subAgentModel": "glm-4.7",        // 子 Agent 用轻量模型，降低成本
   "providers": {
     "glm": {
       "apiKey": "your-zhipu-api-key",
@@ -299,12 +303,37 @@ CLI-1 (session-aaa)  CLI-2 (session-bbb)
 | 能力 | 说明 |
 |------|------|
 | **多模型运行时切换** | `/model` 一键切换，不重启、不丢上下文 |
-| **16 个内置工具** | 文件读写/编辑、glob/grep 搜索、bash 执行、子 Agent 派发、任务管理 |
-| **子 Agent (SubAgent)** | general / explore / plan 三种类型，后台并行运行，`Ctrl+B` 实时面板 |
+| **17 个内置工具** | 文件读写/编辑、glob/grep 搜索、bash 执行、git 深度集成、子 Agent 派发、任务管理 |
+| **子 Agent (SubAgent)** | general / explore / plan 三种类型，后台并行运行，`Ctrl+B` 实时面板，支持独立模型配置 |
 | **并行工具执行** | 多个 tool_calls 自动并行，安全/危险分类策略 |
 | **上下文管理** | `/compact` 三种压缩策略 + auto-compact + `/context` 查看使用率 |
 | **对话持久化** | JSONL 会话 + `--resume` 恢复 + `/fork` 分支 + Web 端一键恢复 |
 | **Token 计量** | 四维统计（input/output/cache_read/cache_write）+ 多币种计价 + `/usage` |
+
+### 父子模型能力联动
+
+子 Agent 的模型选择支持三级优先级：
+
+1. **LLM 显式指定** — 派发时 `model` 参数指定具体模型
+2. **全局配置** — `config.json` 中的 `subAgentModel` 字段
+3. **继承父 Agent** — 不配置时自动使用主 Agent 当前模型
+
+典型用法：主 Agent 用强模型（如 GLM-5）做决策和编排，子 Agent 用轻量模型（如 GLM-4.7）做搜索和文件操作，**同 Provider 内灵活切换、成本可控**。
+
+```jsonc
+{
+  "defaultModel": "glm-5",        // 主 Agent：强模型，负责决策编排
+  "subAgentModel": "glm-4.7"      // 子 Agent：轻量模型，负责执行任务
+}
+```
+
+### Git 深度集成
+
+- **专用 Git 工具** — 13 个子命令（status / log / diff / branch / checkout / commit / merge / rebase / cherry_pick / stash / tag / reset / show），无需通过 bash 调用 git
+- **启动上下文注入** — 冷启动自动收集 Git 状态（当前分支、最近提交、工作区变更）注入 System Prompt
+- **安全防护** — 敏感文件自动拦截（.env / credentials.json / .pem / .key 等）、commit 消息 shell 注入防护
+- **非 Git 仓库感知** — 非 Git 目录启动时给出明确提示，而非静默忽略
+- **Bash 兜底** — 超出 git 工具覆盖范围的操作（如 push、interactive rebase）仍可通过 bash 工具完成
 
 ### Memory / RAG 记忆系统
 
