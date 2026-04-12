@@ -192,7 +192,7 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
         setThinking(false)
         setStreaming('')
         setToolEvents(prev => [...prev, {
-          toolCallId: event.toolCallId, toolName: event.toolName, args: event.args, status: 'running',
+          toolCallId: event.toolCallId, toolName: event.toolName, args: event.args, status: 'running', startedAt: Date.now(),
         }])
         break
       case 'tool_done': {

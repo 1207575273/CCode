@@ -14,7 +14,7 @@
  *   - Error: ✗ + 工具名(参数摘要) — 错误作为 ⎿ 子块另起一行
  */
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { Box, Text } from 'ink'
 import Spinner from 'ink-spinner'
 import { buildArgsSummary, formatDuration, truncate } from './format-utils.js'
@@ -32,6 +32,8 @@ export interface ToolEvent {
   /** 工具调用参数 */
   args?: Record<string, unknown>
   status: 'running' | 'done' | 'error'
+  /** running 状态开始时间（Date.now()），用于 UI 计时显示 */
+  startedAt?: number
   /** 仅 done/error 状态有值 */
   durationMs?: number
   /** 来自 tool_done 事件的结果/错误摘要 */
@@ -122,23 +124,44 @@ function buildOutputPreview(summary: string): { lines: string[]; foldHint: strin
 // 渲染组件
 // ═══════════════════════════════════════════════
 
+/** Running 状态子组件 — 独立管理计时器 state，避免污染父组件 */
+function ToolRunningLine({ toolName, argsSummary, startedAt }: { toolName: string; argsSummary: string; startedAt?: number }) {
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    if (!startedAt) return
+    // 立即计算一次，避免首帧空白
+    setElapsed(Math.floor((Date.now() - startedAt) / 1000))
+    const timer = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startedAt) / 1000))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [startedAt])
+
+  const label = runningLabel(toolName)
+  // 超过 3 秒才显示计时，避免短命令闪烁
+  const timeStr = elapsed >= 3 ? `  ${elapsed}s` : ''
+
+  return (
+    <Box paddingLeft={1}>
+      <Box marginRight={1}><Spinner type="dots" /></Box>
+      <Text dimColor>
+        {label}
+        {argsSummary ? ` ${argsSummary}` : ''}
+        ...
+      </Text>
+      {timeStr && <Text dimColor>{timeStr}</Text>}
+    </Box>
+  )
+}
+
 /** 渲染单条工具状态行（头部 + 可选的 ⎿ 输出子块） */
 export function ToolStatusLine({ event }: { event: ToolEvent }) {
   const argsSummary = buildArgsSummary(event.toolName, event.args)
 
   // ---- Running 状态 ----
   if (event.status === 'running') {
-    const label = runningLabel(event.toolName)
-    return (
-      <Box paddingLeft={1}>
-        <Box marginRight={1}><Spinner type="dots" /></Box>
-        <Text dimColor>
-          {label}
-          {argsSummary ? ` ${argsSummary}` : ''}
-          ...
-        </Text>
-      </Box>
-    )
+    return <ToolRunningLine toolName={event.toolName} argsSummary={argsSummary} {...(event.startedAt != null ? { startedAt: event.startedAt } : {})} />
   }
 
   // ---- Done / Error 状态 ----

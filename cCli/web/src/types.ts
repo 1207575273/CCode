@@ -112,6 +112,8 @@ export interface ToolEvent {
   toolName: string
   args: Record<string, unknown>
   status: 'running' | 'done'
+  /** running 状态开始时间（Date.now()），用于 UI 计时显示 */
+  startedAt?: number
   durationMs?: number
   success?: boolean
   resultSummary?: string

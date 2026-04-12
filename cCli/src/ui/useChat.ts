@@ -399,7 +399,7 @@ export function useChat(): UseChatReturn {
           } else if (event.type === 'tool_start') {
             const id = randomUUID()
             pendingToolIds.set(event.toolCallId, id)
-            const newEvent: ToolEvent = { id, toolName: event.toolName, args: event.args, status: 'running' }
+            const newEvent: ToolEvent = { id, toolName: event.toolName, args: event.args, status: 'running', startedAt: Date.now() }
             toolEventsRef.current = [...toolEventsRef.current, newEvent]
             setToolEvents(toolEventsRef.current)
           } else if (event.type === 'tool_done') {

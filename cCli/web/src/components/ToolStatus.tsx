@@ -10,7 +10,7 @@
  * 样式对齐 CLI 端的 ToolStatusLine。
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import type { ToolEvent } from '../types'
 import { SubAgentCard } from './SubAgentCard'
 import type { SubAgentInfo } from './SubAgentCard'
@@ -119,6 +119,20 @@ export function ToolStatus({ events, subAgents }: Props) {
   )
 }
 
+/** 实时计时 hook — 仅 running 状态使用，>=3s 才返回可见文本 */
+function useElapsedTimer(startedAt?: number): string {
+  const [elapsed, setElapsed] = useState(0)
+  useEffect(() => {
+    if (!startedAt) return
+    setElapsed(Math.floor((Date.now() - startedAt) / 1000))
+    const timer = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startedAt) / 1000))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [startedAt])
+  return elapsed >= 3 ? `${elapsed}s` : ''
+}
+
 function ToolStatusItem({ event }: { event: ToolEvent }) {
   const [expanded, setExpanded] = useState(false)
   const toggle = useCallback(() => setExpanded(prev => !prev), [])
@@ -126,7 +140,9 @@ function ToolStatusItem({ event }: { event: ToolEvent }) {
   const isRunning = event.status === 'running'
   const name = DISPLAY_NAMES[event.toolName] ?? event.toolName
   const summary = formatArgsSummary(event.toolName, event.args)
-  const dur = event.durationMs != null ? `${event.durationMs}ms` : ''
+
+  const runningTimer = useElapsedTimer(isRunning ? event.startedAt : undefined)
+  const dur = isRunning ? runningTimer : (event.durationMs != null ? `${event.durationMs}ms` : '')
 
   // 状态图标和颜色
   const icon = isRunning ? '⟳' : event.success ? '✓' : '✗'
