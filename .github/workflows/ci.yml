@@ -116,11 +116,17 @@ jobs:
           echo "Web build OK: $(find dist/web -type f | wc -l) files"
 
       # tag push 或 release 分支：上传构建产物
+      - name: Sanitize ref name for artifact
+        if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/')
+        id: artifact_name
+        run: echo "name=ccode-cli-$(echo '${{ github.ref_name }}' | tr '/' '-')" >> "$GITHUB_OUTPUT"
+        working-directory: .
+
       - name: Upload build artifacts
         if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/')
         uses: actions/upload-artifact@v4
         with:
-          name: ccode-cli-${{ github.ref_name }}
+          name: ${{ steps.artifact_name.outputs.name }}
           path: |
             cCli/dist/bin/
             cCli/dist/web/
