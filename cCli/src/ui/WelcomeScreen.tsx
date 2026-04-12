@@ -10,8 +10,7 @@
 
 import React from 'react'
 import { Box, Text } from 'ink'
-
-const APP_VERSION = 'v0.8.1'
+import { APP_VERSION } from '../version.js'
 
 // 时间常量（与 ResumePanel 相同，按任务要求独立维护）
 const SECOND = 1000
@@ -69,7 +68,7 @@ export function WelcomeScreen({ model, provider, cwd, recentSessions }: WelcomeS
     >
       {/* 标题行 */}
       <Box paddingX={1} marginBottom={1}>
-        <Text color="red" bold>── CCode {APP_VERSION} ──</Text>
+        <Text color="red" bold>── CCode v{APP_VERSION} ──</Text>
       </Box>
 
       {/* 双栏主体 */}

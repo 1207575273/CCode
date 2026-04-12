@@ -1,5 +1,6 @@
 // src/mcp/mcp-manager.ts
 
+import { APP_VERSION } from '../version.js'
 import type { McpServerConfig, McpConfigWithSources } from '@config/mcp-config.js'
 import { McpTool } from '@mcp/mcp-tool.js'
 import type { McpToolDefinition } from '@mcp/mcp-tool.js'
@@ -71,7 +72,7 @@ export class McpManager {
         this.onConnect?.({ phase: 'start', serverName, transport: transportType })
 
         try {
-          const client = new Client({ name: 'ccode', version: '0.1.0' })
+          const client = new Client({ name: 'ccode', version: APP_VERSION })
           const transport = this.#createTransport(serverConfig)
 
           await client.connect(transport)
