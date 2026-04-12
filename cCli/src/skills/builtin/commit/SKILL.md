@@ -1,7 +1,7 @@
 ---
 name: commit
 description: Use when the user asks to commit changes, create a git commit, or says "提交" or "commit"
-allowed-tools: Bash
+allowed-tools: git, Bash
 user-invocable: true
 ---
 
@@ -42,25 +42,17 @@ user-invocable: true
 
 ## 流程
 
-1. **查看变更**：运行 `git status` 和 `git diff`（含 staged 和 unstaged）
-2. **查看提交历史**：运行 `git log --oneline -10` 了解项目的提交风格
+1. **查看变更**：调用 `git` 工具的 `status` 子命令查看工作区变更
+2. **查看提交历史**：调用 `git` 工具的 `log` 子命令（count=10）了解项目的提交风格
 3. **分析变更**：理解所有改动的目的和关联
-4. **草拟消息**：根据变更内容选择合适的 type 和 scope
-5. **暂存文件**：按文件名逐个 `git add`，不使用 `git add -A` 或 `git add .`
-6. **提交**：使用 HEREDOC 格式传递 commit message
-
-```bash
-git commit -m "$(cat <<'EOF'
-type(scope): subject
-
-EOF
-)"
-```
+4. **查看详细 diff**：如需了解具体改动，调用 `git` 工具的 `diff` 子命令
+5. **草拟消息**：根据变更内容选择合适的 type 和 scope
+6. **提交**：调用 `git` 工具的 `commit` 子命令（指定 files 和 message）
+7. **确认状态**：调用 `git` 工具的 `status` 子命令确认提交成功
 
 ## 注意事项
 
-- 不要提交包含密钥的文件（.env、credentials.json 等）
-- 不要使用 `--no-verify` 跳过 hooks
-- 不要使用 `--amend` 除非用户明确要求
-- 提交后运行 `git status` 确认状态
-- 不要自动 push，除非用户明确要求
+- 不要提交包含密钥的文件（.env、credentials.json 等）— git 工具会自动拦截
+- 不要使用 `--amend` 除非用户明确要求（如需 amend，使用 bash 工具）
+- 不要自动 push，除非用户明确要求（push 使用 bash 工具）
+- commit 的 files 参数必须逐个指定文件，不要使用 `git add -A` 或 `git add .`

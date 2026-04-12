@@ -17,6 +17,7 @@ import { EditFileTool } from '@tools/core/edit-file.js'
 import { GlobTool } from '@tools/core/glob.js'
 import { GrepTool } from '@tools/core/grep.js'
 import { BashTool } from '@tools/core/bash.js'
+import { GitTool } from '@tools/core/git.js'
 import { KillShellTool } from '@tools/core/kill-shell.js'
 import { TaskOutputTool } from '@tools/core/task-output.js'
 import { TodoWriteTool } from '@tools/ext/todo-write.js'
@@ -44,6 +45,7 @@ import { ProviderEmbedding } from '@memory/rag/embedding/provider-embedding.js'
 import { LibsqlVectorStore } from '@memory/storage/libsql-vector-store.js'
 import { configManager } from '@config/config-manager.js'
 import { startSnapshotCreation, cleanupSnapshot } from '@platform/shell-snapshot.js'
+import { execa } from 'execa'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 
@@ -88,6 +90,7 @@ function buildRegistry(): ToolRegistry {
   reg.register(new GlobTool())
   reg.register(new GrepTool())
   reg.register(new BashTool())
+  reg.register(new GitTool())
   reg.register(new KillShellTool())
   reg.register(new TaskOutputTool())
   reg.register(new TodoWriteTool())
@@ -260,6 +263,67 @@ export function getLoadedInstructions(): LoadedInstruction[] {
   return cachedInstructions ?? []
 }
 
+// ═══ Git 上下文收集 ═══
+
+const GIT_CONTEXT_TIMEOUT_MS = 3000
+
+/**
+ * 收集当前工作目录的 Git 上下文信息，供 LLM 在首轮对话时了解仓库状态。
+ * 非 Git 仓库或超时均降级返回提示文案，不会抛异常。
+ */
+async function collectGitContext(): Promise<string> {
+  // 用 Promise.race 实现超时，避免 execa v9 + AbortController 的兼容问题
+  const timeout = new Promise<string>((resolve) =>
+    setTimeout(() => resolve('## Git 状态\nGit 信息收集超时，请手动调用 git status 查看。'), GIT_CONTEXT_TIMEOUT_MS),
+  )
+  return Promise.race([doCollectGitContext(), timeout])
+}
+
+async function doCollectGitContext(): Promise<string> {
+  try {
+    const cwd = process.cwd()
+    const opts = { cwd, reject: false } as const
+
+    // 1. 检查是否在 Git 仓库内
+    const check = await execa('git', ['rev-parse', '--is-inside-work-tree'], opts)
+    if (check.exitCode !== 0) {
+      return '## Git 状态\n当前工作目录不是 Git 仓库。git 工具不可用，如需版本控制请先执行 git init 或 clone 一个仓库。'
+    }
+
+    // 2. 并行收集分支、日志、工作区变更
+    const [branchResult, logResult, statusResult] = await Promise.all([
+      execa('git', ['branch', '--show-current'], opts),
+      execa('git', ['log', '--oneline', '--format=%h %s', '-5'], opts),
+      execa('git', ['status', '--short'], opts),
+    ])
+
+    const branch = branchResult.stdout.trim() || '(detached HEAD)'
+    const log = logResult.stdout.trim() || '(无提交记录)'
+
+    // status 超过 50 行时截断，避免 prompt 过长
+    const statusLines = statusResult.stdout.trim().split('\n').filter(Boolean)
+    let statusText: string
+    if (statusLines.length === 0) {
+      statusText = '(clean)'
+    } else if (statusLines.length > 50) {
+      statusText = statusLines.slice(0, 50).join('\n') + `\n[变更较多（共 ${statusLines.length} 条），请调用 git status 查看完整列表]`
+    } else {
+      statusText = statusLines.join('\n')
+    }
+
+    return [
+      '## 当前 Git 状态',
+      `- 分支: ${branch}`,
+      '- 最近提交:',
+      log.split('\n').map(l => '  ' + l).join('\n'),
+      '- 工作区变更:',
+      statusText === '(clean)' ? '  (clean)' : statusText.split('\n').map(l => '  ' + l).join('\n'),
+    ].join('\n')
+  } catch {
+    return '## Git 状态\nGit 信息收集失败，请手动调用 git status 查看。'
+  }
+}
+
 // ═══ System Prompt 一次构建 ═══
 
 let cachedSystemPrompt: string | undefined
@@ -281,8 +345,9 @@ let cachedSections: SystemPromptSection[] = []
  *
  * @param hookContext SessionStart hook 注入的 additionalContext
  * @param memoryContext 记忆系统冷启动上下文（可选）
+ * @param gitContext Git 仓库上下文（可选，非 git 仓库或超时时为 undefined）
  */
-export function buildSystemPrompt(hookContext: string, memoryContext?: string): void {
+export function buildSystemPrompt(hookContext: string, memoryContext?: string, gitContext?: string): void {
   if (cachedSystemPrompt !== undefined) return
 
   const instructionsPrompt = getInstructionsPrompt()
@@ -294,6 +359,7 @@ export function buildSystemPrompt(hookContext: string, memoryContext?: string): 
   if (skillsPrompt) cachedSections.push({ name: 'Skills', charLength: skillsPrompt.length })
   if (hookContext) cachedSections.push({ name: 'Hooks', charLength: hookContext.length })
   if (memoryContext) cachedSections.push({ name: 'Memory', charLength: memoryContext.length })
+  if (gitContext) cachedSections.push({ name: 'Git', charLength: gitContext.length })
 
   /**
    * 内置行为指导 — 告诉 LLM "该怎么干活"。
@@ -348,7 +414,7 @@ export function buildSystemPrompt(hookContext: string, memoryContext?: string): 
     '3. 简洁报告完成状态，不要重复展示已做的事情',
   ].join('\n')
 
-  const parts = [behaviorGuidance, instructionsPrompt, skillsPrompt, hookContext, memoryContext].filter(Boolean)
+  const parts = [behaviorGuidance, instructionsPrompt, skillsPrompt, hookContext, memoryContext, gitContext].filter(Boolean)
   if (behaviorGuidance) cachedSections.unshift({ name: 'Behavior', charLength: behaviorGuidance.length })
   cachedSystemPrompt = parts.length > 0 ? parts.join('\n\n') : undefined
 }
@@ -467,13 +533,14 @@ export const isDevMode = (process.argv[1] ?? '').endsWith('.ts')
 /**
  * 统一启动编排 — 按依赖拓扑最大化并行（幂等，多次调用返回同一 Promise）。
  *
- * 4 条并行链 + 屏障 + 后台 embed：
+ * 5 条并行链 + 屏障 + 后台 embed：
  * - 链 A'：Skills → Instructions → Hooks → SessionStartHooks（产出 hookContext）
  * - 链 B'：文件索引扫描（磁盘 IO）
  * - 链 C'：Runtime Plugin 发现
  * - 链 D'：MemoryManager.initialize()（扫描文件 + 加载已有索引 + 建 BM25，毫秒级）
- * ── 屏障：等 A' + D' 都完成 ──
- * → buildSystemPrompt(hookContext, memoryContext)
+ * - 链 F'：Git 上下文收集（非 git 仓库返回提示，超时降级）
+ * ── 屏障：等 A' + D' + F' 都完成 ──
+ * → buildSystemPrompt(hookContext, memoryContext, gitContext)
  * → 后台：MemoryManager.embedPending()（增量 embed，不阻塞首次对话）
  *
  * MCP 不在此编排内 — 通过 startMcpBackground() 后台静默加载。
@@ -485,8 +552,9 @@ export function bootstrapAll(): Promise<BootstrapResult> {
     const t0 = performance.now()
     const timings: Record<string, number> = {}
 
-    // 链 A' 产出的 hookContext，需要跨 Promise.all 传递
+    // 链 A' 产出的 hookContext，链 F' 产出的 gitContext，需要跨 Promise.all 传递
     let hookContext = ''
+    let gitContext = ''
 
     await Promise.all([
       // 链 A'：Skills → Hooks → SessionStartHooks（不含 SystemPrompt，屏障后构建）
@@ -531,6 +599,12 @@ export function bootstrapAll(): Promise<BootstrapResult> {
         await startSnapshotCreation()
         timings['shellSnapshot'] = performance.now() - t
       })(),
+      // 链 F'：Git 上下文收集（非 git 仓库返回提示，超时降级）
+      (async () => {
+        const t = performance.now()
+        gitContext = await collectGitContext()
+        timings['gitContext'] = performance.now() - t
+      })(),
     ])
 
     // ── 屏障：A' + D' 都完成 ──
@@ -540,7 +614,7 @@ export function bootstrapAll(): Promise<BootstrapResult> {
     if (memoryManagerInstance) {
       memoryContext = await memoryManagerInstance.getRelevantContext(process.cwd())
     }
-    buildSystemPrompt(hookContext, memoryContext || undefined)
+    buildSystemPrompt(hookContext, memoryContext || undefined, gitContext || undefined)
     timings['systemPrompt'] = performance.now() - t
 
     // 后台：增量 embed（不阻塞启动和首次对话）

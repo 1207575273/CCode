@@ -42,6 +42,16 @@ export type ToolResultMeta =
   | { type: 'grep'; totalMatches: number; displayedMatches: number; truncated: boolean; fileCount: number }
   | { type: 'glob'; fileCount: number }
   | { type: 'ask_user'; questionCount: number; answered: boolean; pairs?: Array<{ question: string; answer: string }> }
+  | { type: 'git-status'; branch: string; staged: number; unstaged: number; untracked: number }
+  | { type: 'git-diff'; filesChanged: number; insertions: number; deletions: number; truncated: boolean }
+  | { type: 'git-log'; count: number }
+  | { type: 'git-checkout'; branch: string; created: boolean }
+  | { type: 'git-commit'; hash: string; message: string; filesChanged: number }
+  | { type: 'git-merge'; target: string; success: boolean; conflicts: number }
+  | { type: 'git-rebase'; target: string; success: boolean; replayed: number }
+  | { type: 'git-stash'; action: string }
+  | { type: 'git-tag'; name: string; action: 'create' | 'delete' | 'list' }
+  | { type: 'git-reset'; ref: string; mode: string }
 
 export interface Tool {
   readonly name: string
