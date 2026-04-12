@@ -28,6 +28,14 @@ export class LibsqlVectorStore implements IVectorStore {
     ensureMemoryTables(this.dimension)
   }
 
+  /** 清空向量表并重建（解决 DiskANN shadow table 损坏问题） */
+  async purge(): Promise<void> {
+    const db = getDb()
+    db.exec('DROP TABLE IF EXISTS memory_vectors')
+    db.exec('DROP INDEX IF EXISTS idx_memory_vec')
+    ensureMemoryTables(this.dimension)
+  }
+
   async upsert(chunks: VectorChunkInput[]): Promise<void> {
     if (chunks.length === 0) return
     const db = getDb()

@@ -297,6 +297,52 @@ export function createApiRoutes(): Hono {
     }
   })
 
+  // ═══ 测试 Embedding 连通性 ═══
+
+  api.post('/settings/test-embedding', async (c) => {
+    try {
+      const body = await c.req.json() as { apiKey: string; baseURL: string; model: string }
+      const { apiKey, baseURL, model } = body
+      if (!apiKey || !baseURL || !model) {
+        return c.json({ success: false, error: '需要填写 API Key、Base URL 和 Model' }, 400)
+      }
+
+      // 调用 Embedding API 测试（OpenAI 兼容协议）
+      const url = `${baseURL.replace(/\/+$/, '')}/embeddings`
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 15000)
+
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({ model, input: ['connection test'] }),
+          signal: controller.signal,
+        })
+        clearTimeout(timeout)
+
+        if (!res.ok) {
+          const text = await res.text().catch(() => '')
+          return c.json({ success: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` })
+        }
+
+        const data = await res.json() as Record<string, unknown>
+        const firstEmb = ((data.data as Array<Record<string, unknown>>)?.[0]?.embedding) as number[] | undefined
+        const dimension = firstEmb?.length
+
+        return c.json({ success: true, dimension })
+      } finally {
+        clearTimeout(timeout)
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return c.json({ success: false, error: msg })
+    }
+  })
+
   // ═══ 计价规则 ═══
 
   api.get('/pricing', (c) => {

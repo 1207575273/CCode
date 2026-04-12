@@ -13,11 +13,27 @@ export interface ProviderConfig {
   visionModels?: string[]
 }
 
+export interface EmbeddingConfig {
+  apiKey?: string
+  baseURL?: string
+  model?: string
+  dimension?: number
+}
+
+export interface MemoryConfig {
+  enabled?: boolean
+  embedding?: EmbeddingConfig
+}
+
 export interface CCodeConfig {
   defaultProvider: string
   defaultModel: string
+  /** 子 Agent 默认模型（不配则继承主 Agent 当前模型），Provider 自动从 providers 中查找 */
+  subAgentModel?: string
   providers: Record<string, ProviderConfig | undefined>
   statusBar?: boolean
+  /** 记忆系统配置（embedding 向量检索） */
+  memory?: MemoryConfig
 }
 
 const DEFAULT_CONFIG: CCodeConfig = {

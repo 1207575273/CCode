@@ -88,7 +88,7 @@ export function SubAgentDrawer({ agents, onStop }: SubAgentDrawerProps) {
       <div
         className={`
           fixed top-0 right-0 h-full z-40
-          w-96 max-w-full
+          w-[36rem] max-w-full
           bg-gray-900 border-l border-gray-700
           transform transition-transform duration-300 ease-in-out
           flex flex-col
@@ -238,7 +238,7 @@ function EventList({ events }: { events: SubAgentDetailEvent[] }) {
   const filtered = events.filter(e => e.type !== 'tool_start')
 
   return (
-    <div className="px-3 py-2 bg-gray-900/50 space-y-1 max-h-80 overflow-y-auto">
+    <div className="px-3 py-2 bg-gray-900/50 space-y-1 max-h-[32rem] overflow-y-auto">
       {filtered.map((evt, i) => (
         <EventLine key={i} event={evt} />
       ))}

@@ -114,6 +114,7 @@ export interface AgentAsyncLaunchedOutput {
   name: string
   agentType: string
   model: string
+  prompt: string
   description: string
 }
 

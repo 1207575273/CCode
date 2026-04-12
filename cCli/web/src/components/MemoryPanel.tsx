@@ -151,7 +151,9 @@ export function MemoryPanel({ open, onClose }: MemoryPanelProps) {
                 /* 无向量但有记忆文件 → 展示列表 */
                 <div className="space-y-2">
                   <div className="text-xs text-gray-500 px-2 mb-1">
-                    记忆条目 ({data.entries.length}) — 未配置 Embedding，仅 BM25 关键词检索
+                    记忆条目 ({data.entries.length}) — {data.dimension > 0
+                      ? 'Embedding 已配置，执行 /remember rebuild 重建向量索引'
+                      : '未配置 Embedding，仅 BM25 关键词检索'}
                   </div>
                   {data.entries.map(entry => (
                     <div

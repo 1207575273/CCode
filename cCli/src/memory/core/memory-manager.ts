@@ -132,6 +132,20 @@ export class MemoryManager implements IMemoryManager {
   }
 
   /**
+   * 重建索引：清空向量表 → 重新扫描文件 → 重建 BM25 → 重新 embed 全部条目。
+   * 用于 /remember rebuild 命令。
+   */
+  async rebuild(): Promise<void> {
+    // 清空向量表（解决 DiskANN shadow table 损坏问题）
+    if (this.vectorStore) {
+      await this.vectorStore.purge()
+    }
+    this.initialized = false
+    await this.initialize()
+    await this.embedPending()
+  }
+
+  /**
    * 异步阶段：增量 embed 新/改文件。
    * 启动后后台调用，不阻塞首次对话。
    */

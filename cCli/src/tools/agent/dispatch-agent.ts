@@ -282,6 +282,7 @@ export class DispatchAgentTool implements StreamableTool {
         name: agentName,
         agentType,
         model: modelName,
+        prompt,
         description,
       }
       return { success: true, output: JSON.stringify(output) }
@@ -669,35 +670,23 @@ function runSubAgentInBackground(opts: BackgroundRunOptions): void {
 
 /**
  * 解析子 Agent 使用的 provider + model。
- * 优先级：显式指定 model → 继承父 Agent
+ * 子 Agent 不跨供应商，始终继承父 Agent 的 provider，仅可切换同 provider 下的 model。
+ * 优先级：LLM 显式传 model → config.subAgentModel → 继承父 Agent
  */
 function resolveSubAgentProvider(
   modelArg: string | undefined,
   ctx: ToolContext,
 ): { provider: import('@providers/provider.js').LLMProvider; providerName: string; modelName: string } {
-  if (!modelArg?.trim()) {
-    return {
-      provider: ctx.provider!,
-      providerName: ctx.providerName ?? 'unknown',
-      modelName: ctx.model ?? 'unknown',
-    }
-  }
-
-  const model = modelArg.trim()
   const config = ctx.config ?? configManager.load()
+  const parentProvider = ctx.providerName ?? 'unknown'
 
-  for (const [name, providerCfg] of Object.entries(config.providers)) {
-    if (!providerCfg) continue
-    if (providerCfg.models.includes(model)) {
-      const provider = getOrCreateProvider(name, config)
-      return { provider, providerName: name, modelName: model }
-    }
-  }
+  // 确定目标模型：LLM 显式指定 > config.subAgentModel > 继承父 Agent
+  const targetModel = modelArg?.trim() || config.subAgentModel?.trim() || (ctx.model ?? 'unknown')
 
   return {
     provider: ctx.provider!,
-    providerName: ctx.providerName ?? 'unknown',
-    modelName: model,
+    providerName: parentProvider,
+    modelName: targetModel,
   }
 }
 

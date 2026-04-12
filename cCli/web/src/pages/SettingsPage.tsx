@@ -17,7 +17,17 @@ interface ProviderConfig {
 interface CCodeConfig {
   defaultProvider: string
   defaultModel: string
+  subAgentModel?: string
   providers: Record<string, ProviderConfig>
+  memory?: {
+    enabled?: boolean
+    embedding?: {
+      apiKey?: string
+      baseURL?: string
+      model?: string
+      dimension?: number
+    }
+  }
 }
 
 interface PricingRule {
@@ -70,6 +80,160 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
     >
       {children}
     </button>
+  )
+}
+
+// ═══ Memory 配置卡片 ═══
+
+function MemoryCard({ config, setConfig, toast }: {
+  config: CCodeConfig
+  setConfig: (c: CCodeConfig) => void
+  toast: ReturnType<typeof useToast>
+}) {
+  const [showEmbKey, setShowEmbKey] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
+
+  const handleTest = useCallback(async () => {
+    const emb = config.memory?.embedding
+    if (!emb?.apiKey || !emb?.baseURL || !emb?.model) {
+      toast.error('请先填写完整的 Embedding 配置')
+      return
+    }
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const res = await apiPost<{ success: boolean; dimension?: number; error?: string }>(
+        '/api/settings/test-embedding',
+        { apiKey: emb.apiKey, baseURL: emb.baseURL, model: emb.model },
+      )
+      if (res.success) {
+        setTestResult({ ok: true, msg: `连通成功（维度: ${res.dimension ?? '未知'}）` })
+        toast.success('Embedding API 连通成功')
+      } else {
+        setTestResult({ ok: false, msg: res.error ?? '未知错误' })
+        toast.error('Embedding API 连通失败')
+      }
+    } catch (e) {
+      setTestResult({ ok: false, msg: String(e) })
+      toast.error('测试请求失败')
+    }
+    setTesting(false)
+  }, [config.memory?.embedding, toast])
+
+  return (
+    <div className="bg-gray-800 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-medium text-gray-300">Memory 记忆系统</h3>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <span className="text-xs text-gray-400">{config.memory?.enabled ? '已启用' : '未启用'}</span>
+          <input
+            type="checkbox"
+            checked={config.memory?.enabled ?? false}
+            onChange={e => setConfig({
+              ...config,
+              memory: { ...config.memory, enabled: e.target.checked },
+            })}
+            className="w-4 h-4 rounded bg-gray-900 border-gray-600 text-blue-500 focus:ring-blue-500 cursor-pointer"
+          />
+        </label>
+      </div>
+
+      {config.memory?.enabled && (
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">Embedding API Key</label>
+              <div className="flex gap-1">
+                <input
+                  type={showEmbKey ? 'text' : 'password'}
+                  value={config.memory?.embedding?.apiKey ?? ''}
+                  onChange={e => setConfig({
+                    ...config,
+                    memory: {
+                      ...config.memory,
+                      enabled: true,
+                      embedding: { ...config.memory?.embedding, apiKey: e.target.value },
+                    },
+                  })}
+                  placeholder="sk-xxx"
+                  className="flex-1 bg-gray-900 text-sm font-mono rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <button onClick={() => setShowEmbKey(!showEmbKey)} className="px-2 text-xs text-blue-400 hover:text-blue-300 shrink-0">
+                  {showEmbKey ? '隐藏' : '显示'}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">Base URL</label>
+              <input
+                value={config.memory?.embedding?.baseURL ?? ''}
+                onChange={e => setConfig({
+                  ...config,
+                  memory: {
+                    ...config.memory,
+                    enabled: true,
+                    embedding: { ...config.memory?.embedding, baseURL: e.target.value },
+                  },
+                })}
+                placeholder="https://open.bigmodel.cn/api/coding/paas/v4"
+                className="w-full bg-gray-900 text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">Embedding Model</label>
+              <input
+                value={config.memory?.embedding?.model ?? ''}
+                onChange={e => setConfig({
+                  ...config,
+                  memory: {
+                    ...config.memory,
+                    enabled: true,
+                    embedding: { ...config.memory?.embedding, model: e.target.value },
+                  },
+                })}
+                placeholder="embedding-3"
+                className="w-full bg-gray-900 text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">向量维度</label>
+              <input
+                type="number"
+                value={config.memory?.embedding?.dimension ?? 1024}
+                onChange={e => setConfig({
+                  ...config,
+                  memory: {
+                    ...config.memory,
+                    enabled: true,
+                    embedding: { ...config.memory?.embedding, dimension: parseInt(e.target.value) || 1024 },
+                  },
+                })}
+                placeholder="1024"
+                className="w-full bg-gray-900 text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-3 mt-1">
+            <button
+              onClick={handleTest}
+              disabled={testing}
+              className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 rounded transition-colors"
+            >
+              {testing ? '测试中...' : '测试连通性'}
+            </button>
+            {testResult && (
+              <span className={`text-xs ${testResult.ok ? 'text-green-400' : 'text-red-400'}`}>
+                {testResult.msg}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-gray-500">支持 OpenAI 兼容的 Embedding API（GLM、DeepSeek、OpenAI 等）。未配置时降级为纯 BM25 关键词检索</p>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -170,8 +334,34 @@ function ProvidersTab() {
             </div>
           </div>
         </div>
+
+        {/* SubAgent 默认模型 */}
+        <div className="mt-3">
+          <label className="text-xs text-gray-400 block mb-1">SubAgent 默认 Model（可选）</label>
+          <div className="flex gap-1">
+            <select
+              value={config.subAgentModel ?? ''}
+              onChange={e => setConfig({ ...config, ...(e.target.value ? { subAgentModel: e.target.value } : { subAgentModel: undefined }) })}
+              className="flex-1 bg-gray-900 text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">继承主 Agent 模型</option>
+              {currentModels.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+            <input
+              value={config.subAgentModel ?? ''}
+              onChange={e => setConfig({ ...config, ...(e.target.value ? { subAgentModel: e.target.value } : { subAgentModel: undefined }) })}
+              placeholder="或手动输入"
+              className="w-32 bg-gray-900 text-sm rounded px-2 py-2 outline-none focus:ring-1 focus:ring-blue-500 text-gray-400"
+            />
+          </div>
+          <p className="text-xs text-gray-500 mt-1">子 Agent 使用的模型（仅限当前 Provider 下的模型）。不填则继承主 Agent 模型，可用于降低成本</p>
+        </div>
+
         <p className="text-xs text-gray-500 mt-2">修改后点击"保存配置"生效（写入 ~/.ccode/config.json）</p>
       </div>
+
+      {/* Memory / Embedding 配置 */}
+      <MemoryCard config={config} setConfig={setConfig} toast={toast} />
 
       {/* 新增供应商 */}
       <AddProviderButton onAdd={(name) => {

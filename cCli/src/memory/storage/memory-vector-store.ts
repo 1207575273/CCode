@@ -49,6 +49,10 @@ export class MemoryVectorStore implements IVectorStore {
     // 纯内存，无需初始化
   }
 
+  async purge(): Promise<void> {
+    this.chunks.clear()
+  }
+
   async upsert(chunks: VectorChunkInput[]): Promise<void> {
     for (const c of chunks) {
       this.chunks.set(c.id, {

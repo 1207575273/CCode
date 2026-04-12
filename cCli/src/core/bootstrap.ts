@@ -581,9 +581,7 @@ async function ensureMemoryInitialized(): Promise<void> {
 
   try {
     const config = configManager.load()
-    const memoryConfig = (config as unknown as Record<string, unknown>)['memory'] as
-      | { enabled?: boolean; embedding?: { provider?: string; model?: string } }
-      | undefined
+    const memoryConfig = config.memory
 
     // memory.enabled 默认 false
     if (!memoryConfig?.enabled) return
@@ -591,9 +589,7 @@ async function ensureMemoryInitialized(): Promise<void> {
     // 构建 EmbeddingProvider：独立配置，不依赖 providers
     // config.json: memory.embedding = { apiKey, baseURL, model, dimension }
     // 模板默认值（未修改 = 未配置 = 降级纯 BM25）
-    const embConfig = memoryConfig.embedding as
-      | { apiKey?: string; baseURL?: string; model?: string; dimension?: number }
-      | undefined
+    const embConfig = memoryConfig.embedding
     let embedding: import('@memory/types.js').EmbeddingProvider
     let vectorStore: import('@memory/types.js').IVectorStore | null = null
 

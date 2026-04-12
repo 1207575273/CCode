@@ -169,6 +169,9 @@ export interface IVectorStore {
   /** 初始化存储（建表/建索引） */
   initialize(): Promise<void>
 
+  /** 清空向量表并重建（rebuild 时调用，解决 shadow index 损坏） */
+  purge(): Promise<void>
+
   /** 批量写入向量 */
   upsert(chunks: VectorChunkInput[]): Promise<void>
 
@@ -244,6 +247,8 @@ export interface IMemoryManager {
   initialize(): Promise<void>
   /** 后台增量 embed 新/改文件（异步阶段，不阻塞启动） */
   embedPending(): Promise<void>
+  /** 重建索引：重置 → 重新扫描 → BM25 + Embedding 全量构建 */
+  rebuild(): Promise<void>
   /** 语义检索 */
   search(query: MemoryQuery): Promise<MemorySearchResult[]>
   /** 写入记忆 */

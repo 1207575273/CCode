@@ -694,8 +694,8 @@ export function App({
           case 'memory_rebuild': {
             const mm = getMemoryManager()
             if (!mm) { appendSystemMessage('记忆系统未初始化'); return }
-            appendSystemMessage('正在重建记忆索引...')
-            mm.initialize().then(() => {
+            appendSystemMessage('正在重建记忆索引（BM25 + Embedding）...')
+            mm.rebuild().then(() => {
               appendSystemMessage('记忆索引重建完成')
             }).catch(e => appendSystemMessage(`重建失败: ${e}`))
             return
