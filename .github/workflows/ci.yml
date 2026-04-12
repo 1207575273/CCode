@@ -107,8 +107,9 @@ jobs:
 
       - name: Verify Web build output
         run: |
-          test -f web/dist/index.html || (echo "ERROR: web/dist/index.html not found" && exit 1)
-          echo "Web build OK: $(find web/dist -type f | wc -l) files"
+          # Vite outDir 配置为 ../dist/web（与 CLI 统一在 dist/ 下）
+          test -f dist/web/index.html || (echo "ERROR: dist/web/index.html not found" && exit 1)
+          echo "Web build OK: $(find dist/web -type f | wc -l) files"
 
       # tag push 时上传构建产物，方便手动发包前检查
       - name: Upload build artifacts
@@ -117,7 +118,8 @@ jobs:
         with:
           name: ccode-cli-${{ github.ref_name }}
           path: |
-            cCli/dist/
+            cCli/dist/bin/
+            cCli/dist/web/
             cCli/package.json
           retention-days: 30
 
