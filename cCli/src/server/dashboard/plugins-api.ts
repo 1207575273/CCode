@@ -15,6 +15,7 @@ import { existsSync, readFileSync, mkdirSync, rmSync, cpSync, readdirSync, write
 import { join, basename } from 'node:path'
 import { homedir } from 'node:os'
 import fg from 'fast-glob'
+import { dbg } from '../../debug.js'
 
 /** cCli 插件根目录 */
 const ccodePluginsDir = () => join(homedir(), '.ccode', 'plugins')
@@ -169,6 +170,7 @@ export function createPluginsRoutes(): Hono {
         try {
           renameSync(src, dst)
         } catch {
+          // 跨盘 rename 失败（Windows 临时目录跨盘常见），降级为 cp
           cpSync(src, dst, { recursive: true })
         }
       }
@@ -216,7 +218,9 @@ function scanInstalledPlugins(): PluginInfo[] {
       const info = analyzePlugin(entry.name, pluginDir)
       if (info) plugins.push(info)
     }
-  } catch { /* 目录不存在或无权限 */ }
+  } catch (err) {
+    dbg(`[PluginsAPI] 插件目录扫描失败: ${err instanceof Error ? err.message : String(err)}\n`)
+  }
 
   return plugins
 }
@@ -233,7 +237,9 @@ function analyzePlugin(name: string, pluginDir: string): PluginInfo | null {
       const skillDirs = readdirSync(skillsDir, { withFileTypes: true })
       skillCount = skillDirs.filter(d => d.isDirectory() && existsSync(join(skillsDir, d.name, 'SKILL.md'))).length
     }
-  } catch { /* ignore */ }
+  } catch (err) {
+    dbg(`[PluginsAPI] skill 统计失败 plugin=${name}: ${err instanceof Error ? err.message : String(err)}\n`)
+  }
 
   // 检查 hooks
   const hasHooks = existsSync(join(pluginDir, 'hooks', 'hooks.json'))
@@ -252,7 +258,9 @@ function analyzePlugin(name: string, pluginDir: string): PluginInfo | null {
       description = meta.description ?? ''
       version = meta.version ?? 'unknown'
     }
-  } catch { /* ignore */ }
+  } catch (err) {
+    dbg(`[PluginsAPI] plugin.json 读取失败 plugin=${name}: ${err instanceof Error ? err.message : String(err)}\n`)
+  }
 
   return {
     name,
@@ -294,7 +302,8 @@ function scanClaudePlugins(): ClaudeAvailablePlugin[] {
     }
 
     return plugins
-  } catch {
+  } catch (err) {
+    dbg(`[PluginsAPI] Claude 插件列表读取失败: ${err instanceof Error ? err.message : String(err)}\n`)
     return []
   }
 }

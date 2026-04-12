@@ -12,6 +12,7 @@ import { Hono } from 'hono'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
+import { dbg } from '../../debug.js'
 
 /** MCP 配置文件搜索路径（按优先级从高到低） */
 const MCP_CONFIG_PATHS = [
@@ -125,7 +126,9 @@ function loadAllMcpServers(): McpServerInfo[] {
           writable: source.writable,
         })
       }
-    } catch { /* 解析失败，跳过 */ }
+    } catch (err) {
+      dbg(`[McpAPI] MCP 配置解析失败 source=${source.label}: ${err instanceof Error ? err.message : String(err)}\n`)
+    }
   }
 
   return servers

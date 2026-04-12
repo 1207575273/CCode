@@ -1,6 +1,7 @@
 // src/core/event-bus.ts
 
 import type { AgentEvent } from './agent-loop.js'
+import { dbg } from '../debug.js'
 
 /** 状态栏推送数据 */
 export interface StatusBarPayload {
@@ -106,8 +107,9 @@ export class EventBus {
     for (const handler of this.#handlers) {
       try {
         handler(event)
-      } catch {
-        // 单个 handler 异常不影响其他订阅者
+      } catch (err) {
+        // 单个 handler 异常不影响其他订阅者，但记录日志便于排查
+        dbg(`[EventBus] handler threw on event "${event.type}": ${err instanceof Error ? err.message : String(err)}\n`)
       }
     }
   }

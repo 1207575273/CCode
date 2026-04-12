@@ -16,6 +16,7 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs'
+import { dbg } from '../debug.js'
 import { join, resolve, normalize } from 'node:path'
 import { homedir } from 'node:os'
 import { execSync } from 'node:child_process'
@@ -48,7 +49,7 @@ export function findGitRoot(cwd: string): string | null {
     }).trim()
     return root ? normalize(root) : null
   } catch {
-    return null
+    return null  // 非 git 仓库或 git 未安装，预期行为
   }
 }
 
@@ -128,8 +129,8 @@ export function loadInstructions(cwd: string): LoadedInstruction[] {
       if (content) {
         loaded.push({ source: filePath, level, content })
       }
-    } catch {
-      // 读取失败（权限问题等），静默跳过
+    } catch (err) {
+      dbg(`[Instructions] 指令文件读取失败 path=${filePath}: ${err instanceof Error ? err.message : String(err)}\n`)
     }
   }
 

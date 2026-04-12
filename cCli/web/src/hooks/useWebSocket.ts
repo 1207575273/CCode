@@ -55,8 +55,8 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
       try {
         const event = JSON.parse(e.data as string) as ServerEvent
         onEventRef.current?.(event)
-      } catch {
-        // 无效 JSON
+      } catch (err) {
+        console.warn('[WebSocket] 消息 JSON 解析失败:', err)
       }
     }
 

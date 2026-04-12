@@ -26,6 +26,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { sessionStore } from '@persistence/index.js'
 import { createApiRoutes } from '../dashboard/api.js'
+import { dbg } from '../../debug.js'
 
 const DEFAULT_PORT = 9800
 /**
@@ -100,8 +101,8 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
         try {
           const msg = JSON.parse(String(event.data)) as { type: string; [key: string]: unknown }
           routeMessage(clientId, msg)
-        } catch {
-          // 无效 JSON，忽略
+        } catch (err) {
+          dbg(`[Bridge] WebSocket 消息 JSON 解析失败: ${err instanceof Error ? err.message : String(err)}\n`)
         }
       },
 
@@ -114,7 +115,7 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
           const msg = JSON.stringify({ type: 'cli_status', connected: false, sessionId: sid })
           for (const cl of clients.values()) {
             if (cl.clientType === 'web' && cl.sessionId === sid) {
-              try { cl.send(msg) } catch { /* ignore */ }
+              try { cl.send(msg) } catch { /* WebSocket 已断开，预期行为 */ }
             }
           }
         }
@@ -237,7 +238,7 @@ export function broadcastToClients(msg: Record<string, unknown>, clientType?: 'c
   const json = JSON.stringify(msg)
   for (const client of clients.values()) {
     if (clientType && client.clientType !== clientType) continue
-    try { client.send(json) } catch { /* ignore */ }
+    try { client.send(json) } catch { /* WebSocket 已断开，预期行为 */ }
   }
 }
 
@@ -245,7 +246,7 @@ export function closeBridge(): void {
   // 通知所有客户端 Bridge 即将关闭
   const closeMsg = JSON.stringify({ type: 'bridge_stop' })
   for (const client of clients.values()) {
-    try { client.send(closeMsg) } catch { /* ignore */ }
+    try { client.send(closeMsg) } catch { /* WebSocket 已断开，预期行为 */ }
   }
   if (server) {
     server.close()
@@ -284,7 +285,7 @@ function routeMessage(senderId: string, msg: { type: string; [key: string]: unkn
         const statusMsg = JSON.stringify({ type: 'cli_status', connected: true, sessionId: sid })
         for (const cl of clients.values()) {
           if (cl.clientType === 'web' && cl.sessionId === sid) {
-            try { cl.send(statusMsg) } catch { /* ignore */ }
+            try { cl.send(statusMsg) } catch { /* WebSocket 已断开，预期行为 */ }
           }
         }
         // 如果 CLI 从 oldSession 切走，通知那边的 Web 断开
@@ -292,7 +293,7 @@ function routeMessage(senderId: string, msg: { type: string; [key: string]: unkn
           const offMsg = JSON.stringify({ type: 'cli_status', connected: false, sessionId: oldSessionId })
           for (const cl of clients.values()) {
             if (cl.clientType === 'web' && cl.sessionId === oldSessionId) {
-              try { cl.send(offMsg) } catch { /* ignore */ }
+              try { cl.send(offMsg) } catch { /* WebSocket 已断开，预期行为 */ }
             }
           }
         }
@@ -328,7 +329,8 @@ function routeMessage(senderId: string, msg: { type: string; [key: string]: unkn
             cliConnected,
             ...(activeSessionId && activeSessionId !== sender.sessionId ? { activeSessionId } : {}),
           }))
-        } catch {
+        } catch (err) {
+          dbg(`[Bridge] session_init 加载会话失败 sid=${sender.sessionId}: ${err instanceof Error ? err.message : String(err)}\n`)
           sender.send(JSON.stringify({
             type: 'session_init',
             sessionId: sender.sessionId,
@@ -350,7 +352,7 @@ function routeMessage(senderId: string, msg: { type: string; [key: string]: unkn
         if (client.id === senderId) continue
         if (client.sessionId !== sender.sessionId) continue
         if (client.clientType !== 'web') continue
-        try { client.send(json) } catch { /* ignore */ }
+        try { client.send(json) } catch { /* WebSocket 已断开，预期行为 */ }
       }
       break
     }
@@ -366,7 +368,7 @@ function routeMessage(senderId: string, msg: { type: string; [key: string]: unkn
         if (client.id === senderId) continue
         if (client.sessionId !== sender.sessionId) continue
         if (client.clientType !== 'cli') continue
-        try { client.send(json) } catch { /* ignore */ }
+        try { client.send(json) } catch { /* WebSocket 已断开，预期行为 */ }
       }
       break
     }
@@ -376,7 +378,7 @@ function routeMessage(senderId: string, msg: { type: string; [key: string]: unkn
       const json = JSON.stringify(msg)
       for (const client of clients.values()) {
         if (client.clientType !== 'cli') continue
-        try { client.send(json) } catch { /* ignore */ }
+        try { client.send(json) } catch { /* WebSocket 已断开，预期行为 */ }
       }
       break
     }

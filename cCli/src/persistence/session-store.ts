@@ -10,6 +10,7 @@ import {
   existsSync,
 } from 'node:fs'
 import { join, basename } from 'node:path'
+import { dbg } from '../debug.js'
 import type { SessionEvent, SessionSnapshot, SessionSummary, BranchInfo, SubagentSnapshot, SubagentSnapshotEvent } from './session-types.js'
 import {
   toProjectSlug,
@@ -260,7 +261,7 @@ export class SessionStore {
       try {
         entries = readdirSync(projectDir).filter((f) => f.endsWith('.jsonl'))
       } catch {
-        continue
+        continue  // 目录读取失败（已删除/无权限），跳过该项目
       }
 
       for (const entry of entries) {
@@ -302,7 +303,7 @@ export class SessionStore {
       try {
         entries = readdirSync(projectDir).filter((f) => f.endsWith('.jsonl'))
       } catch {
-        continue
+        continue  // 目录读取失败，跳过该项目
       }
 
       for (const entry of entries) {
@@ -316,7 +317,7 @@ export class SessionStore {
             this.#pathCache.delete(sessionId)
           }
         } catch {
-          // File may have been deleted concurrently, skip
+          // 文件可能被并发删除，跳过（cleanup 场景下预期行为）
         }
       }
 
@@ -327,7 +328,7 @@ export class SessionStore {
           rmSync(projectDir, { recursive: true })
         }
       } catch {
-        // Ignore
+        // 空目录删除失败（可能有新文件写入），不影响正常流程
       }
     }
   }
@@ -456,8 +457,8 @@ export class SessionStore {
           status,
           events: detailEvents,
         })
-      } catch {
-        // 单个 JSONL 解析失败不影响其他
+      } catch (err) {
+        dbg(`[SessionStore] SubAgent JSONL 解析失败 file=${file}: ${err instanceof Error ? err.message : String(err)}\n`)
       }
     }
 
@@ -503,14 +504,15 @@ export class SessionStore {
                 if (event.type === 'session_end' && event.accumulatedMs != null) {
                   return event.accumulatedMs
                 }
-              } catch { continue }  // 截断的首行 JSON 解析失败，跳过
+              } catch { continue }  // 尾部读取可能截断首行 JSON，解析失败是预期行为
             }
             return 0
           }
         }
       }
       return 0
-    } catch {
+    } catch (err) {
+      dbg(`[SessionStore] getLastAccumulatedMs 失败 sid=${sessionId}: ${err instanceof Error ? err.message : String(err)}\n`)
       return 0
     }
   }
@@ -584,8 +586,8 @@ export class SessionStore {
               : event.message.content
         }
       }
-    } catch {
-      // Corrupted file, return defaults
+    } catch (err) {
+      dbg(`[SessionStore] JSONL 摘要提取失败 file=${filePath}: ${err instanceof Error ? err.message : String(err)}\n`)
     }
 
     return { firstMessage, updatedAt, gitBranch }
@@ -606,7 +608,7 @@ export class SessionStore {
       try {
         entries = readdirSync(projectDir)
       } catch {
-        continue
+        continue  // 目录读取失败，跳过
       }
 
       for (const entry of entries) {
@@ -630,7 +632,7 @@ export class SessionStore {
         .filter((d) => d.isDirectory())
         .map((d) => d.name)
     } catch {
-      return []
+      return []  // baseDir 不存在或无权限，返回空列表
     }
   }
 }

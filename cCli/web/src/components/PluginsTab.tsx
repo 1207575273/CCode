@@ -161,7 +161,7 @@ function ClaudeImportPanel() {
         await apiPost('/api/plugins/import-claude', { name: p.name, sourcePath: p.installPath })
         setImportDone(prev => new Set([...prev, p.name]))
         await new Promise(r => setTimeout(r, 500))
-      } catch { /* 单个失败继续 */ }
+      } catch (err) { console.warn(`[Plugins] 导入插件 ${p.name} 失败:`, err) }
     }
     setImporting(null)
     loadClaudePlugins()

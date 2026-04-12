@@ -5,6 +5,7 @@ import { Fzf } from 'fzf'
 import type { Ignore } from 'ignore'
 import { createIgnoreFilter } from './ignore-rules.js'
 import type { SearchResult, DirEntry } from './types.js'
+import { dbg } from '../debug.js'
 
 /**
  * 文件索引器
@@ -42,8 +43,9 @@ export class FileIndex {
         onlyFiles: true,
         suppressErrors: true,
       })
-    } catch {
-      // 极端情况：cwd 本身无权限
+    } catch (err) {
+      // cwd 无权限或不存在等极端情况，降级为空索引
+      dbg(`[FileIndex] glob 扫描失败 cwd=${this.cwd}: ${err instanceof Error ? err.message : String(err)}\n`)
       allFiles = []
     }
 

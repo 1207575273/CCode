@@ -56,7 +56,7 @@ export class HookRunner {
             settle(null)
           }
         } catch {
-          settle(null)
+          settle(null)  // hook 子进程 stdout 非合法 JSON，返回 null（预期行为）
         }
       })
 

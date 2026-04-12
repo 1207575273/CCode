@@ -320,6 +320,7 @@ async function doCollectGitContext(): Promise<string> {
       statusText === '(clean)' ? '  (clean)' : statusText.split('\n').map(l => '  ' + l).join('\n'),
     ].join('\n')
   } catch {
+    // Git 命令执行异常（git 未安装或其他意外错误），降级提示用户手动查看
     return '## Git 状态\nGit 信息收集失败，请手动调用 git status 查看。'
   }
 }
@@ -619,7 +620,7 @@ export function bootstrapAll(): Promise<BootstrapResult> {
 
     // 后台：增量 embed（不阻塞启动和首次对话）
     if (memoryManagerInstance) {
-      memoryManagerInstance.embedPending().catch(() => { /* embed 失败不影响启动 */ })
+      memoryManagerInstance.embedPending().catch(() => { /* 后台增量 embed 失败不影响启动和对话 */ })
     }
 
     // 退出时清理 shell 快照文件
@@ -686,7 +687,9 @@ async function ensureMemoryInitialized(): Promise<void> {
       let embAvailable = false
       try {
         embAvailable = await candidate.isAvailable()
-      } catch { /* 探测异常视为不可用 */ }
+      } catch {
+        // Embedding API 探测异常（网络不通或鉴权失败），视为不可用，降级纯 BM25
+      }
 
       if (embAvailable) {
         embedding = candidate

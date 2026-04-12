@@ -80,7 +80,7 @@ export class ProviderEmbedding implements EmbeddingProvider {
       await this.callApi(['test'])
       return true
     } catch {
-      /* 连通性测试失败，视为不可用 */
+      // Embedding API 连通性测试失败（网络不通或鉴权失败），视为不可用
       return false
     }
   }

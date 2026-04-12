@@ -1,4 +1,5 @@
 // src/config/permissions.ts
+import { dbg } from '../debug.js'
 
 /**
  * 项目级权限管理 — 读取 .ccode/settings.local.json 的 permissions.allow 白名单，
@@ -90,8 +91,9 @@ export class PermissionManager {
       const settings = JSON.parse(raw) as LocalSettings
       const rules = settings.permissions?.allow ?? []
       return new PermissionManager(rules, registeredTools)
-    } catch {
-      /* 配置文件不存在或格式错误，使用默认权限 */
+    } catch (err) {
+      // 配置文件不存在或格式错误，降级为默认权限
+      dbg(`[Permissions] 权限配置加载失败: ${err instanceof Error ? err.message : String(err)}\n`)
       return new PermissionManager([], registeredTools)
     }
   }

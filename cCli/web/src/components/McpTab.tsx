@@ -70,7 +70,7 @@ export function McpTab() {
       } else {
         config = { type: newType, url: newUrl }
         if (newHeaders.trim()) {
-          try { config.headers = JSON.parse(newHeaders) } catch { /* 忽略无效 JSON */ }
+          try { config.headers = JSON.parse(newHeaders) } catch { /* headers 输入非合法 JSON，跳过解析（用户输入中间态） */ }
         }
       }
 

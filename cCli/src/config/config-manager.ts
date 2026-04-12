@@ -83,7 +83,7 @@ export class ConfigManager {
       if (this.#cached && mtime === this.#cachedMtime) return this.#cached
       this.#cachedMtime = mtime
     } catch {
-      // statSync 失败，走无缓存路径
+      // statSync 失败（文件被删除或权限问题），走无缓存路径
     }
 
     try {
@@ -98,11 +98,12 @@ export class ConfigManager {
       const hasMissingKeys = defaultKeys.some(k => !(k in loaded))
       if (hasMissingKeys) {
         this.#write(merged)
-        try { this.#cachedMtime = statSync(this.#configPath).mtimeMs } catch { /* ignore */ }
+        try { this.#cachedMtime = statSync(this.#configPath).mtimeMs } catch { /* 回写后刷新 mtime 失败，下次 load 会重新读取 */ }
       }
 
       return this.#cached
     } catch {
+      // config.json 读取或 JSON 解析失败，降级使用默认配置
       this.#cached = { ...DEFAULT_CONFIG }
       return this.#cached
     }
@@ -121,7 +122,7 @@ export class ConfigManager {
     this.#ensureDir()
     this.#write(config)
     this.#cached = config
-    try { this.#cachedMtime = statSync(this.#configPath).mtimeMs } catch { /* ignore */ }
+    try { this.#cachedMtime = statSync(this.#configPath).mtimeMs } catch { /* 保存后刷新 mtime 失败，下次 load 会重新读取 */ }
   }
 
   #ensureDir(): void {

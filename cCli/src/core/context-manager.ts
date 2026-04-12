@@ -391,7 +391,9 @@ export class ContextManager {
     if (this.#compactBridge) {
       try {
         await this.#compactBridge.extractAndSave(rawHistory, provider, options.model)
-      } catch { /* 提取失败不阻塞压缩 */ }
+      } catch {
+        // 记忆提取失败不阻塞自动压缩，记忆为辅助功能
+      }
     }
 
     // auto-compact 级联：先 tool-trim，不够再用主策略
@@ -429,7 +431,9 @@ export class ContextManager {
     if (this.#compactBridge) {
       try {
         await this.#compactBridge.extractAndSave(rawHistory, provider, options.model)
-      } catch { /* 提取失败不阻塞压缩 */ }
+      } catch {
+        // 记忆提取失败不阻塞手动压缩，记忆为辅助功能
+      }
     }
 
     const strategyName = options.strategy ?? this.#strategyName

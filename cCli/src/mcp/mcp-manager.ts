@@ -149,7 +149,7 @@ export class McpManager {
       try {
         await server.client.close()
       } catch {
-        // 静默忽略关闭错误
+        // 清理阶段容错，单个 MCP Server 关闭失败不阻塞退出
       }
     }
     this.#servers.length = 0

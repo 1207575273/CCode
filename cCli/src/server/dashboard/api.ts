@@ -463,7 +463,7 @@ export function createApiRoutes(): Hono {
         const dimRow = db.prepare('SELECT value FROM memory_meta WHERE key = ?').get('embedding_dimension') as { value: string } | undefined
         dimension = dimRow ? parseInt(dimRow.value, 10) : 0
       } catch {
-        // memory_meta 表不存在时静默跳过
+        // memory_meta 表不存在（首次启动未创建 embedding），降级为 dimension=0
       }
 
       // 读取所有向量 chunk
@@ -479,7 +479,7 @@ export function createApiRoutes(): Hono {
             FROM memory_vectors
           `).all() as typeof rows
         } catch {
-          // memory_vectors 查询失败时静默跳过，返回空数组
+          // memory_vectors 表不存在或查询失败（首次启动场景），降级返回空数组
         }
       }
 

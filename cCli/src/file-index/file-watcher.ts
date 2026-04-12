@@ -3,6 +3,7 @@
 import { watch, stat, type FSWatcher } from 'node:fs'
 import type { Ignore } from 'ignore'
 import type { FileIndex } from './file-index.js'
+import { dbg } from '../debug.js'
 
 /** 防抖延迟（毫秒） */
 const DEBOUNCE_MS = 100
@@ -47,11 +48,11 @@ export class FileWatcher {
       )
 
       // 监听错误，避免崩溃整个应用
-      this.watcher.on('error', () => {
-        // watcher 错误静默处理，不影响应用运行
+      this.watcher.on('error', (err) => {
+        dbg(`[FileWatcher] watcher 错误: ${err instanceof Error ? err.message : String(err)}\n`)
       })
-    } catch {
-      // 启动失败静默处理（例如目录不存在）
+    } catch (err) {
+      dbg(`[FileWatcher] 启动失败 cwd=${this.cwd}: ${err instanceof Error ? err.message : String(err)}\n`)
     }
   }
 
@@ -118,8 +119,8 @@ export class FileWatcher {
         }
 
         this.scheduleBatchUpdate()
-      } catch {
-        // 异常静默处理
+      } catch (err) {
+        dbg(`[FileWatcher] checkFileExists 异常 path=${relativePath}: ${err instanceof Error ? err.message : String(err)}\n`)
       }
     })
   }
@@ -150,8 +151,8 @@ export class FileWatcher {
 
       this.pendingRemoves.clear()
       this.pendingAdds.clear()
-    } catch {
-      // 刷新异常静默处理
+    } catch (err) {
+      dbg(`[FileWatcher] flushPending 异常: ${err instanceof Error ? err.message : String(err)}\n`)
     }
   }
 }

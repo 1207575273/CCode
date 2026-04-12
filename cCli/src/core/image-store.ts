@@ -60,6 +60,7 @@ function findImageFile(imageId: string): string | null {
     const match = files.find((f) => f.startsWith(imageId))
     return match ? join(getImagesDir(), match) : null
   } catch {
+    // 目录读取失败（不存在或权限问题），视为图片不存在
     return null
   }
 }
@@ -108,6 +109,7 @@ export function readImageBase64(
       mediaType,
     }
   } catch {
+    // 文件读取失败（已删除或损坏），返回 null 让调用方降级处理
     return null
   }
 }
@@ -117,6 +119,7 @@ export function imageExists(imageId: string): boolean {
   try {
     return findImageFile(imageId) !== null
   } catch {
+    // 文件查找异常，保守返回 false
     return false
   }
 }
@@ -140,12 +143,13 @@ export function cleanupImages(retentionDays: number): number {
           deletedCount++
         }
       } catch {
-        // 单个文件删除失败不影响其他文件的清理
+        // 清理阶段容错，单个文件删除失败不阻塞其他文件清理
       }
     }
 
     return deletedCount
   } catch {
+    // 图片目录不存在或无权限，无需清理
     return 0
   }
 }

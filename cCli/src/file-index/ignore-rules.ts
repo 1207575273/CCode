@@ -86,7 +86,7 @@ function readFileSafe(filePath: string): string {
   try {
     return readFileSync(filePath, 'utf-8')
   } catch {
-    return ''
+    return ''  // 文件不存在或无权限，返回空内容（预期行为）
   }
 }
 

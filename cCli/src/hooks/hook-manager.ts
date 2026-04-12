@@ -2,6 +2,7 @@
 
 import { readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import { dbg } from '../debug.js'
 import { HookRunner } from './hook-runner.js'
 import type {
   HookEventType,
@@ -45,8 +46,8 @@ export class HookManager {
           }
         }
       }
-    } catch {
-      // 文件不存在或 JSON 解析失败，静默跳过
+    } catch (err) {
+      dbg(`[HookManager] hook 配置加载失败 source=${source}: ${err instanceof Error ? err.message : String(err)}\n`)
     }
   }
 

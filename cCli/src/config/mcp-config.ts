@@ -37,14 +37,14 @@ function loadSingleConfig(configPath: string): McpConfig | null {
   try {
     raw = readFileSync(configPath, 'utf-8')
   } catch {
-    return null
+    return null  // 配置文件不存在，预期行为（多路径探测）
   }
 
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
   } catch {
-    return null
+    return null  // JSON 语法错误，跳过该配置文件
   }
 
   if (

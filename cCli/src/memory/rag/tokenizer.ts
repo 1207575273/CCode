@@ -103,7 +103,7 @@ export class JiebaTokenizer implements Tokenizer {
         this.jieba = { cut }
       }
     } catch {
-      // jieba-wasm 加载失败，tokenize 时走降级
+      // jieba-wasm 未安装或 WASM 加载失败，tokenize 时降级为 CJK Bigram
     } finally {
       this.initialized = true
     }

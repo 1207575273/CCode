@@ -148,12 +148,12 @@ export function initialize(): InitDiagnostic {
         warnings.push('config.json 缺少关键字段，已自动补全')
       }
     } catch {
-      // JSON 解析失败：备份后重写
+      // config.json 读取或 JSON 解析失败：备份后重写
       const backupPath = CONFIG_PATH + '.bak'
       try {
         const broken = readFileSync(CONFIG_PATH, 'utf-8')
         writeFileSync(backupPath, broken, 'utf-8')
-      } catch { /* 备份失败也不阻塞 */ }
+      } catch { /* 备份失败也不阻塞启动，重写默认配置更重要 */ }
       writeFileSync(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2), 'utf-8')
       warnings.push(`config.json 格式损坏，已备份到 ${backupPath} 并重置`)
     }
@@ -212,7 +212,9 @@ export function initialize(): InitDiagnostic {
         warnings.push(`当前 provider "${providerName}" 的 apiKey 为空，请在 ~/.ccode/config.json 中配置`)
       }
     }
-  } catch { /* 诊断失败不阻塞启动 */ }
+  } catch {
+    // apiKey 诊断失败不阻塞启动，用户后续使用时会收到 API 错误
+  }
 
   return { warnings, created }
 }

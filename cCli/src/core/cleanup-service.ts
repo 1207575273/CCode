@@ -130,6 +130,7 @@ function scanSessionFiles(retentionDays: number): CleanupStats['sessions'] {
   try {
     slugs = readdirSync(baseDir)
   } catch {
+    // 会话目录不存在或无权限，返回空统计
     return { totalFiles, totalSizeBytes, expiredFiles, expiredSizeBytes }
   }
 
@@ -139,7 +140,7 @@ function scanSessionFiles(retentionDays: number): CleanupStats['sessions'] {
     try {
       entries = readdirSync(dir).filter(f => f.endsWith('.jsonl'))
     } catch {
-      continue
+      continue // 子目录读取失败（已删除或非目录），跳过
     }
     for (const entry of entries) {
       try {
@@ -151,7 +152,7 @@ function scanSessionFiles(retentionDays: number): CleanupStats['sessions'] {
           expiredSizeBytes += stat.size
         }
       } catch {
-        continue
+        continue // 单个文件 stat 失败（竞态删除），跳过
       }
     }
   }
@@ -186,11 +187,11 @@ function scanImageFiles(retentionDays: number): CleanupStats['images'] {
           expiredFiles++
         }
       } catch {
-        continue
+        continue // 单个图片文件 stat 失败（竞态删除），跳过
       }
     }
   } catch {
-    // 目录不存在或无权限，返回空统计
+    // 图片目录不存在或无权限，返回空统计
   }
 
   return { totalFiles, expiredFiles }

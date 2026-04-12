@@ -6,6 +6,8 @@ import { homedir } from 'node:os'
 vi.mock('node:fs', () => ({
   existsSync: vi.fn(),
   readFileSync: vi.fn(),
+  mkdirSync: vi.fn(),
+  appendFileSync: vi.fn(),
 }))
 
 vi.mock('node:child_process', () => ({

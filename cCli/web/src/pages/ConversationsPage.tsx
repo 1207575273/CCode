@@ -124,7 +124,8 @@ function ConversationList() {
                     try {
                       await apiPost('/api/session/resume', { sessionId: s.sessionId })
                       navigate(`/session/${s.sessionId}`)
-                    } catch {
+                    } catch (err) {
+                      console.warn('[Conversations] 恢复对话失败:', err)
                       setResumingId(null)
                     }
                   }}
@@ -313,7 +314,7 @@ function ConversationDetail({ sessionId }: { sessionId: string }) {
             try {
               await apiPost('/api/session/resume', { sessionId })
               navigate(`/session/${sessionId}`)
-            } catch { /* ignore */ }
+            } catch (err) { console.warn('[Conversations] 恢复对话失败:', err) }
           }}
           className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-500 whitespace-nowrap"
           title="恢复此对话，跳转到实时聊天继续提问"

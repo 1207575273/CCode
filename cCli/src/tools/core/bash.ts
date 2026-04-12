@@ -91,7 +91,7 @@ export class BashTool implements Tool {
         timedOut = true
         child.kill('SIGTERM')
         // 给 SIGTERM 500ms 宽限期，之后强制 SIGKILL
-        setTimeout(() => { try { child.kill('SIGKILL') } catch { /* 进程可能已退出 */ } }, 500)
+        setTimeout(() => { try { child.kill('SIGKILL') } catch { /* SIGTERM 后进程已退出，SIGKILL 抛 ESRCH 是预期行为 */ } }, 500)
       }, timeout)
 
       child.stdout?.on('data', (d: Buffer) => { stdout += d.toString() })

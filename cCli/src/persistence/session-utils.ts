@@ -39,6 +39,6 @@ export function getGitBranch(cwd: string): string {
   try {
     return execSync('git rev-parse --abbrev-ref HEAD', { cwd, encoding: 'utf-8', timeout: 3000 }).trim()
   } catch {
-    return 'unknown'
+    return 'unknown'  // 非 git 仓库或 git 未安装，预期行为
   }
 }
