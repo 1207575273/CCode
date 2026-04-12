@@ -88,19 +88,23 @@ export class TaskOutputTool implements Tool {
           : Math.min(rawTimeout, MAX_BLOCK_TIMEOUT_MS))
       : 0
 
-    // 阻塞模式
-    if (block && state.status === 'running') {
+    // 阻塞模式：等待 running 或 stopping 状态的 agent 终态
+    if (block && (state.status === 'running' || state.status === 'stopping')) {
       const deadline = Date.now() + timeout
-      while (state.status === 'running' && Date.now() < deadline) {
+      while ((state.status === 'running' || state.status === 'stopping') && Date.now() < deadline) {
         await sleep(POLL_INTERVAL_MS)
       }
     }
 
     const status = state.status === 'running'
       ? `子 Agent 仍在运行 (turn ${state.turn}/${state.maxTurns})`
-      : state.status === 'done'
-        ? '子 Agent 已完成'
-        : '子 Agent 执行异常'
+      : state.status === 'stopping'
+        ? `子 Agent 正在停止 (turn ${state.turn}/${state.maxTurns})`
+        : state.status === 'stopped'
+          ? `子 Agent 已停止${state.stopReport ? ` (${state.stopReport.resolution === 'graceful' ? '优雅退出' : '强制中断'}, 原因: ${state.stopReport.reason})` : ''}`
+          : state.status === 'done'
+            ? '子 Agent 已完成'
+            : '子 Agent 执行异常'
 
     const toolEvents = state.events.filter(e => e.type === 'tool_done')
     const toolSummary = toolEvents
@@ -124,7 +128,8 @@ export class TaskOutputTool implements Tool {
       state.currentTool ? `当前工具: ${state.currentTool}` : '',
       statsLine,
       toolSummary ? `\n工具调用详情:\n${toolSummary}` : '',
-      state.finalText ? `\n最终输出:\n${state.finalText}` : '',
+      state.stopReport ? `\n停止报告:\n  来源: ${state.stopReport.source}\n  原因: ${state.stopReport.reason}\n  方式: ${state.stopReport.resolution === 'graceful' ? '优雅退出' : '强制中断'}\n  进度: ${state.stopReport.turn}/${state.stopReport.maxTurns} 轮` : '',
+      state.finalText ? `\n部分输出:\n${state.finalText}` : '',
     ].filter(Boolean).join('\n')
 
     return { success: true, output }

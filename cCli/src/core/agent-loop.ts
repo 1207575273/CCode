@@ -83,7 +83,7 @@ export type AgentEvent =
   | { type: 'permission_request'; toolName: string; args: Record<string, unknown>; resolve: (allow: boolean) => void }
   | { type: 'user_question_request'; questions: UserQuestion[]; resolve: (result: UserQuestionResult) => void }
   | { type: 'error';              error: string }
-  | { type: 'done';               reason?: 'complete' | 'max_turns' | 'aborted' }
+  | { type: 'done';               reason?: 'complete' | 'max_turns' | 'aborted' | 'stopped' }
   // 观测事件
   | { type: 'llm_start';          provider: string; model: string; messageCount: number; systemPrompt?: string }
   | { type: 'llm_done';           inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; stopReason: string }
@@ -124,6 +124,8 @@ export interface AgentConfig {
   config?: import('@config/config-manager.js').CCodeConfig | undefined
   /** 最少执行轮次（仅 isSidechain 模式生效，防止弱模型提前退出） */
   minTurns?: number | undefined
+  /** 标记后台执行模式（run_in_background），禁用 minTurns 续跑，避免无用 LLM 调用挂起 */
+  isBackground?: boolean | undefined
 }
 
 // ═══════════════════════════════════════════════
@@ -153,6 +155,8 @@ export class AgentLoop {
   #llmCallIndex = 0
   /** 工具调用重复检测器（防止弱模型陷入循环调用） */
   readonly #repetitionDetector = new RepetitionDetector()
+  /** 外部请求优雅停止 — 当前轮结束后退出循环 */
+  #stopRequested = false
 
   constructor(
     provider: LLMProvider,
@@ -170,6 +174,11 @@ export class AgentLoop {
   /** 暴露 registry 给 StreamableTool（子 Agent 需要 cloneWithout） */
   get registry(): ToolRegistry { return this.#registry }
 
+  /** 外部请求优雅停止 — 当前轮结束后退出循环 */
+  requestStop(): void {
+    this.#stopRequested = true
+  }
+
   /**
    * 主循环：LLM 调用 → [工具执行 → LLM 调用]* → 文本回复
    */
@@ -183,6 +192,12 @@ export class AgentLoop {
     let toolRounds = 0
 
     for (let turn = 0; turn < maxTurns; turn++) {
+      // 检查点 1：新一轮开始前（安全 — history 末尾是 tool_result 或初始 user 消息）
+      if (this.#stopRequested) {
+        yield { type: 'done', reason: 'stopped' }
+        return
+      }
+
       const llmResult = yield* this.#callLLM(history)
       if (llmResult.aborted) return
 
@@ -206,8 +221,9 @@ export class AgentLoop {
       }
 
       if (llmResult.toolCalls.length === 0) {
-        // 续跑检测：SubAgent 模式下，工具调用轮次不足 minToolRounds 时注入继续消息
-        if (toolRounds < minToolRounds && this.#config.isSidechain) {
+        // 续跑检测：前台 SubAgent 且工具轮次不足时注入继续消息
+        // 后台 SubAgent 不续跑——任务完成即退出，避免无用 LLM 调用挂起导致 session_end 缺失
+        if (toolRounds < minToolRounds && this.#config.isSidechain && !this.#config.isBackground) {
           history.push({
             role: 'user',
             content: 'You have not completed the task yet. Continue executing tools to finish the task. Do NOT just describe what to do — actually call tools.',
@@ -220,6 +236,12 @@ export class AgentLoop {
 
       toolRounds++
       yield* this.#executeToolCalls(llmResult.toolCalls, history)
+
+      // 检查点 2：工具执行完毕后（安全 — tool_result 已写入 history）
+      if (this.#stopRequested) {
+        yield { type: 'done', reason: 'stopped' }
+        return
+      }
     }
 
     // 超过最大轮次：以 done + max_turns 结束，不再 yield error（调用方可按 reason 区分）

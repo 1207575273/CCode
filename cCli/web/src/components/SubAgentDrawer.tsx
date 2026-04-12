@@ -10,8 +10,8 @@
  * 数据来源：ChatPage 的 subAgents state，通过 props 传入，零后端改动。
  */
 
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
-import type { SubAgentInfo, SubAgentDetailEvent } from '../types'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import type { SubAgentInfo, SubAgentDetailEvent } from './SubAgentCard'
 
 // ═══════════════════════════════════════════════
 // Props
@@ -19,13 +19,15 @@ import type { SubAgentInfo, SubAgentDetailEvent } from '../types'
 
 interface SubAgentDrawerProps {
   agents: Map<string, SubAgentInfo>
+  /** 停止子 Agent 回调 */
+  onStop?: (agentId: string) => void
 }
 
 // ═══════════════════════════════════════════════
 // 主组件
 // ═══════════════════════════════════════════════
 
-export function SubAgentDrawer({ agents }: SubAgentDrawerProps) {
+export function SubAgentDrawer({ agents, onStop }: SubAgentDrawerProps) {
   const [open, setOpen] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
@@ -122,6 +124,7 @@ export function SubAgentDrawer({ agents }: SubAgentDrawerProps) {
               onToggle={() => setExpandedId(prev =>
                 prev === agent.agentId ? null : agent.agentId,
               )}
+              onStop={onStop}
             />
           ))}
         </div>
@@ -138,19 +141,26 @@ interface AgentRowProps {
   agent: SubAgentInfo
   expanded: boolean
   onToggle: () => void
+  onStop?: (agentId: string) => void
 }
 
-function AgentRow({ agent, expanded, onToggle }: AgentRowProps) {
-  const statusIcon = agent.status === 'running'
+function AgentRow({ agent, expanded, onToggle, onStop }: AgentRowProps) {
+  const statusIcon = agent.status === 'running' || agent.status === 'stopping'
     ? '⟳'
     : agent.status === 'done'
       ? '✓'
-      : '✗'
+      : agent.status === 'stopped'
+        ? '◼'
+        : '✗'
   const statusColor = agent.status === 'running'
     ? 'text-yellow-400'
-    : agent.status === 'done'
-      ? 'text-green-400'
-      : 'text-red-400'
+    : agent.status === 'stopping'
+      ? 'text-orange-400'
+      : agent.status === 'done'
+        ? 'text-green-400'
+        : agent.status === 'stopped'
+          ? 'text-yellow-400'
+          : 'text-red-400'
 
   return (
     <div className="border border-gray-700 rounded-lg overflow-hidden">
@@ -161,7 +171,7 @@ function AgentRow({ agent, expanded, onToggle }: AgentRowProps) {
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <span className={`${statusColor} font-mono text-sm shrink-0`}>
-            {agent.status === 'running' ? <Spinner /> : statusIcon}
+            {(agent.status === 'running' || agent.status === 'stopping') ? <Spinner /> : statusIcon}
           </span>
           {agent.agentType && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-400 font-mono shrink-0">
@@ -180,6 +190,19 @@ function AgentRow({ agent, expanded, onToggle }: AgentRowProps) {
                 <span className="text-yellow-400/70"> ▸ {agent.currentTool}</span>
               )}
             </span>
+          )}
+          {agent.status === 'stopping' && (
+            <span className="text-[10px] text-orange-400">正在停止...</span>
+          )}
+          {/* 停止按钮 */}
+          {agent.status === 'running' && onStop && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onStop(agent.agentId) }}
+              className="px-1.5 py-0.5 text-[10px] rounded bg-red-900/50 text-red-300 hover:bg-red-800/70 transition-colors cursor-pointer"
+              title="停止此 Agent"
+            >
+              ⏹ 停止
+            </button>
           )}
           <span className="text-gray-600 text-[10px]">{expanded ? '▲' : '▼'}</span>
         </div>

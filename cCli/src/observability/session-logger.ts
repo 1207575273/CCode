@@ -237,9 +237,11 @@ export class SessionLogger {
     }
   }
 
-  /** 写入 session_end 汇总事件 */
-  finalize(): void {
-    if (!this.#sessionId) return
+  /** 写入 session_end 汇总事件（幂等：重复调用只写一次） */
+  #finalized = false
+  finalize(status?: 'done' | 'stopped' | 'error'): void {
+    if (!this.#sessionId || this.#finalized) return
+    this.#finalized = true
     const durationMs = Date.now() - this.#turnStats.startTime
     this.#appendEvent('session_end', {
       totalInputTokens: this.#turnStats.totalInputTokens,
@@ -251,7 +253,16 @@ export class SessionLogger {
       totalErrors: this.#turnStats.totalErrors,
       totalDurationMs: durationMs,
       accumulatedMs: this.#accumulatedMs + durationMs,
+      ...(status !== undefined ? { status } : {}),
     })
+  }
+
+  /**
+   * 记录生命周期事件（stop_requested / stopped 等）。
+   * 用于 JSONL 审计 — 记录 SubAgent 的停止过程和原因。
+   */
+  logLifecycle(action: string, detail: Record<string, unknown> = {}): void {
+    this.#appendEvent('lifecycle', { action, ...detail })
   }
 
   /** 追加事件到 JSONL，静默处理错误 */

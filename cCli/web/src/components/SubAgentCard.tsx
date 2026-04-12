@@ -15,7 +15,7 @@ export interface SubAgentInfo {
   /** Agent 类型（general / explore / plan / 自定义） */
   agentType?: string
   description: string
-  status: 'running' | 'done' | 'error'
+  status: 'running' | 'stopping' | 'stopped' | 'done' | 'error'
   turn: number
   maxTurns: number
   currentTool?: string
@@ -40,16 +40,22 @@ interface SubAgentCardProps {
 export function SubAgentCard({ agent }: SubAgentCardProps) {
   const [expanded, setExpanded] = useState(false)
 
-  const statusIcon = agent.status === 'running'
+  const statusIcon = agent.status === 'running' || agent.status === 'stopping'
     ? '⟳'
     : agent.status === 'done'
       ? '✓'
-      : '✗'
+      : agent.status === 'stopped'
+        ? '◼'
+        : '✗'
   const statusColor = agent.status === 'running'
     ? 'text-yellow-400'
-    : agent.status === 'done'
-      ? 'text-green-400'
-      : 'text-red-400'
+    : agent.status === 'stopping'
+      ? 'text-orange-400'
+      : agent.status === 'done'
+        ? 'text-green-400'
+        : agent.status === 'stopped'
+          ? 'text-yellow-400'
+          : 'text-red-400'
 
   return (
     <div className="my-2 border border-gray-700 rounded-lg overflow-hidden">
@@ -68,10 +74,16 @@ export function SubAgentCard({ agent }: SubAgentCardProps) {
           <span className="text-sm font-medium text-gray-200">
             {agent.name ?? agent.description}
           </span>
-          {agent.status === 'running' && (
+          {(agent.status === 'running' || agent.status === 'stopping') && (
             <span className="text-xs text-gray-500">
-              turn {agent.turn}/{agent.maxTurns}
-              {agent.currentTool && <> ▸ {agent.currentTool}</>}
+              {agent.status === 'stopping' ? (
+                <span className="text-orange-400">正在停止...</span>
+              ) : (
+                <>
+                  turn {agent.turn}/{agent.maxTurns}
+                  {agent.currentTool && <> ▸ {agent.currentTool}</>}
+                </>
+              )}
             </span>
           )}
         </div>

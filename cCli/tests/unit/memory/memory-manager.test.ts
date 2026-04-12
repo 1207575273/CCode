@@ -175,9 +175,14 @@ describe('MemoryManager', () => {
     expect(context).toContain('memory_search')
   })
 
-  it('getRelevantContext 空记忆返回空', async () => {
+  it('getRelevantContext 无 project 记忆时不含 project 条目', async () => {
+    // project scope 为空（testDir 是临时目录），但 global scope 可能有真实记忆
     const context = await manager.getRelevantContext(testDir)
-    expect(context).toBe('')
+    // 关键断言：不应包含本测试写入的任何 project 条目
+    expect(context).not.toContain('认证中间件重写')
+    expect(context).not.toContain('测试记忆')
+    // 如果 global scope 也为空，则整体为空字符串
+    // 如果 global scope 有内容，则 context 非空但不应有 project 条目
   })
 
   it('type → 子目录映射', async () => {

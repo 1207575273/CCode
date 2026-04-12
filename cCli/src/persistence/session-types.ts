@@ -24,6 +24,7 @@ export type SessionEventType =
   | 'post_tool_feedback'
   | 'error'
   | 'compact'
+  | 'lifecycle'
   | 'session_end'
 
 export interface SessionEvent {
@@ -120,6 +121,14 @@ export interface SessionEvent {
   totalDurationMs?: number
   /** 累计运行时长 ms（跨 resume 累加） */
   accumulatedMs?: number
+  /** session_end 终态：done / stopped / error */
+  status?: 'done' | 'stopped' | 'error'
+
+  /** lifecycle 事件 */
+  /** 生命周期动作：stop_requested / stopped / ... */
+  action?: string
+  /** 终止方式（stopped 事件用） */
+  resolution?: 'graceful' | 'forced'
 }
 
 /** 工具执行记录（loadMessages 还原用） */
@@ -185,7 +194,7 @@ export interface BranchInfo {
 export interface SubagentSnapshot {
   agentId: string
   description: string
-  status: 'running' | 'done' | 'error'
+  status: 'running' | 'stopping' | 'stopped' | 'done' | 'error'
   events: SubagentSnapshotEvent[]
 }
 

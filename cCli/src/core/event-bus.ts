@@ -40,6 +40,7 @@ export type BridgeEvent =
   | { type: 'subagent_progress'; agentId: string; name: string; agentType: string; description: string; turn: number; maxTurns: number; currentTool?: string }
   | { type: 'subagent_done'; agentId: string; name: string; description: string; success: boolean; output: string }
   | { type: 'subagent_event'; agentId: string; detail: SubAgentDetail }
+  | { type: 'subagent_control'; agentId: string; action: 'stop'; reason: string; source: 'cli' | 'web' }
   | { type: 'context_update'; usedPercentage: number; lastInputTokens: number; effectiveWindow: number; level: string }
   | { type: 'compact_status'; status: 'start' | 'done' | 'error'; strategy?: string; message?: string }
   | { type: 'status_bar'; data: StatusBarPayload }

@@ -14,6 +14,15 @@ import type { BuiltInAgentDefinition } from './types.js'
 import { agentDefinitionRegistry } from './definition-registry.js'
 
 // ═══════════════════════════════════════════════
+// 超时常量
+// ═══════════════════════════════════════════════
+
+/** 通用型 Agent 超时：10 分钟（代码实现 + 构建 + 验证） */
+const TIMEOUT_GENERAL_MS = 10 * 60 * 1000
+/** 探索/规划型 Agent 超时：5 分钟（只读搜索 + 分析） */
+const TIMEOUT_READONLY_MS = 5 * 60 * 1000
+
+// ═══════════════════════════════════════════════
 // general — 通用型
 // ═══════════════════════════════════════════════
 
@@ -36,6 +45,8 @@ const generalAgent: BuiltInAgentDefinition = {
   modelHint: 'balanced',
   contextPolicy: { mode: 'trimmed', maxMessages: 20, maxTokenEstimate: 8000 },
   minTurns: 5,
+  /** 10 分钟超时（重任务：代码实现 + 构建 + 验证） */
+  timeoutMs: TIMEOUT_GENERAL_MS,
 
   getSystemPrompt() {
     return [
@@ -88,6 +99,8 @@ const exploreAgent: BuiltInAgentDefinition = {
   modelHint: 'fast',
   contextPolicy: { mode: 'trimmed', maxMessages: 10, maxTokenEstimate: 4000 },
   minTurns: 2,
+  /** 5 分钟超时（轻量只读搜索） */
+  timeoutMs: TIMEOUT_READONLY_MS,
 
   getSystemPrompt() {
     return [
@@ -133,6 +146,8 @@ const planAgent: BuiltInAgentDefinition = {
   modelHint: 'strong',
   contextPolicy: { mode: 'trimmed', maxMessages: 30, maxTokenEstimate: 12000 },
   minTurns: 2,
+  /** 5 分钟超时（只读分析 + 规划输出） */
+  timeoutMs: 5 * 60 * 1000,
 
   getSystemPrompt() {
     return [

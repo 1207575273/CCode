@@ -75,6 +75,7 @@ export type ClientMessage =
   | { type: 'permission'; allow: boolean }
   | { type: 'question'; cancelled: boolean; answers?: Record<string, string | string[]> }
   | { type: 'abort' }
+  | { type: 'subagent_stop'; agentId: string; reason: string }
 
 /** 聊天消息（UI 渲染用） */
 export interface ChatMessage {
@@ -121,7 +122,7 @@ export interface ToolEvent {
 export interface SubagentSnapshot {
   agentId: string
   description: string
-  status: 'running' | 'done' | 'error'
+  status: 'running' | 'stopping' | 'stopped' | 'done' | 'error'
   events: Array<
     | { kind: 'tool_start'; toolName: string; toolCallId: string; args?: Record<string, unknown> }
     | { kind: 'tool_done'; toolName: string; toolCallId: string; durationMs?: number; success?: boolean; resultSummary?: string }

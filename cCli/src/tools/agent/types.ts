@@ -63,6 +63,9 @@ export interface AgentDefinition {
   /** 最少执行轮次（防止弱模型提前退出，仅 SubAgent 模式生效） */
   readonly minTurns?: number
 
+  /** 执行超时（毫秒），超时后自动发起 stop（走优雅退出+宽限期路径） */
+  readonly timeoutMs?: number
+
   // ── 预留字段 ──
   // readonly skills?: string[]
   // readonly background?: boolean
@@ -124,5 +127,26 @@ export interface AgentErrorOutput {
   partialResult?: string
 }
 
+/** 被停止 */
+export interface AgentStoppedOutput {
+  status: 'stopped'
+  agentId: string
+  name: string
+  agentType: string
+  /** 终止方式：优雅退出 or 强制中断 */
+  resolution: 'graceful' | 'forced'
+  /** 谁触发的停止 */
+  source: import('./store.js').StopSource
+  /** 停止原因 */
+  reason: string
+  /** 执行进度 */
+  turn: number
+  maxTurns: number
+  /** 已有结果 */
+  partialResult: string
+  /** token 用量 */
+  tokenUsed?: import('./store.js').TokenUsage
+}
+
 /** dispatch_agent 输出联合类型 */
-export type AgentOutput = AgentCompletedOutput | AgentAsyncLaunchedOutput | AgentErrorOutput
+export type AgentOutput = AgentCompletedOutput | AgentAsyncLaunchedOutput | AgentErrorOutput | AgentStoppedOutput

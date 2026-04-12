@@ -13,7 +13,7 @@
 import React, { useState, useCallback } from 'react'
 import { Box, Text, useInput } from 'ink'
 import Spinner from 'ink-spinner'
-import { listSubAgents, getSubAgent } from '@tools/agent/store.js'
+import { listSubAgents, getSubAgent, stopAgent } from '@tools/agent/store.js'
 import type { SubAgentState, SubAgentDetailEvent } from '@tools/agent/store.js'
 import { formatDuration } from './format-utils.js'
 
@@ -74,12 +74,33 @@ function DetailView({ state, onBack }: { state: SubAgentState; onBack: () => voi
               {state.currentTool ? `  ▸ ${state.currentTool}` : ''}
             </Text>
           </>
+        ) : state.status === 'stopping' ? (
+          <>
+            <Box marginRight={1}><Spinner type="dots" /></Box>
+            <Text color="yellow">
+              正在停止
+              {state.stopRequest ? ` (${formatDuration(Date.now() - state.stopRequest.requestedAt)})` : ''}
+            </Text>
+          </>
         ) : (
-          <Text color={state.status === 'done' ? 'green' : 'red'}>
-            {state.status === 'done' ? '✓ 完成' : '✗ 异常'}
+          <Text color={state.status === 'done' ? 'green' : state.status === 'stopped' ? 'yellow' : 'red'}>
+            {state.status === 'done' ? '✓ 完成' : state.status === 'stopped' ? '◼ 已停止' : '✗ 异常'}
           </Text>
         )}
       </Box>
+
+      {/* 停止报告 */}
+      {state.stopReport && (
+        <Box paddingLeft={1}>
+          <Text dimColor>
+            {state.stopReport.resolution === 'graceful' ? '优雅退出' : '强制中断'}
+            {' | '}
+            {state.stopReport.source}: {state.stopReport.reason}
+            {' | '}
+            {state.stopReport.turn}/{state.stopReport.maxTurns} 轮
+          </Text>
+        </Box>
+      )}
 
       {/* 事件列表 */}
       <Box flexDirection="column" marginTop={1}>
@@ -163,6 +184,13 @@ function ListView({ agents, selectedIndex, onSelect, onClose }: {
       const agent = agents[selectedIndex]
       if (agent) onSelect(agent.agentId)
     }
+    // s 键停止选中的 running agent
+    if (_input === 's') {
+      const agent = agents[selectedIndex]
+      if (agent && (agent.status === 'running' || agent.status === 'stopping')) {
+        stopAgent(agent.agentId, 'user_cli', '用户通过面板停止')
+      }
+    }
   })
 
   const running = agents.filter(a => a.status === 'running').length
@@ -199,10 +227,19 @@ function ListView({ agents, selectedIndex, onSelect, onClose }: {
                 <Text dimColor>  turn {agent.turn}/{agent.maxTurns}</Text>
                 {agent.currentTool && <Text dimColor>  ▸ {agent.currentTool}</Text>}
               </>
+            ) : agent.status === 'stopping' ? (
+              <>
+                <Box marginRight={1}><Spinner type="dots" /></Box>
+                <Text color="yellow" bold>{agent.name}</Text>
+                <Text color="yellow">  等待退出</Text>
+                {agent.stopRequest && (
+                  <Text dimColor> ({formatDuration(Date.now() - agent.stopRequest.requestedAt)})</Text>
+                )}
+              </>
             ) : (
               <>
-                <Text color={agent.status === 'done' ? 'green' : 'red'}>
-                  {agent.status === 'done' ? '✓' : '✗'}{' '}
+                <Text color={agent.status === 'done' ? 'green' : agent.status === 'stopped' ? 'yellow' : 'red'}>
+                  {agent.status === 'done' ? '✓' : agent.status === 'stopped' ? '◼' : '✗'}{' '}
                 </Text>
                 <Text bold>{agent.name}</Text>
                 <Text dimColor>  {elapsed}</Text>
@@ -214,7 +251,7 @@ function ListView({ agents, selectedIndex, onSelect, onClose }: {
 
       {/* 操作提示 */}
       <Box marginTop={1}>
-        <Text dimColor>↑↓ 选择  Enter 查看详情  Ctrl+B/ESC 关闭</Text>
+        <Text dimColor>↑↓ 选择  Enter 详情  s 停止  Ctrl+B/ESC 关闭</Text>
       </Box>
     </Box>
   )

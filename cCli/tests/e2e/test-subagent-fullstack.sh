@@ -15,7 +15,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-WORKSPACE="C:/Users/ThinkPad/Desktop/新建文件夹 (4)"
+WORKSPACE="C:\Users\ThinkPad\Desktop\新建文件夹"
 
 TSX="$PROJECT_ROOT/node_modules/.bin/tsx"
 TSCONFIG="$PROJECT_ROOT/tsconfig.json"

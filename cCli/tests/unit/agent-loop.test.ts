@@ -250,4 +250,112 @@ describe('AgentLoop', () => {
     for await (const _e of loop.run([{ role: 'user', content: 'search' }])) { /* consume */ }
     expect(callOrder).toEqual(['glob', 'grep'])
   })
+
+  // ═══════════════════════════════════════════════
+  // requestStop 检查点测试
+  // ═══════════════════════════════════════════════
+
+  it('requestStop — 在 turn 顶部检查点优雅退出', async () => {
+    // 第一轮正常执行，第二轮开始前触发停止
+    const registry = new ToolRegistry()
+    registry.register({
+      name: 'read_file', description: '', parameters: {}, dangerous: false,
+      execute: async () => ({ success: true, output: 'content' }),
+    })
+    const provider = makeProvider([
+      // 第一轮：工具调用
+      [
+        { type: 'tool_call', toolCall: { type: 'tool_call', toolCallId: 'c1', toolName: 'read_file', args: { path: 'a.ts' } } },
+        { type: 'done' },
+      ],
+      // 第二轮不会真正执行（stopRequested 在 turn 顶部拦截）
+      [{ type: 'text', text: 'should not reach' }, { type: 'done' }],
+    ])
+    const loop = new AgentLoop(provider, registry, { model: 'mock', provider: 'mock' })
+
+    const events: AgentEvent[] = []
+    const runPromise = (async () => {
+      for await (const e of loop.run([{ role: 'user', content: 'read' }])) {
+        events.push(e)
+        // 工具执行完后触发停止（会在第二轮 turn 顶部被拦截）
+        if (e.type === 'tool_done') {
+          loop.requestStop()
+        }
+      }
+    })()
+
+    await runPromise
+
+    // 应有 done 事件且 reason 为 stopped
+    const doneEvent = events.find(e => e.type === 'done')
+    expect(doneEvent).toBeDefined()
+    if (doneEvent && 'reason' in doneEvent) {
+      expect(doneEvent.reason).toBe('stopped')
+    }
+    // 不应有第二轮的文本输出
+    expect(events.some(e => e.type === 'text' && 'text' in e && e.text === 'should not reach')).toBe(false)
+  })
+
+  it('requestStop — 工具执行后检查点退出', async () => {
+    // 在第一轮工具执行完后立即停止
+    const registry = new ToolRegistry()
+    registry.register({
+      name: 'glob', description: '', parameters: {}, dangerous: false,
+      execute: async () => ({ success: true, output: '*.ts' }),
+    })
+    const provider = makeProvider([
+      [
+        { type: 'tool_call', toolCall: { type: 'tool_call', toolCallId: 'c1', toolName: 'glob', args: {} } },
+        { type: 'done' },
+      ],
+      [{ type: 'text', text: 'after' }, { type: 'done' }],
+    ])
+    const loop = new AgentLoop(provider, registry, { model: 'mock', provider: 'mock', maxTurns: 5 })
+
+    const events: AgentEvent[] = []
+    const runPromise = (async () => {
+      for await (const e of loop.run([{ role: 'user', content: 'search' }])) {
+        events.push(e)
+        if (e.type === 'tool_done') {
+          loop.requestStop()
+        }
+      }
+    })()
+
+    await runPromise
+
+    // 工具已执行完毕
+    expect(events.some(e => e.type === 'tool_done')).toBe(true)
+    // 应优雅退出
+    const doneEvent = events.find(e => e.type === 'done')
+    expect(doneEvent).toBeDefined()
+    if (doneEvent && 'reason' in doneEvent) {
+      expect(doneEvent.reason).toBe('stopped')
+    }
+  })
+
+  it('requestStop — 初始 turn 前停止直接退出', async () => {
+    // maxTurns=2 但在第一轮开始前就调用 requestStop
+    const provider = makeProvider([
+      [{ type: 'text', text: 'should not reach' }, { type: 'done' }],
+    ])
+    const loop = new AgentLoop(provider, new ToolRegistry(), { model: 'mock', provider: 'mock' })
+
+    // 在 run 之前就请求停止
+    loop.requestStop()
+
+    const events: AgentEvent[] = []
+    for await (const e of loop.run([{ role: 'user', content: 'test' }])) {
+      events.push(e)
+    }
+
+    // 应该只产生 done 事件
+    expect(events).toHaveLength(1)
+    expect(events[0]!.type).toBe('done')
+    if ('reason' in events[0]!) {
+      expect(events[0]!.reason).toBe('stopped')
+    }
+    // 不应有文本输出
+    expect(events.some(e => e.type === 'text')).toBe(false)
+  })
 })

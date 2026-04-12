@@ -22,6 +22,7 @@ import type { ToolContext, ToolResult, StreamableTool } from '../core/types.js'
 import type { ToolRegistry } from '../core/registry.js'
 import { AgentLoop } from '@core/agent-loop.js'
 import type { AgentEvent } from '@core/agent-loop.js'
+import { isAbortError } from '@core/agent-loop.js'
 import { sessionStore } from '@persistence/index.js'
 import { SessionLogger } from '@observability/session-logger.js'
 import { configManager } from '@config/config-manager.js'
@@ -29,10 +30,11 @@ import { getOrCreateProvider } from '@providers/registry.js'
 import {
   registerSubAgent, consumeAgentEvent, markSubAgentDone,
   setSubAgentSessionId, resolveAgentName,
+  setSubAgentControl, clearSubAgentControl, getSubAgent, buildStopReport, stopAgent,
 } from './store.js'
 import { getTodos } from '../ext/todo-store.js'
 import { agentDefinitionRegistry } from './definition-registry.js'
-import type { ToolPolicy, AgentCompletedOutput, AgentAsyncLaunchedOutput, AgentErrorOutput } from './types.js'
+import type { ToolPolicy, AgentCompletedOutput, AgentAsyncLaunchedOutput, AgentErrorOutput, AgentStoppedOutput } from './types.js'
 import { trimHistoryForSubAgent } from './context-utils.js'
 import { eventBus } from '@core/event-bus.js'
 
@@ -41,7 +43,7 @@ import { eventBus } from '@core/event-bus.js'
 // ═══════════════════════════════════════════════
 
 /** 硬编码排除 — 所有子 Agent 类型必须遵守，不可通过 toolPolicy 覆盖 */
-const ALWAYS_EXCLUDE = ['dispatch_agent', 'ask_user_question']
+const ALWAYS_EXCLUDE = ['dispatch_agent', 'ask_user_question', 'control_agent']
 
 /** SubAgent 默认 maxTurns（未匹配到定义时的兜底） */
 const DEFAULT_MAX_TURNS = 50
@@ -182,7 +184,20 @@ export class DispatchAgentTool implements StreamableTool {
     // SubAgent 的 LLM 多轮调用会给 signal 反复加 listener（LangChain stream 内部行为），
     // 默认 MaxListeners=10 不够用（25 轮 maxTurns），提高上限避免 Node.js 警告
     import('node:events').then(events => events.setMaxListeners(100, subController.signal)).catch(() => {})
-    const onParentAbort = () => subController.abort()
+    // 父 signal abort 时：
+    // 1. 传播到子 Agent 的 AbortController（中断 LLM 流）
+    // 2. 立即同步写入 session_end（防止进程退出时 fire-and-forget Promise 被丢弃）
+    const onParentAbort = () => {
+      subController.abort()
+      // 防御性写入：如果后台 Promise 还没来得及 finalize 就被进程丢弃
+      if (runInBackground) {
+        const state = getSubAgent(agentId)
+        if (state && state.status !== 'done' && state.status !== 'error' && state.status !== 'stopped') {
+          subLogger.finalize('error')
+          markSubAgentDone(agentId, '', 'error')
+        }
+      }
+    }
     ctx.signal?.addEventListener('abort', onParentAbort, { once: true })
 
     // 创建子 AgentLoop
@@ -192,10 +207,36 @@ export class DispatchAgentTool implements StreamableTool {
       signal: subController.signal,
       maxTurns,
       isSidechain: true,
+      isBackground: runInBackground,
       agentId,
       systemPrompt: subSystemPrompt,
-      ...(definition.minTurns !== undefined ? { minTurns: definition.minTurns } : {}),
+      // 后台模式不传 minTurns — 已通过 isBackground 禁用续跑
+      ...(!runInBackground && definition.minTurns !== undefined ? { minTurns: definition.minTurns } : {}),
     })
+
+    // 🆕 注册控制句柄到 store（外部才能通过 stopAgent() 停止此子 Agent）
+    setSubAgentControl(agentId, { abortController: subController, loop: subLoop })
+
+    // 🆕 超时自动 stop（definition.timeoutMs 配置时生效）
+    let timeoutTimer: ReturnType<typeof setTimeout> | undefined
+    const effectiveTimeoutMs = definition.timeoutMs || (runInBackground ? 10 * 60 * 1000 : 0)
+    if (effectiveTimeoutMs > 0) {
+      timeoutTimer = setTimeout(() => {
+        const s = getSubAgent(agentId)
+        if (s && s.status === 'running') {
+          stopAgent(agentId, 'timeout', `执行超时 ${effectiveTimeoutMs / 1000}s`)
+        }
+        // 后台模式额外保护：stopAgent 后 5 秒仍未退出（LLM 无响应），
+        // 直接 abort 强制中断 for-await 循环，确保 session_end 写入
+        if (runInBackground) {
+          setTimeout(() => {
+            if (!subController.signal.aborted) {
+              subController.abort()
+            }
+          }, 5_000).unref()
+        }
+      }, effectiveTimeoutMs)
+    }
 
     subLogger.logUserMessage(prompt)
 
@@ -217,7 +258,13 @@ export class DispatchAgentTool implements StreamableTool {
 
     // ── 后台模式 ──
     if (runInBackground) {
-      runSubAgentInBackground(subLoop, initialMessages, agentId, agentName, agentType, description, subLogger, modelName, maxTurns, sessionProvider, () => ctx.signal?.removeEventListener('abort', onParentAbort))
+      runSubAgentInBackground({
+        subLoop, initialMessages, agentId, agentName, agentType,
+        description, subLogger, modelName, maxTurns,
+        parentSignal: ctx.signal, sessionProvider,
+        cleanup: () => ctx.signal?.removeEventListener('abort', onParentAbort),
+        ...(timeoutTimer ? { timeoutTimer } : {}),
+      })
 
       yield {
         type: 'subagent_progress',
@@ -243,6 +290,7 @@ export class DispatchAgentTool implements StreamableTool {
     // ── 前台模式 ──
     let finalText = ''
     let currentTurn = 0
+    let wasStoppedByCheckpoint = false
 
     try {
       for await (const event of subLoop.run(initialMessages)) {
@@ -298,6 +346,9 @@ export class DispatchAgentTool implements StreamableTool {
             break
 
           case 'done':
+            // reason='stopped' 表示 AgentLoop 因 requestStop 退出
+            // reason='complete'/'max_turns' 表示 AgentLoop 自然完成（stop 可能是时序竞争）
+            if (event.reason === 'stopped') wasStoppedByCheckpoint = true
             break
 
           default:
@@ -305,8 +356,38 @@ export class DispatchAgentTool implements StreamableTool {
         }
       }
 
+      // 循环退出 — 区分"正常完成" vs "优雅停止"
+      const state = getSubAgent(agentId)
+      if (wasStoppedByCheckpoint && state?.stopRequest) {
+        // 优雅停止：AgentLoop 因 requestStop 在检查点退出
+        const report = buildStopReport(state, finalText, currentTurn, 'graceful')
+        state.stopReport = report
+        subLogger.logLifecycle('stopped', {
+          resolution: 'graceful',
+          source: state.stopRequest.source,
+          reason: state.stopRequest.reason,
+          turn: currentTurn, maxTurns,
+        })
+        subLogger.logAssistantMessage(finalText || '(stopped)', modelName)
+        subLogger.finalize('stopped')
+        markSubAgentDone(agentId, finalText, 'stopped')
+
+        const output: AgentStoppedOutput = {
+          status: 'stopped',
+          agentId, name: agentName, agentType,
+          resolution: 'graceful',
+          source: report.source,
+          reason: report.reason,
+          turn: currentTurn, maxTurns,
+          partialResult: finalText,
+          ...(report.tokenUsed ? { tokenUsed: report.tokenUsed } : {}),
+        }
+        return { success: true, output: JSON.stringify(output) }
+      }
+
+      // 正常完成
       subLogger.logAssistantMessage(finalText || '(no text output)', modelName)
-      subLogger.finalize()
+      subLogger.finalize('done')
       markSubAgentDone(agentId, finalText, 'done')
 
       const output: AgentCompletedOutput = {
@@ -321,11 +402,47 @@ export class DispatchAgentTool implements StreamableTool {
       return { success: true, output: JSON.stringify(output) }
 
     } catch (err) {
+      const state = getSubAgent(agentId)
+
+      // 区分 abort 来源：宽限期超时 vs 父 Agent Ctrl+C
+      if (isAbortError(err) && state?.stopRequest) {
+        const fromParentAbort = ctx.signal?.aborted === true
+        if (!fromParentAbort) {
+          // 宽限期超时强制中断
+          const report = buildStopReport(state, finalText, currentTurn, 'forced')
+          state.stopReport = report
+          subLogger.logLifecycle('stopped', {
+            resolution: 'forced',
+            source: state.stopRequest.source,
+            reason: state.stopRequest.reason,
+            turn: currentTurn, maxTurns,
+          })
+          if (finalText) {
+            subLogger.logAssistantMessage(finalText, modelName)
+          }
+          subLogger.finalize('stopped')
+          markSubAgentDone(agentId, finalText, 'stopped')
+
+          const output: AgentStoppedOutput = {
+            status: 'stopped',
+            agentId, name: agentName, agentType,
+            resolution: 'forced',
+            source: report.source,
+            reason: report.reason,
+            turn: currentTurn, maxTurns,
+            partialResult: finalText,
+            ...(report.tokenUsed ? { tokenUsed: report.tokenUsed } : {}),
+          }
+          return { success: true, output: JSON.stringify(output) }
+        }
+      }
+
+      // 常规异常
       const errorMsg = err instanceof Error ? err.message : String(err)
       if (finalText) {
         subLogger.logAssistantMessage(finalText, modelName)
       }
-      subLogger.finalize()
+      subLogger.finalize('error')
       markSubAgentDone(agentId, finalText, 'error')
 
       const output: AgentErrorOutput = {
@@ -342,6 +459,8 @@ export class DispatchAgentTool implements StreamableTool {
         error: `子 Agent 执行异常: ${errorMsg}`,
       }
     } finally {
+      if (timeoutTimer) clearTimeout(timeoutTimer)
+      clearSubAgentControl(agentId)
       ctx.signal?.removeEventListener('abort', onParentAbort)
       sessionProvider.dispose?.()
     }
@@ -363,25 +482,37 @@ function buildSubRegistry(parentRegistry: ToolRegistry, toolPolicy: ToolPolicy):
   }
 }
 
+/** 后台执行参数 */
+interface BackgroundRunOptions {
+  subLoop: AgentLoop
+  initialMessages: import('@core/types.js').Message[]
+  agentId: string
+  agentName: string
+  agentType: string
+  description: string
+  subLogger: SessionLogger
+  modelName: string
+  maxTurns: number
+  parentSignal: AbortSignal | undefined
+  sessionProvider?: import('@providers/provider.js').LLMProvider
+  cleanup?: () => void
+  timeoutTimer?: ReturnType<typeof setTimeout>
+}
+
 /**
  * 后台执行子 AgentLoop（fire-and-forget）。
  * 事件双写到 store + JSONL，通过 eventBus 广播进度。
+ * 支持优雅停止 + 宽限期强制中断，区分 Ctrl+C 与 stop。
  */
-function runSubAgentInBackground(
-  subLoop: AgentLoop,
-  initialMessages: import('@core/types.js').Message[],
-  agentId: string,
-  agentName: string,
-  agentType: string,
-  description: string,
-  subLogger: SessionLogger,
-  modelName: string,
-  maxTurns: number,
-  sessionProvider?: import('@providers/provider.js').LLMProvider,
-  cleanup?: () => void,
-): void {
+function runSubAgentInBackground(opts: BackgroundRunOptions): void {
+  const {
+    subLoop, initialMessages, agentId, agentName, agentType,
+    description, subLogger, modelName, maxTurns, parentSignal,
+    sessionProvider, cleanup, timeoutTimer,
+  } = opts
   let finalText = ''
   let currentTurn = 0
+  let wasStoppedByCheckpoint = false
 
   void (async () => {
     try {
@@ -433,13 +564,42 @@ function runSubAgentInBackground(
             eventBus.emit({ type: 'subagent_event', agentId, detail: { kind: 'error', error: event.error } })
             break
 
+          case 'done':
+            if (event.reason === 'stopped') wasStoppedByCheckpoint = true
+            break
+
           default:
             break
         }
       }
 
+      // 循环退出 — 区分"正常完成" vs "优雅停止"
+      const state = getSubAgent(agentId)
+      if (wasStoppedByCheckpoint && state?.stopRequest) {
+        const report = buildStopReport(state, finalText, currentTurn, 'graceful')
+        state.stopReport = report
+        subLogger.logLifecycle('stopped', {
+          resolution: 'graceful',
+          source: state.stopRequest.source,
+          reason: state.stopRequest.reason,
+          turn: currentTurn, maxTurns,
+        })
+        subLogger.logAssistantMessage(finalText || '(stopped)', modelName)
+        subLogger.finalize('stopped')
+        markSubAgentDone(agentId, finalText, 'stopped')
+
+        eventBus.emit({
+          type: 'subagent_done',
+          agentId, name: agentName, description,
+          success: true,
+          output: JSON.stringify({ status: 'stopped', ...report }),
+        })
+        return
+      }
+
+      // 正常完成
       subLogger.logAssistantMessage(finalText || '(no text output)', modelName)
-      subLogger.finalize()
+      subLogger.finalize('done')
       markSubAgentDone(agentId, finalText, 'done')
 
       eventBus.emit({
@@ -451,11 +611,43 @@ function runSubAgentInBackground(
         output: finalText,
       })
     } catch (err) {
+      const state = getSubAgent(agentId)
+
+      // 区分 abort 来源：宽限期超时 vs 父 Agent Ctrl+C
+      if (isAbortError(err) && state?.stopRequest) {
+        const fromParentAbort = parentSignal?.aborted === true
+        if (!fromParentAbort) {
+          // 宽限期超时强制中断
+          const report = buildStopReport(state, finalText, currentTurn, 'forced')
+          state.stopReport = report
+          subLogger.logLifecycle('stopped', {
+            resolution: 'forced',
+            source: state.stopRequest.source,
+            reason: state.stopRequest.reason,
+            turn: currentTurn, maxTurns,
+          })
+          if (finalText) {
+            subLogger.logAssistantMessage(finalText, modelName)
+          }
+          subLogger.finalize('stopped')
+          markSubAgentDone(agentId, finalText, 'stopped')
+
+          eventBus.emit({
+            type: 'subagent_done',
+            agentId, name: agentName, description,
+            success: true,
+            output: JSON.stringify({ status: 'stopped', ...report }),
+          })
+          return
+        }
+      }
+
+      // 常规异常
       const errorMsg = err instanceof Error ? err.message : String(err)
       if (finalText) {
         subLogger.logAssistantMessage(finalText, modelName)
       }
-      subLogger.finalize()
+      subLogger.finalize('error')
       markSubAgentDone(agentId, finalText, 'error')
 
       eventBus.emit({
@@ -467,6 +659,8 @@ function runSubAgentInBackground(
         output: errorMsg,
       })
     } finally {
+      if (timeoutTimer) clearTimeout(timeoutTimer)
+      clearSubAgentControl(agentId)
       cleanup?.()
       sessionProvider?.dispose?.()
     }
