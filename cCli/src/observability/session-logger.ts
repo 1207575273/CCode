@@ -136,6 +136,8 @@ export class SessionLogger {
           success: event.success,
           ...(event.resultSummary !== undefined ? { resultSummary: event.resultSummary } : {}),
           ...(event.resultFull !== undefined ? { resultFull: event.resultFull } : {}),
+          // dispatch_agent 关联子 Agent ID（结构化字段，避免前端正则提取）
+          ...(event.meta?.type === 'dispatch-agent' ? { agentId: event.meta.agentId } : {}),
         })
         break
 

@@ -86,11 +86,15 @@ interface Props {
   subAgents?: Map<string, SubAgentInfo>
 }
 
-/** 从 dispatch_agent 的 resultSummary 中提取 agentId */
-function extractAgentId(resultSummary?: string): string | null {
-  if (!resultSummary) return null
-  const match = resultSummary.match(/agentId:\s*([a-f0-9]+)/)
-  return match?.[1] ?? null
+/** 从 dispatch_agent 的输出文本中提取 agentId（降级方案，优先使用结构化 agentId 字段） */
+function extractAgentId(text?: string): string | null {
+  if (!text) return null
+  // JSON 格式："agentId":"abc123def456789"
+  const jsonMatch = text.match(/"agentId"\s*:\s*"([a-f0-9]+)"/)
+  if (jsonMatch?.[1]) return jsonMatch[1]
+  // 旧格式兼容：agentId: abc123def456789
+  const plainMatch = text.match(/agentId:\s*([a-f0-9]+)/)
+  return plainMatch?.[1] ?? null
 }
 
 export function ToolStatus({ events, subAgents }: Props) {
@@ -98,8 +102,10 @@ export function ToolStatus({ events, subAgents }: Props) {
   return (
     <div className="py-1 space-y-1">
       {events.map(e => {
-        // dispatch_agent 工具：尝试匹配关联的 SubAgentCard
-        const agentId = e.toolName === 'dispatch_agent' ? extractAgentId(e.resultSummary) : null
+        // dispatch_agent 工具：优先结构化 agentId，降级到正则提取
+        const agentId = e.toolName === 'dispatch_agent'
+          ? (e.agentId ?? extractAgentId(e.resultFull ?? e.resultSummary))
+          : null
         const agentInfo = agentId && subAgents ? subAgents.get(agentId) : undefined
 
         return (

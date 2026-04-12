@@ -196,16 +196,19 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
         }])
         break
       case 'tool_done': {
+        // 从 meta 中提取结构化 agentId（dispatch_agent 专用）
+        const toolAgentId = event.meta?.type === 'dispatch-agent' ? event.meta.agentId : undefined
         const completed: ToolEvent = {
           toolCallId: event.toolCallId, toolName: event.toolName, args: {},
           status: 'done', durationMs: event.durationMs, success: event.success, resultSummary: event.resultSummary,
+          ...(toolAgentId ? { agentId: toolAgentId } : {}),
         }
         setToolEvents(prev => {
           const running = prev.find(e => e.toolCallId === event.toolCallId)
           if (running) completed.args = running.args
           turnToolsRef.current.push(completed)
           return prev.map(e => e.toolCallId === event.toolCallId
-            ? { ...e, status: 'done' as const, durationMs: event.durationMs, success: event.success, resultSummary: event.resultSummary }
+            ? { ...e, status: 'done' as const, durationMs: event.durationMs, success: event.success, resultSummary: event.resultSummary, ...(toolAgentId ? { agentId: toolAgentId } : {}) }
             : e)
         })
         break
@@ -487,7 +490,7 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
 
       <MemoryPanel open={memoryPanelOpen} onClose={() => setMemoryPanelOpen(false)} />
 
-      <SubAgentDrawer agents={subAgents} />
+      <SubAgentDrawer agents={subAgents} onStop={(agentId) => send({ type: 'subagent_stop', agentId, reason: 'user' })} />
     </div>
   )
 }

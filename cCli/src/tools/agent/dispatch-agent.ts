@@ -285,7 +285,7 @@ export class DispatchAgentTool implements StreamableTool {
         prompt,
         description,
       }
-      return { success: true, output: JSON.stringify(output) }
+      return { success: true, output: JSON.stringify(output), meta: { type: 'dispatch-agent', agentId, agentName, agentType, status: 'async_launched' } }
     }
 
     // ── 前台模式 ──
@@ -383,7 +383,7 @@ export class DispatchAgentTool implements StreamableTool {
           partialResult: finalText,
           ...(report.tokenUsed ? { tokenUsed: report.tokenUsed } : {}),
         }
-        return { success: true, output: JSON.stringify(output) }
+        return { success: true, output: JSON.stringify(output), meta: { type: 'dispatch-agent', agentId, agentName, agentType, status: 'stopped' } }
       }
 
       // 正常完成
@@ -400,7 +400,7 @@ export class DispatchAgentTool implements StreamableTool {
         prompt,
         result: finalText,
       }
-      return { success: true, output: JSON.stringify(output) }
+      return { success: true, output: JSON.stringify(output), meta: { type: 'dispatch-agent', agentId, agentName, agentType, status: 'completed' } }
 
     } catch (err) {
       const state = getSubAgent(agentId)
@@ -434,7 +434,7 @@ export class DispatchAgentTool implements StreamableTool {
             partialResult: finalText,
             ...(report.tokenUsed ? { tokenUsed: report.tokenUsed } : {}),
           }
-          return { success: true, output: JSON.stringify(output) }
+          return { success: true, output: JSON.stringify(output), meta: { type: 'dispatch-agent', agentId, agentName, agentType, status: 'stopped' } }
         }
       }
 

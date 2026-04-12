@@ -126,6 +126,8 @@ export class SessionStore {
           toolCallId: event.toolCallId,
           toolName: event.toolName,
           args: toolStartArgs.get(event.toolCallId) ?? {},
+          // dispatch_agent 关联子 Agent ID
+          ...(event.agentId ? { agentId: event.agentId } : {}),
         }
         if (event.durationMs != null) toolEvt.durationMs = event.durationMs
         if (event.success != null) toolEvt.success = event.success

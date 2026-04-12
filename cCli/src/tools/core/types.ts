@@ -52,6 +52,7 @@ export type ToolResultMeta =
   | { type: 'git-stash'; action: string }
   | { type: 'git-tag'; name: string; action: 'create' | 'delete' | 'list' }
   | { type: 'git-reset'; ref: string; mode: string }
+  | { type: 'dispatch-agent'; agentId: string; agentName: string; agentType: string; status: string }
 
 export interface Tool {
   readonly name: string

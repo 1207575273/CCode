@@ -43,7 +43,7 @@ export type ServerEvent =
   | { type: 'session_init'; sessionId: string; provider?: string; model?: string; messages: SessionMessage[]; subagents?: SubagentSnapshot[]; cliConnected?: boolean; activeSessionId?: string }
   | { type: 'text'; text: string }
   | { type: 'tool_start'; toolName: string; toolCallId: string; args: Record<string, unknown> }
-  | { type: 'tool_done'; toolName: string; toolCallId: string; durationMs: number; success: boolean; resultSummary?: string }
+  | { type: 'tool_done'; toolName: string; toolCallId: string; durationMs: number; success: boolean; resultSummary?: string; meta?: { type: string; agentId?: string } }
   | { type: 'permission_request'; toolName: string; args: Record<string, unknown> }
   | { type: 'user_question_request'; questions: UserQuestion[] }
   | { type: 'error'; error: string }
@@ -72,7 +72,7 @@ export type ServerEvent =
 /** 客户端发送的消息 */
 export type ClientMessage =
   | { type: 'chat'; text: string; imageIds?: string[] }
-  | { type: 'permission'; allow: boolean }
+  | { type: 'permission'; allow: boolean; always?: boolean }
   | { type: 'question'; cancelled: boolean; answers?: Record<string, string | string[]> }
   | { type: 'abort' }
   | { type: 'subagent_stop'; agentId: string; reason: string }
@@ -116,6 +116,8 @@ export interface ToolEvent {
   success?: boolean
   resultSummary?: string
   resultFull?: string
+  /** dispatch_agent 关联的子 Agent ID（结构化字段） */
+  agentId?: string
 }
 
 /** SubAgent JSONL 回放快照（session_init 携带） */

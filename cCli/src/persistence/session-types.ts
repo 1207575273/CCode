@@ -140,6 +140,8 @@ export interface SnapshotToolEvent {
   success?: boolean
   resultSummary?: string
   resultFull?: string
+  /** dispatch_agent 关联的子 Agent ID */
+  agentId?: string
 }
 
 export interface SessionSnapshot {

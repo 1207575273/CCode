@@ -129,6 +129,15 @@ function handleBridgeMessage(msg: { type: string; [key: string]: unknown }): voi
       })
       break
     }
+    case 'subagent_stop':
+      eventBus.emit({
+        type: 'subagent_control',
+        agentId: String(msg['agentId'] ?? ''),
+        action: 'stop',
+        reason: String(msg['reason'] ?? 'user'),
+        source: 'web',
+      })
+      break
     case 'config_changed':
       eventBus.emit({
         type: 'config_changed',

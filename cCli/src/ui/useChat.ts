@@ -30,6 +30,7 @@ import type { ToolEvent, SubAgentEvent } from './ToolStatusLine.js'
 import type { ServerInfo } from '@mcp/mcp-manager.js'
 import { sessionStore, generateEventId } from '@persistence/index.js'
 import { getTodos } from '@tools/ext/todo-store.js'
+import { stopAgent } from '@tools/agent/store.js'
 import { PermissionManager } from '@config/permissions.js'
 import { eventBus } from '@core/event-bus.js'
 import { contextTracker } from '@core/context-tracker.js'
@@ -825,6 +826,17 @@ export function useChat(): UseChatReturn {
     })
     return off
   }, [appendSystemMessage])
+
+  /** Web 端停止子 Agent → 调用 stopAgent */
+  useEffect(() => {
+    const off = eventBus.onType('subagent_control', (event) => {
+      if (event.action === 'stop' && event.agentId) {
+        const source = event.source === 'web' ? 'user_web' as const : 'user_cli' as const
+        stopAgent(event.agentId, source, event.reason)
+      }
+    })
+    return off
+  }, [])
 
   return {
     messages,
