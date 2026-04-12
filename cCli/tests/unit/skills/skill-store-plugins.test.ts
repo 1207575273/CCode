@@ -22,9 +22,10 @@ function makeSkillMd(name: string, description: string): string {
 
 /**
  * 根据 fast-glob 的 pattern 参数返回不同结果。
- * 关键识别规则：
+ *
+ * 关键识别规则（使用精确路径前缀匹配，避免 CI 上 cwd 位于 homedir 子目录时误判）：
  * - 包含 'builtin' → 内置 skills
- * - 包含 'plugins' + onlyDirectories → 插件目录发现
+ * - 包含 'plugins' + onlyDirectories → 插件目录发现（区分 user/project）
  * - 包含 'plugins' + 'SKILL.md' → 插件内 skill 文件
  * - 包含 '.ccode/skills' → user/project skills
  */
@@ -36,13 +37,18 @@ function setupFgMock(config: {
   projectPluginDirs?: string[]
   pluginSkillFiles?: Record<string, string[]>  // pluginDir → skill files
 }): void {
+  // 精确路径前缀：homedir()/.ccode/... 而非 includes(homedir())
+  // 解决 CI 上 cwd=/home/runner/work/... 也包含 homedir=/home/runner 的问题
+  const userPluginsPrefix = join(homedir(), '.ccode', 'plugins').replace(/\\/g, '/')
+  const userSkillsPrefix = join(homedir(), '.ccode', 'skills').replace(/\\/g, '/')
+
   mockedFg.mockImplementation(async (pattern: string | string[], options?: Record<string, unknown>) => {
     const p = Array.isArray(pattern) ? pattern[0]! : pattern
     const isOnlyDirs = options?.['onlyDirectories'] === true
 
     // 插件目录发现
     if (isOnlyDirs && p.includes('plugins')) {
-      if (p.includes(homedir().replace(/\\/g, '/'))) {
+      if (p.startsWith(userPluginsPrefix)) {
         return config.userPluginDirs ?? []
       }
       return config.projectPluginDirs ?? []
@@ -63,8 +69,8 @@ function setupFgMock(config: {
       return []
     }
 
-    // 用户级 skills
-    if (p.includes('.ccode/skills') && p.includes(homedir().replace(/\\/g, '/'))) {
+    // 用户级 skills（精确匹配 homedir/.ccode/skills 前缀）
+    if (p.includes('.ccode/skills') && p.startsWith(userSkillsPrefix)) {
       return config.userSkillFiles ?? []
     }
 
