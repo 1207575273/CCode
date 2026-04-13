@@ -32,7 +32,10 @@ function timeAgo(isoString: string): string {
 function truncate(text: string, maxLen: number): string {
   return text.length > maxLen ? text.slice(0, maxLen) + '…' : text
 }
-const LEFT_PANEL_WIDTH = 28
+const LEFT_PANEL_WIDTH = 38
+
+// 外层边框开关：设为 true 显示圆角边框，false 无边框
+const SHOW_OUTER_BORDER = true
 
 // 像素风格机器人（块元素字符 U+2580 系列）
 const ROBOT_ART = [
@@ -43,8 +46,8 @@ const ROBOT_ART = [
   '   ██  ██   ',
 ]
 
-// 竖分隔线：固定行数覆盖左栏最大高度（标题1 + 机器人5 + 信息3 + 间距2 = 11）
-const DIVIDER_LINES = Array.from({ length: 11 }, (_, i) => i)
+// 竖分隔线：固定行数覆盖左栏最大高度（标题1 + 机器人5 + 作者1 + GitHub1 + 信息3 + 间距4 = 15）
+const DIVIDER_LINES = Array.from({ length: 15 }, (_, i) => i)
 
 interface WelcomeScreenProps {
   /** 当前激活的模型名，从 useChat.currentModel 传入 */
@@ -61,8 +64,7 @@ interface WelcomeScreenProps {
 export function WelcomeScreen({ model, provider, cwd, recentSessions }: WelcomeScreenProps) {
   return (
     <Box
-      borderStyle="round"
-      borderColor="red"
+      {...(SHOW_OUTER_BORDER ? { borderStyle: 'round' as const, borderColor: 'red' } : {})}
       flexDirection="column"
       marginX={1}
     >
@@ -86,9 +88,15 @@ export function WelcomeScreen({ model, provider, cwd, recentSessions }: WelcomeS
               <Text key={line} color="red">{line}</Text>
             ))}
           </Box>
-          <Text color="white">{model}</Text>
-          <Text dimColor>{provider}</Text>
-          <Text dimColor wrap="truncate">{cwd}</Text>
+          <Text dimColor>by codeYang</Text>
+          <Box marginTop={1} flexDirection="column">
+            <Text color="cyan" bold>github.com/1207575273/CCode</Text>
+          </Box>
+          <Box marginTop={1} flexDirection="column">
+            <Text color="white">{model}</Text>
+            <Text dimColor>{provider}</Text>
+            <Text dimColor wrap="truncate">{cwd}</Text>
+          </Box>
         </Box>
 
         {/* 竖分隔线 */}
