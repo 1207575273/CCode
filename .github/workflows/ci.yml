@@ -1,13 +1,18 @@
 # CI Pipeline — 类型检查 + 单元测试 + 构建验证 + Release Notes
 #
+# 分支模型:
+#   - main      — 主开发分支，接受 feat/* 等分支的 PR
+#   - release   — 稳定发布分支，从 main 合入，push 即触发 CI + Release Notes
+#   - feat/*    — 功能开发分支
+#
 # 触发条件:
-#   - release/* 分支 push（发版准备分支）
+#   - release 分支 push（发版）
 #   - v* tag push（打版本标签时）
 #   - 任何分支向 main 的 PR（合并前门控）
 #
 # Release Notes 策略:
-#   - release/* 分支 → 生成 Draft Release（预览，可随时编辑/删除）
-#   - v* tag push    → 正式发布 Release（含 CHANGELOG + git log + 统计）
+#   - release 分支 → 生成 Draft Release（预览，可随时编辑/删除）
+#   - v* tag push  → 正式发布 Release（含 CHANGELOG + git log + 统计）
 #
 # 不包含 npm publish:
 #   npm 发包需要人工确认（版本号、changelog、构建产物检查），
@@ -18,7 +23,7 @@ name: CI
 on:
   push:
     branches:
-      - 'release/**'
+      - release
     tags:
       - 'v*'
   pull_request:
@@ -117,13 +122,13 @@ jobs:
 
       # tag push 或 release 分支：上传构建产物
       - name: Sanitize ref name for artifact
-        if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/')
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/release'
         id: artifact_name
         run: echo "name=ccode-cli-$(echo '${{ github.ref_name }}' | tr '/' '-')" >> "$GITHUB_OUTPUT"
         working-directory: .
 
       - name: Upload build artifacts
-        if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/')
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/release'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.artifact_name.outputs.name }}
@@ -142,7 +147,7 @@ jobs:
     name: Release Notes
     runs-on: ubuntu-latest
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/')
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/release'
     permissions:
       contents: write
 
@@ -159,11 +164,11 @@ jobs:
             echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
             echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           else
-            # release 分支：从分支名提取版本号 release/0.11.0 → 0.11.0
-            BRANCH_VERSION="${GITHUB_REF_NAME#release/}"
+            # release 分支：从 package.json 读取版本号
+            PKG_VERSION=$(node -p "require('./cCli/package.json').version")
             echo "is_tag=false" >> "$GITHUB_OUTPUT"
-            echo "tag=v${BRANCH_VERSION}" >> "$GITHUB_OUTPUT"
-            echo "version=${BRANCH_VERSION}" >> "$GITHUB_OUTPUT"
+            echo "tag=v${PKG_VERSION}" >> "$GITHUB_OUTPUT"
+            echo "version=${PKG_VERSION}" >> "$GITHUB_OUTPUT"
           fi
         working-directory: .
 
