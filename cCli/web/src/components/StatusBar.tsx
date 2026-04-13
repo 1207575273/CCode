@@ -51,9 +51,9 @@ interface StatusBarProps {
 
 /** 进度条色阶：0-60% 绿、60-85% 黄、85%+ 红 */
 function barColorClass(percent: number): string {
-  if (percent >= 85) return 'bg-red-500'
-  if (percent >= 60) return 'bg-yellow-500'
-  return 'bg-green-500'
+  if (percent >= 85) return 'bg-error'
+  if (percent >= 60) return 'bg-warning'
+  return 'bg-success'
 }
 
 /** 格式化字节为 MB/GB，负数兜底为 0MB */
@@ -90,7 +90,7 @@ function formatTokenCount(n: number): string {
 function ProgressBar({ percent, width = 'w-20' }: { percent: number; width?: string }) {
   const clamped = Math.min(100, Math.max(0, percent))
   return (
-    <div className={`${width} h-2.5 bg-gray-700 rounded-sm overflow-hidden inline-flex`}>
+    <div className={`${width} h-2.5 bg-elevated rounded-sm overflow-hidden inline-flex`}>
       <div
         className={`h-full ${barColorClass(clamped)} transition-all duration-300`}
         style={{ width: `${clamped}%` }}
@@ -101,7 +101,7 @@ function ProgressBar({ percent, width = 'w-20' }: { percent: number; width?: str
 
 /** 分隔符 */
 function Sep() {
-  return <span className="text-gray-600">|</span>
+  return <span className="text-txt-muted">|</span>
 }
 
 // ═══════════════════════════════════════════════
@@ -114,15 +114,15 @@ export function StatusBar({ data }: StatusBarProps) {
   const { sys, proc, token, context } = data
 
   return (
-    <div className="px-4 py-1.5 text-xs text-gray-400 font-mono border-t border-gray-800 space-y-1">
+    <div className="px-4 py-1.5 text-xs text-txt-secondary font-mono border-t border-border space-y-1">
       {/* SYS 行：系统整体资源 */}
       <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-gray-500 w-10">SYS</span>
+        <span className="text-txt-secondary w-10">SYS</span>
         <span className="flex items-center gap-1.5">
           <span>MEM</span>
           <ProgressBar percent={sys.memPercent} />
           <span>{Math.round(sys.memPercent)}%</span>
-          <span className="text-gray-500">{formatBytes(sys.memUsedBytes)}/{formatBytes(sys.memTotalBytes)}</span>
+          <span className="text-txt-secondary">{formatBytes(sys.memUsedBytes)}/{formatBytes(sys.memTotalBytes)}</span>
         </span>
         <Sep />
         <span className="flex items-center gap-1.5">
@@ -134,12 +134,12 @@ export function StatusBar({ data }: StatusBarProps) {
 
       {/* PROC 行：进程资源 */}
       <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-gray-500 w-10">PROC</span>
+        <span className="text-txt-secondary w-10">PROC</span>
         <span className="flex items-center gap-1.5">
           <span>MEM</span>
           <ProgressBar percent={proc.memPercent} />
           <span>{Math.round(proc.memPercent)}%</span>
-          <span className="text-gray-500">{formatBytes(proc.memUsedBytes)}</span>
+          <span className="text-txt-secondary">{formatBytes(proc.memUsedBytes)}</span>
         </span>
         <Sep />
         <span className="flex items-center gap-1.5">
@@ -151,7 +151,7 @@ export function StatusBar({ data }: StatusBarProps) {
 
       {/* INFO 行：运行时间 + token + context + cost */}
       <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-gray-500 w-10">INFO</span>
+        <span className="text-txt-secondary w-10">INFO</span>
         <span>⏱ {formatElapsed(proc.elapsedMs)}</span>
         {token && token.callCount > 0 && (
           <>
@@ -163,8 +163,8 @@ export function StatusBar({ data }: StatusBarProps) {
           <>
             <Sep />
             <span className={
-              context.level === 'overflow' || context.level === 'critical' ? 'text-red-400'
-              : context.level === 'warning' ? 'text-yellow-400'
+              context.level === 'overflow' || context.level === 'critical' ? 'text-error'
+              : context.level === 'warning' ? 'text-warning'
               : ''
             }>
               Ctx {(context.usedPercentage * 100).toFixed(0)}%

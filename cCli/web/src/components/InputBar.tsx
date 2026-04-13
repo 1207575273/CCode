@@ -69,7 +69,7 @@ export function InputBar({ onSubmit, disabled }: Props) {
 
   return (
     <div>
-      <div className="flex gap-2 p-4 border-t border-gray-700">
+      <div className="flex gap-2 p-4 border-t border-border">
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}
@@ -78,13 +78,13 @@ export function InputBar({ onSubmit, disabled }: Props) {
           // onPaste={handlePaste}
           placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
           disabled={disabled}
-          className="flex-1 bg-gray-800 text-gray-100 rounded-lg px-4 py-3 resize-none outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500 disabled:opacity-50"
+          className="flex-1 bg-elevated text-txt-primary rounded-lg px-4 py-3 resize-none outline-none focus:border-accent focus:outline-none placeholder-txt-muted disabled:opacity-50"
           rows={2}
         />
         <button
           onClick={handleSubmit}
           disabled={disabled || (!text.trim() && attachments.length === 0)}
-          className="self-end px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50 disabled:hover:bg-blue-600 transition-colors"
+          className="self-end px-6 py-3 bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-50 disabled:hover:bg-accent transition-colors"
         >
           发送
         </button>
@@ -93,12 +93,12 @@ export function InputBar({ onSubmit, disabled }: Props) {
       {/* TODO: 图片附件条暂屏蔽，待多模态策略完成后恢复 */}
       {attachments.length > 0 && (
         <div className="px-4 pb-2 flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-gray-400">📎 {attachments.length} 张附件</span>
+          <span className="text-xs text-txt-secondary">📎 {attachments.length} 张附件</span>
           {attachments.map(att => (
             <div key={att.id} className="relative group">
-              <img src={att.url} alt="附件" className="w-16 h-16 object-cover rounded border border-gray-600" />
+              <img src={att.url} alt="附件" className="w-16 h-16 object-cover rounded border border-border" />
               <button onClick={() => removeAttachment(att.id)}
-                className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-600 text-white text-[10px] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+                className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-error text-white text-[10px] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">×</button>
             </div>
           ))}
         </div>

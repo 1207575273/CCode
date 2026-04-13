@@ -365,10 +365,10 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
 
   return (
     <div className="flex flex-col h-full">
-      <header className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+      <header className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold">CCode</h1>
-          {sessionId && <span className="text-xs text-gray-500 font-mono">{sessionId.slice(0, 8)}</span>}
+          {sessionId && <span className="text-xs text-txt-secondary font-mono">{sessionId.slice(0, 8)}</span>}
         </div>
         <div className="flex items-center gap-2">
           <span className={`text-xs px-2 py-1 rounded ${connected ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}`}>
@@ -384,7 +384,7 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
             className={`text-xs px-2 py-1 rounded transition-colors ${
               memoryPanelOpen
                 ? 'bg-purple-900 text-purple-300'
-                : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                : 'bg-elevated text-txt-secondary hover:bg-elevated'
             }`}
             title="记忆全景"
           >
@@ -396,7 +396,7 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
                 fetch('/api/bridge/stop', { method: 'POST' }).catch(() => {})
               }
             }}
-            className="text-xs px-2 py-1 rounded bg-red-900/50 text-red-400 hover:bg-red-800 transition-colors"
+            className="text-xs px-2 py-1 rounded bg-red-900/50 text-error hover:bg-red-800 transition-colors"
             title="关闭 Bridge Server"
           >
             关闭 Bridge
@@ -430,7 +430,7 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
         {/* 思考中动效 */}
         {thinking && !streaming && (
           <div className="flex justify-start mb-3">
-            <div className="max-w-[80%] rounded-lg px-4 py-3 bg-gray-800 text-gray-100">
+            <div className="max-w-[80%] rounded-lg px-4 py-3 bg-elevated text-txt-primary">
               <ThinkingDots />
             </div>
           </div>
@@ -439,7 +439,7 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
         {/* 流式输出 */}
         {streaming && (
           <div className="flex justify-start mb-3">
-            <div className="max-w-[80%] rounded-lg px-4 py-3 bg-gray-800 text-gray-100">
+            <div className="max-w-[80%] rounded-lg px-4 py-3 bg-elevated text-txt-primary">
               <p className="whitespace-pre-wrap text-sm">{streaming}</p>
             </div>
           </div>
@@ -448,13 +448,13 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
         {/* Compact 进行中动效 */}
         {compacting && (
           <div className="flex justify-start mb-3">
-            <div className="max-w-[80%] rounded-lg px-4 py-3 bg-gray-800 border border-blue-500/30">
-              <div className="flex items-center gap-2 text-sm text-blue-300">
+            <div className="max-w-[80%] rounded-lg px-4 py-3 bg-elevated border border-blue-500/30">
+              <div className="flex items-center gap-2 text-sm text-accent">
                 <span className="animate-spin">⟳</span>
                 <span>{compacting.message}</span>
               </div>
-              <div className="text-xs text-gray-500 mt-1">
-                Strategy: <span className="text-blue-400">{compacting.strategy}</span>
+              <div className="text-xs text-txt-secondary mt-1">
+                Strategy: <span className="text-accent">{compacting.strategy}</span>
               </div>
             </div>
           </div>
@@ -507,7 +507,7 @@ function ThinkingDots() {
   }, [])
 
   return (
-    <div className="flex items-center gap-1.5 text-sm text-gray-400">
+    <div className="flex items-center gap-1.5 text-sm text-txt-secondary">
       <span className="font-mono text-cyan-400">{DOTS_FRAMES[frame]}</span>
       <span>思考中...</span>
     </div>

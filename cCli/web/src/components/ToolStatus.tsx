@@ -147,9 +147,9 @@ function ToolStatusItem({ event }: { event: ToolEvent }) {
   // 状态图标和颜色
   const icon = isRunning ? '⟳' : event.success ? '✓' : '✗'
   const iconClass = isRunning
-    ? 'animate-pulse text-yellow-400'
-    : event.success ? 'text-green-400' : 'text-red-400'
-  const textClass = isRunning ? 'text-gray-400' : event.success ? 'text-green-400/80' : 'text-red-400/80'
+    ? 'animate-pulse text-warning'
+    : event.success ? 'text-success' : 'text-error'
+  const textClass = isRunning ? 'text-txt-secondary' : event.success ? 'text-success/80' : 'text-error/80'
 
   // 输出内容：优先使用 resultFull（Web 完整展示），fallback 到 resultSummary（旧数据兼容）
   const outputContent = event.resultFull ?? event.resultSummary ?? ''
@@ -171,30 +171,30 @@ function ToolStatusItem({ event }: { event: ToolEvent }) {
       {/* 头部行 */}
       <div
         onClick={hasOutput ? toggle : undefined}
-        className={`flex items-center gap-1.5 py-0.5 ${hasOutput ? 'cursor-pointer hover:bg-gray-800/30 rounded px-1 -mx-1' : ''}`}
+        className={`flex items-center gap-1.5 py-0.5 ${hasOutput ? 'cursor-pointer hover:bg-elevated/30 rounded px-1 -mx-1' : ''}`}
       >
         <span className={iconClass}>{icon}</span>
         <span className={`font-mono ${textClass}`}>
           {name}
         </span>
-        {summary && <span className="text-gray-500 font-mono">({summary})</span>}
-        {dur && <span className="text-gray-600 ml-1">{dur}</span>}
+        {summary && <span className="text-txt-secondary font-mono">({summary})</span>}
+        {dur && <span className="text-txt-muted ml-1">{dur}</span>}
         {hasOutput && (
-          <span className="text-gray-600 ml-1 text-xs">{expanded ? '▼' : '▶'}</span>
+          <span className="text-txt-muted ml-1 text-xs">{expanded ? '▼' : '▶'}</span>
         )}
       </div>
 
       {/* 输出子块 */}
       {hasOutput && expanded && (
-        <div className="ml-5 mt-0.5 border-l-2 border-gray-700 pl-2 mb-1">
+        <div className="ml-5 mt-0.5 border-l-2 border-border pl-2 mb-1">
           {hasFull ? (
             <>
               {/* 完整内容：滚动容器 */}
-              <pre className="text-xs text-gray-400 font-mono whitespace-pre-wrap leading-relaxed max-h-[400px] overflow-y-auto bg-gray-900/50 rounded p-2">
+              <pre className="text-xs text-txt-secondary font-mono whitespace-pre-wrap leading-relaxed max-h-[400px] overflow-y-auto bg-surface/50 rounded p-2">
                 {fullDisplay}
               </pre>
               {charCount > 500 && (
-                <span className="text-xs text-gray-600 mt-0.5 block">
+                <span className="text-xs text-txt-muted mt-0.5 block">
                   {charCount.toLocaleString()} chars · {outputLines.length} lines
                 </span>
               )}
@@ -203,12 +203,12 @@ function ToolStatusItem({ event }: { event: ToolEvent }) {
             <>
               {/* 旧数据 fallback：摘要预览 */}
               {previewLines.map((line, i) => (
-                <pre key={i} className="text-xs text-gray-500 font-mono whitespace-pre-wrap leading-relaxed">
+                <pre key={i} className="text-xs text-txt-secondary font-mono whitespace-pre-wrap leading-relaxed">
                   {line}
                 </pre>
               ))}
               {remaining > 0 && (
-                <span className="text-xs text-gray-600">... +{remaining} lines</span>
+                <span className="text-xs text-txt-muted">... +{remaining} lines</span>
               )}
             </>
           )}

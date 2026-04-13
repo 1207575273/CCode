@@ -5,19 +5,77 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Markdown 表格优化 — prose 默认表格太宽 */
+/* ═══════════════════════════════════════
+   双主题 CSS 变量
+   ═══════════════════════════════════════ */
+
+@layer base {
+  /* 亮色主题（Alabaster Pure） */
+  :root {
+    --bg-base:      #ffffff;
+    --bg-surface:   #f6f8fa;
+    --bg-elevated:  #eaeef2;
+    --text-primary:   #1f2328;
+    --text-secondary: #656d76;
+    --text-muted:     #b1bac4;
+    --accent:         #0969da;
+    --accent-hover:   #0550ae;
+    --accent-subtle:  rgba(9,105,218,0.08);
+    --success:  #1a7f37;
+    --warning:  #9a6700;
+    --error:    #d1242f;
+    --border:         #d0d7de;
+    --border-subtle:  #eaeef2;
+  }
+
+  /* 暗色主题（Void Space） */
+  .dark {
+    --bg-base:      #0d1117;
+    --bg-surface:   #161b22;
+    --bg-elevated:  #21262d;
+    --text-primary:   #c9d1d9;
+    --text-secondary: #8b949e;
+    --text-muted:     #484f58;
+    --accent:         #58a6ff;
+    --accent-hover:   #79c0ff;
+    --accent-subtle:  rgba(88,166,255,0.1);
+    --success:  #3fb950;
+    --warning:  #d29922;
+    --error:    #f85149;
+    --border:         #30363d;
+    --border-subtle:  #21262d;
+  }
+
+  /* 全局基础样式 */
+  html {
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI Variable", sans-serif;
+  }
+}
+
+/* ═══════════════════════════════════════
+   Markdown prose 定制
+   ═══════════════════════════════════════ */
+
+/* 表格优化 */
 .prose table {
   @apply text-sm;
 }
 .prose th,
 .prose td {
-  @apply px-3 py-1.5 border border-gray-700;
+  @apply px-3 py-1.5;
+  border: 1px solid var(--border);
 }
 .prose thead th {
-  @apply bg-gray-800/50 font-medium;
+  background: var(--bg-elevated);
+  @apply font-medium;
 }
 
-/* 代码块圆角 + 内边距 */
+/* 代码块 */
 .prose pre {
   @apply rounded-lg;
 }
@@ -25,16 +83,21 @@
   @apply text-sm;
 }
 
-/* 内联代码样式 */
+/* 内联代码 */
 .prose :not(pre) > code {
-  @apply bg-gray-700/50 px-1.5 py-0.5 rounded text-gray-200;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  @apply px-1.5 py-0.5 rounded;
 }
 .prose :not(pre) > code::before,
 .prose :not(pre) > code::after {
   content: none;
 }
 
-/* 回放消息淡入动画 */
+/* ═══════════════════════════════════════
+   动画
+   ═══════════════════════════════════════ */
+
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }

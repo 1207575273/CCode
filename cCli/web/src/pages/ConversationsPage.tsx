@@ -79,13 +79,13 @@ function ConversationList() {
     )
   }, [sessions, search])
 
-  if (error) return <div className="p-6 text-red-400">加载失败: {error}</div>
+  if (error) return <div className="p-6 text-error">加载失败: {error}</div>
 
   return (
     <div className="p-6 max-w-4xl">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold">对话历史</h2>
-        <span className="text-xs text-gray-500">{filtered.length} / {sessions.length} 条</span>
+        <span className="text-xs text-txt-secondary">{filtered.length} / {sessions.length} 条</span>
       </div>
 
       {/* 搜索框 */}
@@ -93,31 +93,31 @@ function ConversationList() {
         value={search}
         onChange={e => setSearch(e.target.value)}
         placeholder="搜索 sessionId / 消息内容 / provider..."
-        className="w-full bg-gray-800 text-sm rounded-lg px-4 py-2.5 mb-4 outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-500"
+        className="w-full bg-elevated text-sm rounded-lg px-4 py-2.5 mb-4 outline-none focus:ring-1 focus:border-accent placeholder-txt-muted"
       />
 
       {filtered.length === 0 ? (
-        <p className="text-gray-500">{search ? '无匹配结果' : '暂无会话记录'}</p>
+        <p className="text-txt-secondary">{search ? '无匹配结果' : '暂无会话记录'}</p>
       ) : (
         <div className="space-y-2">
           {filtered.map(s => (
             <div
               key={s.sessionId}
-              className="flex items-center justify-between p-4 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
+              className="flex items-center justify-between p-4 bg-elevated rounded-lg hover:bg-elevated transition-colors"
             >
               {/* 左侧：点击跳转到回放详情 */}
               <Link to={`/conversations/${s.sessionId}`} className="min-w-0 flex-1 mr-4">
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-sm text-gray-400">{s.sessionId.slice(0, 12)}</span>
-                  {s.provider && <span className="text-xs bg-gray-700 px-1.5 py-0.5 rounded text-gray-400">{s.provider}</span>}
+                  <span className="font-mono text-sm text-txt-secondary">{s.sessionId.slice(0, 12)}</span>
+                  {s.provider && <span className="text-xs bg-elevated px-1.5 py-0.5 rounded text-txt-secondary">{s.provider}</span>}
                 </div>
                 {s.firstMessage && (
-                  <p className="text-sm text-gray-300 mt-1 truncate">{s.firstMessage}</p>
+                  <p className="text-sm text-txt-primary mt-1 truncate">{s.firstMessage}</p>
                 )}
               </Link>
               {/* 右侧：时间 + 恢复按钮 */}
               <div className="flex items-center gap-3 shrink-0">
-                <div className="text-xs text-gray-500">{new Date(s.updatedAt).toLocaleString()}</div>
+                <div className="text-xs text-txt-secondary">{new Date(s.updatedAt).toLocaleString()}</div>
                 <button
                   onClick={async () => {
                     setResumingId(s.sessionId)
@@ -130,7 +130,7 @@ function ConversationList() {
                     }
                   }}
                   disabled={resumingId === s.sessionId}
-                  className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50 whitespace-nowrap"
+                  className="px-3 py-1.5 text-xs bg-accent text-white rounded hover:bg-accent-hover disabled:opacity-50 whitespace-nowrap"
                   title="恢复此对话继续聊天"
                 >
                   {resumingId === s.sessionId ? '恢复中...' : '恢复'}
@@ -254,8 +254,8 @@ function ConversationDetail({ sessionId }: { sessionId: string }) {
   // 清理
   useEffect(() => () => clearTimeout(timerRef.current), [])
 
-  if (error) return <div className="p-6 text-red-400">加载失败: {error}</div>
-  if (!detail) return <div className="p-6 text-gray-500">加载中...</div>
+  if (error) return <div className="p-6 text-error">加载失败: {error}</div>
+  if (!detail) return <div className="p-6 text-txt-secondary">加载中...</div>
 
   const allVisible = visibleCount >= messages.length
   const progress = messages.length > 0 ? Math.round((visibleCount / messages.length) * 100) : 0
@@ -264,21 +264,21 @@ function ConversationDetail({ sessionId }: { sessionId: string }) {
     <div className="p-6 max-w-4xl">
       {/* 头部 */}
       <div className="flex items-center gap-3 mb-4">
-        <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-gray-200">&larr; 返回</button>
+        <button onClick={() => navigate(-1)} className="text-txt-secondary hover:text-txt-primary">&larr; 返回</button>
         <h2 className="text-xl font-bold">会话回放</h2>
-        <span className="text-xs bg-gray-700 px-2 py-0.5 rounded text-gray-400">{detail.model}</span>
-        <span className="text-xs text-gray-500 font-mono">{sessionId.slice(0, 8)}</span>
+        <span className="text-xs bg-elevated px-2 py-0.5 rounded text-txt-secondary">{detail.model}</span>
+        <span className="text-xs text-txt-secondary font-mono">{sessionId.slice(0, 8)}</span>
       </div>
 
       {/* 回放控制栏 */}
-      <div className="flex items-center gap-3 mb-4 p-3 bg-gray-800 rounded-lg">
+      <div className="flex items-center gap-3 mb-4 p-3 bg-elevated rounded-lg">
         {/* 播放/暂停 */}
         <button
           onClick={() => {
             if (allVisible) { setVisibleCount(0); setIsPlaying(true) }
             else setIsPlaying(!isPlaying)
           }}
-          className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-500"
+          className="px-3 py-1 bg-accent text-white text-sm rounded hover:bg-accent-hover"
         >
           {allVisible ? '重播' : isPlaying ? '暂停' : '播放'}
         </button>
@@ -287,7 +287,7 @@ function ConversationDetail({ sessionId }: { sessionId: string }) {
         {!allVisible && (
           <button
             onClick={() => { setVisibleCount(messages.length); setIsPlaying(false) }}
-            className="px-3 py-1 bg-gray-700 text-gray-300 text-sm rounded hover:bg-gray-600"
+            className="px-3 py-1 bg-elevated text-txt-primary text-sm rounded hover:bg-elevated"
           >
             显示全部
           </button>
@@ -295,10 +295,10 @@ function ConversationDetail({ sessionId }: { sessionId: string }) {
 
         {/* 速度选择 */}
         <div className="flex items-center gap-1 ml-2">
-          <span className="text-xs text-gray-500">速度:</span>
+          <span className="text-xs text-txt-secondary">速度:</span>
           {SPEED_OPTIONS.map((opt, i) => (
             <button key={opt.label} onClick={() => setSpeedIdx(i)}
-              className={`px-2 py-0.5 text-xs rounded ${i === speedIdx ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
+              className={`px-2 py-0.5 text-xs rounded ${i === speedIdx ? 'bg-accent text-white' : 'bg-elevated text-txt-secondary hover:bg-elevated'}`}
             >
               {opt.label}
             </button>
@@ -306,7 +306,7 @@ function ConversationDetail({ sessionId }: { sessionId: string }) {
         </div>
 
         {/* 进度 */}
-        <span className="text-xs text-gray-500 ml-auto">{visibleCount} / {messages.length} ({progress}%)</span>
+        <span className="text-xs text-txt-secondary ml-auto">{visibleCount} / {messages.length} ({progress}%)</span>
 
         {/* 恢复对话：跳转到实时聊天继续 */}
         <button
@@ -316,7 +316,7 @@ function ConversationDetail({ sessionId }: { sessionId: string }) {
               navigate(`/session/${sessionId}`)
             } catch (err) { console.warn('[Conversations] 恢复对话失败:', err) }
           }}
-          className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-500 whitespace-nowrap"
+          className="px-3 py-1.5 bg-success text-white text-sm rounded hover:bg-success whitespace-nowrap"
           title="恢复此对话，跳转到实时聊天继续提问"
         >
           恢复对话
@@ -331,7 +331,7 @@ function ConversationDetail({ sessionId }: { sessionId: string }) {
           </div>
         ))}
         {allVisible && messages.length === 0 && (
-          <p className="text-gray-500 text-sm">空会话（无消息）</p>
+          <p className="text-txt-secondary text-sm">空会话（无消息）</p>
         )}
         <div ref={bottomRef} />
       </div>

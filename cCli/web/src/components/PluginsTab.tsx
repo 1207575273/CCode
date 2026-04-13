@@ -35,7 +35,7 @@ export function PluginsTab() {
   return (
     <div className="space-y-4">
       {/* 子 Tab 切换 */}
-      <div className="flex gap-1 border-b border-gray-700">
+      <div className="flex gap-1 border-b border-border">
         <SubTabButton active={subTab === 'installed'} onClick={() => setSubTab('installed')}>
           已安装
         </SubTabButton>
@@ -60,8 +60,8 @@ function SubTabButton({ active, onClick, children }: { active: boolean; onClick:
       onClick={onClick}
       className={`px-3 py-1.5 text-sm border-b-2 transition-colors ${
         active
-          ? 'border-blue-500 text-blue-400'
-          : 'border-transparent text-gray-500 hover:text-gray-300'
+          ? 'border-blue-500 text-accent'
+          : 'border-transparent text-txt-secondary hover:text-txt-primary'
       }`}
     >
       {children}
@@ -96,26 +96,26 @@ function InstalledPanel() {
   return (
     <div className="space-y-2">
       {plugins.length === 0 ? (
-        <p className="text-gray-500 text-sm">暂无已安装插件。可从 "Claude Code 导入" 或 "Skills 市场" 添加。</p>
+        <p className="text-txt-secondary text-sm">暂无已安装插件。可从 "Claude Code 导入" 或 "Skills 市场" 添加。</p>
       ) : (
         plugins.map(p => (
-          <div key={p.name} className="bg-gray-800 rounded-lg p-4">
+          <div key={p.name} className="bg-elevated rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <span className="font-medium">{p.name}</span>
-                <span className="text-xs text-gray-500">v{p.version}</span>
+                <span className="text-xs text-txt-secondary">v{p.version}</span>
               </div>
-              <button onClick={() => handleDelete(p.name)} className="text-red-400 hover:text-red-300 text-xs">删除</button>
+              <button onClick={() => handleDelete(p.name)} className="text-error hover:text-red-300 text-xs">删除</button>
             </div>
-            {p.description && <p className="text-sm text-gray-400 mb-2">{p.description}</p>}
-            <div className="flex gap-4 text-xs text-gray-500">
+            {p.description && <p className="text-sm text-txt-secondary mb-2">{p.description}</p>}
+            <div className="flex gap-4 text-xs text-txt-secondary">
               <span>Skills: {p.skillCount} 个</span>
               <span>Hooks: {p.hasHooks ? '有' : '无'}</span>
             </div>
           </div>
         ))
       )}
-      {error && <p className="text-red-400 text-sm">{error}</p>}
+      {error && <p className="text-error text-sm">{error}</p>}
     </div>
   )
 }
@@ -169,38 +169,38 @@ function ClaudeImportPanel() {
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-gray-400">检测本机 Claude Code 已安装的插件，一键导入到 cCli。</p>
+      <p className="text-sm text-txt-secondary">检测本机 Claude Code 已安装的插件，一键导入到 cCli。</p>
 
       {claudePlugins.some(p => !p.alreadyImported) && (
         <button onClick={handleImportAll} disabled={!!importing}
-          className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-500 disabled:opacity-50">
+          className="px-3 py-1.5 bg-success text-white text-sm rounded hover:bg-success disabled:opacity-50">
           全部导入
         </button>
       )}
 
       {claudePlugins.length === 0 ? (
-        <p className="text-gray-500 text-sm">未检测到 Claude Code 已安装的插件</p>
+        <p className="text-txt-secondary text-sm">未检测到 Claude Code 已安装的插件</p>
       ) : (
         <div className="space-y-2">
           {claudePlugins.map(p => {
             const isImporting = importing === p.name
             const isDone = importDone.has(p.name) || p.alreadyImported
             return (
-              <div key={p.name} className={`flex items-center justify-between p-3 bg-gray-800 rounded-lg transition-colors ${isImporting ? 'ring-1 ring-blue-500/50' : ''} ${isDone ? 'opacity-70' : ''}`}>
+              <div key={p.name} className={`flex items-center justify-between p-3 bg-elevated rounded-lg transition-colors ${isImporting ? 'ring-1 ring-blue-500/50' : ''} ${isDone ? 'opacity-70' : ''}`}>
                 <div className="flex items-center gap-2">
-                  {isImporting && <span className="animate-spin text-blue-400">⟳</span>}
-                  {isDone && !isImporting && <span className="text-green-400">✓</span>}
+                  {isImporting && <span className="animate-spin text-accent">⟳</span>}
+                  {isDone && !isImporting && <span className="text-success">✓</span>}
                   <span className="text-sm font-mono">{p.name}</span>
-                  <span className="text-xs text-gray-500">v{p.version}</span>
-                  <span className="text-xs text-gray-600">{p.marketplace}</span>
+                  <span className="text-xs text-txt-secondary">v{p.version}</span>
+                  <span className="text-xs text-txt-muted">{p.marketplace}</span>
                 </div>
                 {isImporting ? (
-                  <span className="text-xs text-blue-400 animate-pulse">导入中...</span>
+                  <span className="text-xs text-accent animate-pulse">导入中...</span>
                 ) : isDone ? (
-                  <span className="text-xs text-green-400">已导入</span>
+                  <span className="text-xs text-success">已导入</span>
                 ) : (
                   <button onClick={() => handleImport(p)} disabled={!!importing}
-                    className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-500 disabled:opacity-50">
+                    className="px-2 py-1 bg-accent text-white text-xs rounded hover:bg-accent-hover disabled:opacity-50">
                     导入
                   </button>
                 )}
@@ -209,7 +209,7 @@ function ClaudeImportPanel() {
           })}
         </div>
       )}
-      {error && <p className="text-red-400 text-sm">{error}</p>}
+      {error && <p className="text-error text-sm">{error}</p>}
     </div>
   )
 }
@@ -293,10 +293,10 @@ function MarketplacePanel() {
   return (
     <div className="space-y-4">
       {/* 说明 */}
-      <div className="text-sm text-gray-400">
+      <div className="text-sm text-txt-secondary">
         <p>
           从{' '}
-          <a href="https://skills.sh/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+          <a href="https://skills.sh/" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
             skills.sh
           </a>
           {' '}生态安装 skill，扩展 cCli 的能力。
@@ -304,57 +304,57 @@ function MarketplacePanel() {
       </div>
 
       {/* 命令输入框 */}
-      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-        <label className="text-sm text-gray-300 mb-2 block">安装 Skill</label>
+      <div className="bg-elevated rounded-lg p-4 border border-border">
+        <label className="text-sm text-txt-primary mb-2 block">安装 Skill</label>
         <div className="flex gap-2">
           <input
             value={command}
             onChange={e => { setCommand(e.target.value); setError(null); setInstallResult(null) }}
             onKeyDown={e => { if (e.key === 'Enter' && !installing) handleSubmit() }}
             placeholder="vercel-labs/agent-skills --skill find-skills"
-            className="flex-1 bg-gray-900 text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-600 font-mono"
+            className="flex-1 bg-surface text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:border-accent placeholder-txt-muted font-mono"
             disabled={installing}
           />
           <button
             onClick={handleSubmit}
             disabled={installing || !command.trim()}
-            className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-500 disabled:opacity-50 transition-colors whitespace-nowrap"
+            className="px-4 py-2 bg-accent text-white text-sm rounded hover:bg-accent-hover disabled:opacity-50 transition-colors whitespace-nowrap"
           >
             {installing ? '安装中...' : '安装'}
           </button>
         </div>
-        <p className="text-xs text-gray-600 mt-1.5">
-          支持格式：<code className="text-gray-500">owner/repo</code>、
-          <code className="text-gray-500">npx skills add ...</code>、
-          <code className="text-gray-500">GitHub URL</code>
+        <p className="text-xs text-txt-muted mt-1.5">
+          支持格式：<code className="text-txt-secondary">owner/repo</code>、
+          <code className="text-txt-secondary">npx skills add ...</code>、
+          <code className="text-txt-secondary">GitHub URL</code>
         </p>
 
         {/* 安装结果 */}
         {installResult && (
-          <div className={`mt-2 text-sm ${installResult.success ? 'text-green-400' : 'text-red-400'}`}>
+          <div className={`mt-2 text-sm ${installResult.success ? 'text-success' : 'text-error'}`}>
             {installResult.success ? '✓' : '✗'} {installResult.message}
           </div>
         )}
-        {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+        {error && <p className="mt-2 text-sm text-error">{error}</p>}
       </div>
 
       {/* 热门推荐 */}
       <div>
-        <h4 className="text-sm font-medium text-gray-300 mb-2">热门 Skills</h4>
+        <h4 className="text-sm font-medium text-txt-primary mb-2">热门 Skills</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {FEATURED_SKILLS.map(s => (
-            <div key={s.name} className="bg-gray-800 rounded-lg p-3 flex items-start justify-between group hover:bg-gray-750 transition-colors">
+            <div key={s.name} className="bg-elevated rounded-lg p-3 flex items-start justify-between group hover:bg-elevated transition-colors">
               <div className="min-w-0 flex-1 mr-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-200">{s.name}</span>
-                  <span className="text-xs text-gray-600">{s.installs}</span>
+                  <span className="text-sm font-medium text-txt-primary">{s.name}</span>
+                  <span className="text-xs text-txt-muted">{s.installs}</span>
                 </div>
-                <p className="text-xs text-gray-500 mt-0.5">{s.desc}</p>
+                <p className="text-xs text-txt-secondary mt-0.5">{s.desc}</p>
               </div>
               <button
                 onClick={() => handleInstall(s.source, s.skill)}
                 disabled={installing}
-                className="px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded hover:bg-blue-600 hover:text-white transition-colors disabled:opacity-50 shrink-0"
+                className="px-2 py-1 bg-elevated text-txt-primary text-xs rounded hover:bg-accent hover:text-white transition-colors disabled:opacity-50 shrink-0"
               >
                 安装
               </button>
@@ -364,9 +364,9 @@ function MarketplacePanel() {
       </div>
 
       {/* 更多提示 */}
-      <p className="text-xs text-gray-600">
+      <p className="text-xs text-txt-muted">
         浏览更多：
-        <a href="https://skills.sh/" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline ml-1">
+        <a href="https://skills.sh/" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline ml-1">
           skills.sh
         </a>
         {' '}| 275+ skills 可用

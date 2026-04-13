@@ -21,7 +21,7 @@ function ChatPageWrapper() {
 /** 懒加载 fallback */
 function PageLoading() {
   return (
-    <div className="flex items-center justify-center h-full text-gray-500">
+    <div className="flex items-center justify-center h-full text-txt-muted">
       <span className="animate-pulse">Loading...</span>
     </div>
   )
@@ -31,7 +31,7 @@ export function App() {
   return (
     <BrowserRouter>
       <ToastProvider>
-      <div className="flex h-screen bg-gray-950 text-gray-100">
+      <div className="flex h-screen bg-base text-txt-primary">
         <Sidebar />
         <div className="flex-1 overflow-y-auto">
           <Suspense fallback={<PageLoading />}>

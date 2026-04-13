@@ -48,34 +48,34 @@ export function SubAgentCard({ agent }: SubAgentCardProps) {
         ? '◼'
         : '✗'
   const statusColor = agent.status === 'running'
-    ? 'text-yellow-400'
+    ? 'text-warning'
     : agent.status === 'stopping'
       ? 'text-orange-400'
       : agent.status === 'done'
-        ? 'text-green-400'
+        ? 'text-success'
         : agent.status === 'stopped'
-          ? 'text-yellow-400'
-          : 'text-red-400'
+          ? 'text-warning'
+          : 'text-error'
 
   return (
-    <div className="my-2 border border-gray-700 rounded-lg overflow-hidden">
+    <div className="my-2 border border-border rounded-lg overflow-hidden">
       {/* 折叠头 */}
       <button
         onClick={() => setExpanded(prev => !prev)}
-        className="w-full flex items-center justify-between px-3 py-2 bg-gray-800/50 hover:bg-gray-700/50 transition-colors text-left"
+        className="w-full flex items-center justify-between px-3 py-2 bg-elevated hover:bg-elevated transition-colors text-left"
       >
         <div className="flex items-center gap-2">
           <span className={`${statusColor} font-mono`}>{statusIcon}</span>
           {agent.agentType && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-700 text-gray-400 font-mono">
+            <span className="text-xs px-1.5 py-0.5 rounded bg-elevated text-txt-secondary font-mono">
               {agent.agentType}
             </span>
           )}
-          <span className="text-sm font-medium text-gray-200">
+          <span className="text-sm font-medium text-txt-primary">
             {agent.name ?? agent.description}
           </span>
           {(agent.status === 'running' || agent.status === 'stopping') && (
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-txt-secondary">
               {agent.status === 'stopping' ? (
                 <span className="text-orange-400">正在停止...</span>
               ) : (
@@ -87,14 +87,14 @@ export function SubAgentCard({ agent }: SubAgentCardProps) {
             </span>
           )}
         </div>
-        <span className="text-gray-500 text-xs">{expanded ? '▲' : '▼'}</span>
+        <span className="text-txt-secondary text-xs">{expanded ? '▲' : '▼'}</span>
       </button>
 
       {/* 展开详情：完整的对话流（工具调用 + AI 文本 + 错误） */}
       {expanded && (
-        <div className="px-3 py-2 bg-gray-900/50 space-y-1 max-h-80 overflow-y-auto">
+        <div className="px-3 py-2 bg-surface/50 space-y-1 max-h-80 overflow-y-auto">
           {agent.events.length === 0 ? (
-            <p className="text-xs text-gray-500">(等待事件...)</p>
+            <p className="text-xs text-txt-secondary">(等待事件...)</p>
           ) : (
             agent.events
               .filter(e => e.type !== 'tool_start') // tool_start 和 tool_done 合并显示
@@ -102,27 +102,27 @@ export function SubAgentCard({ agent }: SubAgentCardProps) {
                 <div key={i}>
                   {evt.type === 'tool_done' && (
                     <div className="flex items-center gap-2 text-xs">
-                      <span className={evt.success ? 'text-green-400' : 'text-red-400'}>
+                      <span className={evt.success ? 'text-success' : 'text-error'}>
                         {evt.success ? '✓' : '✗'}
                       </span>
-                      <span className="text-gray-300 font-mono">{evt.toolName}</span>
+                      <span className="text-txt-primary font-mono">{evt.toolName}</span>
                       {evt.durationMs != null && (
-                        <span className="text-gray-500">{evt.durationMs}ms</span>
+                        <span className="text-txt-secondary">{evt.durationMs}ms</span>
                       )}
                       {evt.resultSummary && (
-                        <span className="text-gray-500 truncate max-w-[300px]">
+                        <span className="text-txt-secondary truncate max-w-[300px]">
                           ⎿ {evt.resultSummary.split('\n')[0]}
                         </span>
                       )}
                     </div>
                   )}
                   {evt.type === 'text' && evt.text && (
-                    <div className="text-xs text-gray-300 pl-4 py-1 border-l-2 border-cyan-800 whitespace-pre-wrap">
+                    <div className="text-xs text-txt-primary pl-4 py-1 border-l-2 border-cyan-800 whitespace-pre-wrap">
                       {evt.text}
                     </div>
                   )}
                   {evt.type === 'error' && (
-                    <div className="text-xs text-red-400">✗ {evt.error}</div>
+                    <div className="text-xs text-error">✗ {evt.error}</div>
                   )}
                 </div>
               ))

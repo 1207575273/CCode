@@ -55,7 +55,7 @@ export function SettingsPage() {
       <h2 className="text-xl font-bold mb-4">设置管理</h2>
 
       {/* Tab 切换 */}
-      <div className="flex gap-1 mb-6 border-b border-gray-700">
+      <div className="flex gap-1 mb-6 border-b border-border">
         <TabButton active={tab === 'providers'} onClick={() => setTab('providers')}>Provider 配置</TabButton>
         <TabButton active={tab === 'pricing'} onClick={() => setTab('pricing')}>计价规则</TabButton>
         <TabButton active={tab === 'plugins'} onClick={() => setTab('plugins')}>插件与 Skill</TabButton>
@@ -75,7 +75,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
     <button
       onClick={onClick}
       className={`px-4 py-2 text-sm transition-colors border-b-2 -mb-[1px] ${
-        active ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-200'
+        active ? 'border-blue-500 text-accent' : 'border-transparent text-txt-secondary hover:text-txt-primary'
       }`}
     >
       {children}
@@ -122,11 +122,11 @@ function MemoryCard({ config, setConfig, toast }: {
   }, [config.memory?.embedding, toast])
 
   return (
-    <div className="bg-gray-800 rounded-lg p-4">
+    <div className="bg-elevated rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium text-gray-300">Memory 记忆系统</h3>
+        <h3 className="text-sm font-medium text-txt-primary">Memory 记忆系统</h3>
         <label className="flex items-center gap-2 cursor-pointer">
-          <span className="text-xs text-gray-400">{config.memory?.enabled ? '已启用' : '未启用'}</span>
+          <span className="text-xs text-txt-secondary">{config.memory?.enabled ? '已启用' : '未启用'}</span>
           <input
             type="checkbox"
             checked={config.memory?.enabled ?? false}
@@ -134,7 +134,7 @@ function MemoryCard({ config, setConfig, toast }: {
               ...config,
               memory: { ...config.memory, enabled: e.target.checked },
             })}
-            className="w-4 h-4 rounded bg-gray-900 border-gray-600 text-blue-500 focus:ring-blue-500 cursor-pointer"
+            className="w-4 h-4 rounded bg-surface border-border text-blue-500 focus:border-accent cursor-pointer"
           />
         </label>
       </div>
@@ -143,7 +143,7 @@ function MemoryCard({ config, setConfig, toast }: {
         <div className="space-y-2">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-gray-400 block mb-1">Embedding API Key</label>
+              <label className="text-xs text-txt-secondary block mb-1">Embedding API Key</label>
               <div className="flex gap-1">
                 <input
                   type={showEmbKey ? 'text' : 'password'}
@@ -157,15 +157,15 @@ function MemoryCard({ config, setConfig, toast }: {
                     },
                   })}
                   placeholder="sk-xxx"
-                  className="flex-1 bg-gray-900 text-sm font-mono rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500"
+                  className="flex-1 bg-surface text-sm font-mono rounded px-3 py-2 outline-none focus:ring-1 focus:border-accent"
                 />
-                <button onClick={() => setShowEmbKey(!showEmbKey)} className="px-2 text-xs text-blue-400 hover:text-blue-300 shrink-0">
+                <button onClick={() => setShowEmbKey(!showEmbKey)} className="px-2 text-xs text-accent hover:text-accent shrink-0">
                   {showEmbKey ? '隐藏' : '显示'}
                 </button>
               </div>
             </div>
             <div>
-              <label className="text-xs text-gray-400 block mb-1">Base URL</label>
+              <label className="text-xs text-txt-secondary block mb-1">Base URL</label>
               <input
                 value={config.memory?.embedding?.baseURL ?? ''}
                 onChange={e => setConfig({
@@ -177,13 +177,13 @@ function MemoryCard({ config, setConfig, toast }: {
                   },
                 })}
                 placeholder="https://open.bigmodel.cn/api/coding/paas/v4"
-                className="w-full bg-gray-900 text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full bg-surface text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:border-accent"
               />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-gray-400 block mb-1">Embedding Model</label>
+              <label className="text-xs text-txt-secondary block mb-1">Embedding Model</label>
               <input
                 value={config.memory?.embedding?.model ?? ''}
                 onChange={e => setConfig({
@@ -195,11 +195,11 @@ function MemoryCard({ config, setConfig, toast }: {
                   },
                 })}
                 placeholder="embedding-3"
-                className="w-full bg-gray-900 text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full bg-surface text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:border-accent"
               />
             </div>
             <div>
-              <label className="text-xs text-gray-400 block mb-1">向量维度</label>
+              <label className="text-xs text-txt-secondary block mb-1">向量维度</label>
               <input
                 type="number"
                 value={config.memory?.embedding?.dimension ?? 1024}
@@ -212,7 +212,7 @@ function MemoryCard({ config, setConfig, toast }: {
                   },
                 })}
                 placeholder="1024"
-                className="w-full bg-gray-900 text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full bg-surface text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:border-accent"
               />
             </div>
           </div>
@@ -220,17 +220,17 @@ function MemoryCard({ config, setConfig, toast }: {
             <button
               onClick={handleTest}
               disabled={testing}
-              className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 rounded transition-colors"
+              className="px-3 py-1.5 text-xs bg-accent hover:bg-accent-hover disabled:bg-elevated rounded transition-colors"
             >
               {testing ? '测试中...' : '测试连通性'}
             </button>
             {testResult && (
-              <span className={`text-xs ${testResult.ok ? 'text-green-400' : 'text-red-400'}`}>
+              <span className={`text-xs ${testResult.ok ? 'text-success' : 'text-error'}`}>
                 {testResult.msg}
               </span>
             )}
           </div>
-          <p className="text-xs text-gray-500">支持 OpenAI 兼容的 Embedding API（GLM、DeepSeek、OpenAI 等）。未配置时降级为纯 BM25 关键词检索</p>
+          <p className="text-xs text-txt-secondary">支持 OpenAI 兼容的 Embedding API（GLM、DeepSeek、OpenAI 等）。未配置时降级为纯 BM25 关键词检索</p>
         </div>
       )}
     </div>
@@ -283,23 +283,23 @@ function ProvidersTab() {
     setSaving(false)
   }, [config, toast])
 
-  if (error && !config) return <div className="text-red-400">加载失败: {error}</div>
-  if (!config) return <div className="text-gray-500">加载中...</div>
+  if (error && !config) return <div className="text-error">加载失败: {error}</div>
+  if (!config) return <div className="text-txt-secondary">加载中...</div>
 
   return (
     <div className="space-y-4">
       {/* 默认设置 */}
-      <div className="bg-gray-800 rounded-lg p-4">
-        <h3 className="text-sm font-medium text-gray-300 mb-3">默认设置</h3>
+      <div className="bg-elevated rounded-lg p-4">
+        <h3 className="text-sm font-medium text-txt-primary mb-3">默认设置</h3>
         <div className="grid grid-cols-2 gap-3">
           {/* Provider 下拉 + 手动输入 */}
           <div>
-            <label className="text-xs text-gray-400 block mb-1">默认 Provider</label>
+            <label className="text-xs text-txt-secondary block mb-1">默认 Provider</label>
             <div className="flex gap-1">
               <select
                 value={providerNames.includes(config.defaultProvider) ? config.defaultProvider : ''}
                 onChange={e => { if (e.target.value) handleProviderChange(e.target.value) }}
-                className="flex-1 bg-gray-900 text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500"
+                className="flex-1 bg-surface text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:border-accent"
               >
                 <option value="" disabled>选择 Provider</option>
                 {providerNames.map(n => <option key={n} value={n}>{n}</option>)}
@@ -308,19 +308,19 @@ function ProvidersTab() {
                 value={config.defaultProvider}
                 onChange={e => setConfig({ ...config, defaultProvider: e.target.value })}
                 placeholder="或手动输入"
-                className="w-32 bg-gray-900 text-sm rounded px-2 py-2 outline-none focus:ring-1 focus:ring-blue-500 text-gray-400"
+                className="w-32 bg-surface text-sm rounded px-2 py-2 outline-none focus:ring-1 focus:border-accent text-txt-secondary"
               />
             </div>
           </div>
 
           {/* Model 下拉 + 手动输入 */}
           <div>
-            <label className="text-xs text-gray-400 block mb-1">默认 Model</label>
+            <label className="text-xs text-txt-secondary block mb-1">默认 Model</label>
             <div className="flex gap-1">
               <select
                 value={currentModels.includes(config.defaultModel) ? config.defaultModel : ''}
                 onChange={e => { if (e.target.value) setConfig({ ...config, defaultModel: e.target.value }) }}
-                className="flex-1 bg-gray-900 text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500"
+                className="flex-1 bg-surface text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:border-accent"
               >
                 <option value="" disabled>选择 Model</option>
                 {currentModels.map(m => <option key={m} value={m}>{m}</option>)}
@@ -329,7 +329,7 @@ function ProvidersTab() {
                 value={config.defaultModel}
                 onChange={e => setConfig({ ...config, defaultModel: e.target.value })}
                 placeholder="或手动输入"
-                className="w-32 bg-gray-900 text-sm rounded px-2 py-2 outline-none focus:ring-1 focus:ring-blue-500 text-gray-400"
+                className="w-32 bg-surface text-sm rounded px-2 py-2 outline-none focus:ring-1 focus:border-accent text-txt-secondary"
               />
             </div>
           </div>
@@ -337,12 +337,12 @@ function ProvidersTab() {
 
         {/* SubAgent 默认模型 */}
         <div className="mt-3">
-          <label className="text-xs text-gray-400 block mb-1">SubAgent 默认 Model（可选）</label>
+          <label className="text-xs text-txt-secondary block mb-1">SubAgent 默认 Model（可选）</label>
           <div className="flex gap-1">
             <select
               value={config.subAgentModel ?? ''}
               onChange={e => setConfig({ ...config, ...(e.target.value ? { subAgentModel: e.target.value } : { subAgentModel: undefined }) })}
-              className="flex-1 bg-gray-900 text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:ring-blue-500"
+              className="flex-1 bg-surface text-sm rounded px-3 py-2 outline-none focus:ring-1 focus:border-accent"
             >
               <option value="">继承主 Agent 模型</option>
               {currentModels.map(m => <option key={m} value={m}>{m}</option>)}
@@ -351,13 +351,13 @@ function ProvidersTab() {
               value={config.subAgentModel ?? ''}
               onChange={e => setConfig({ ...config, ...(e.target.value ? { subAgentModel: e.target.value } : { subAgentModel: undefined }) })}
               placeholder="或手动输入"
-              className="w-32 bg-gray-900 text-sm rounded px-2 py-2 outline-none focus:ring-1 focus:ring-blue-500 text-gray-400"
+              className="w-32 bg-surface text-sm rounded px-2 py-2 outline-none focus:ring-1 focus:border-accent text-txt-secondary"
             />
           </div>
-          <p className="text-xs text-gray-500 mt-1">子 Agent 使用的模型（仅限当前 Provider 下的模型）。不填则继承主 Agent 模型，可用于降低成本</p>
+          <p className="text-xs text-txt-secondary mt-1">子 Agent 使用的模型（仅限当前 Provider 下的模型）。不填则继承主 Agent 模型，可用于降低成本</p>
         </div>
 
-        <p className="text-xs text-gray-500 mt-2">修改后点击"保存配置"生效（写入 ~/.ccode/config.json）</p>
+        <p className="text-xs text-txt-secondary mt-2">修改后点击"保存配置"生效（写入 ~/.ccode/config.json）</p>
       </div>
 
       {/* Memory / Embedding 配置 */}
@@ -390,10 +390,10 @@ function ProvidersTab() {
 
       {/* 保存按钮 */}
       <div className="flex items-center gap-3">
-        <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50 text-sm">
+        <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-accent text-white rounded hover:bg-accent-hover disabled:opacity-50 text-sm">
           {saving ? '保存中...' : '保存配置'}
         </button>
-        {error && <span className="text-red-400 text-sm">{error}</span>}
+        {error && <span className="text-error text-sm">{error}</span>}
       </div>
     </div>
   )
@@ -452,14 +452,14 @@ function PricingTab() {
       {/* 新增按钮 */}
       <button
         onClick={() => setEditing({ ...EMPTY_RULE, isNew: true })}
-        className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-500"
+        className="px-3 py-1.5 bg-accent text-white text-sm rounded hover:bg-accent-hover"
       >
         + 新增规则
       </button>
 
       {/* 编辑表单 */}
       {editing && (
-        <div className="bg-gray-800 rounded-lg p-4 border border-blue-500/30">
+        <div className="bg-elevated rounded-lg p-4 border border-blue-500/30">
           <h4 className="text-sm font-medium mb-3">{editing.isNew ? '新增计价规则' : '编辑计价规则'}</h4>
           <div className="grid grid-cols-3 gap-3 text-sm">
             <Field label="供应商" value={editing.provider ?? ''} onChange={v => setEditing({ ...editing, provider: v })} />
@@ -473,8 +473,8 @@ function PricingTab() {
             <Field label="来源说明" value={editing.source ?? ''} onChange={v => setEditing({ ...editing, source: v })} placeholder="如 官网 2026-03" />
           </div>
           <div className="flex gap-2 mt-4">
-            <button onClick={handleSave} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-500">保存</button>
-            <button onClick={() => setEditing(null)} className="px-3 py-1.5 bg-gray-700 text-gray-300 text-sm rounded hover:bg-gray-600">取消</button>
+            <button onClick={handleSave} className="px-3 py-1.5 bg-success text-white text-sm rounded hover:bg-success">保存</button>
+            <button onClick={() => setEditing(null)} className="px-3 py-1.5 bg-elevated text-txt-primary text-sm rounded hover:bg-elevated">取消</button>
           </div>
         </div>
       )}
@@ -483,7 +483,7 @@ function PricingTab() {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-gray-400 border-b border-gray-700">
+            <tr className="text-left text-txt-secondary border-b border-border">
               <th className="px-3 py-2">供应商</th>
               <th className="px-3 py-2">模型匹配</th>
               <th className="px-3 py-2 text-right">输入</th>
@@ -495,24 +495,24 @@ function PricingTab() {
           </thead>
           <tbody>
             {rules.map(r => (
-              <tr key={r.id} className="border-b border-gray-800 hover:bg-gray-800/50">
+              <tr key={r.id} className="border-b border-border hover:bg-elevated">
                 <td className="px-3 py-2 font-mono">{r.provider}</td>
                 <td className="px-3 py-2 font-mono">{r.model_pattern}</td>
                 <td className="px-3 py-2 text-right">{sym(r.currency)}{r.input_price}</td>
                 <td className="px-3 py-2 text-right">{sym(r.currency)}{r.output_price}</td>
                 <td className="px-3 py-2">{r.currency}</td>
-                <td className="px-3 py-2 text-gray-400">{r.effective_from}</td>
+                <td className="px-3 py-2 text-txt-secondary">{r.effective_from}</td>
                 <td className="px-3 py-2 space-x-2">
-                  <button onClick={() => setEditing(r)} className="text-blue-400 hover:text-blue-300 text-xs">编辑</button>
-                  <button onClick={() => handleDelete(r.id)} className="text-red-400 hover:text-red-300 text-xs">删除</button>
+                  <button onClick={() => setEditing(r)} className="text-accent hover:text-accent text-xs">编辑</button>
+                  <button onClick={() => handleDelete(r.id)} className="text-error hover:text-red-300 text-xs">删除</button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      {rules.length === 0 && <p className="text-gray-500 text-sm">暂无计价规则</p>}
-      {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
+      {rules.length === 0 && <p className="text-txt-secondary text-sm">暂无计价规则</p>}
+      {error && <p className="text-error text-sm mt-2">{error}</p>}
     </div>
   )
 }
@@ -522,9 +522,9 @@ function Field({ label, value, onChange, placeholder, type = 'text' }: {
 }) {
   return (
     <div>
-      <label className="text-xs text-gray-400 block mb-1">{label}</label>
+      <label className="text-xs text-txt-secondary block mb-1">{label}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full bg-gray-900 text-sm rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-blue-500" />
+        className="w-full bg-surface text-sm rounded px-2 py-1.5 outline-none focus:ring-1 focus:border-accent" />
     </div>
   )
 }
@@ -543,7 +543,7 @@ function AddProviderButton({ onAdd }: { onAdd: (name: string) => void }) {
 
   if (!show) {
     return (
-      <button onClick={() => setShow(true)} className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-500">
+      <button onClick={() => setShow(true)} className="px-3 py-1.5 bg-accent text-white text-sm rounded hover:bg-accent-hover">
         + 新增供应商
       </button>
     )
@@ -556,11 +556,11 @@ function AddProviderButton({ onAdd }: { onAdd: (name: string) => void }) {
         onChange={e => setName(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
         placeholder="供应商名称（如 deepseek）"
-        className="bg-gray-900 text-sm rounded px-3 py-1.5 outline-none focus:ring-1 focus:ring-blue-500"
+        className="bg-surface text-sm rounded px-3 py-1.5 outline-none focus:ring-1 focus:border-accent"
         autoFocus
       />
-      <button onClick={handleAdd} className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-500">确认</button>
-      <button onClick={() => { setShow(false); setName('') }} className="px-3 py-1.5 bg-gray-700 text-gray-300 text-sm rounded hover:bg-gray-600">取消</button>
+      <button onClick={handleAdd} className="px-3 py-1.5 bg-success text-white text-sm rounded hover:bg-success">确认</button>
+      <button onClick={() => { setShow(false); setName('') }} className="px-3 py-1.5 bg-elevated text-txt-primary text-sm rounded hover:bg-elevated">取消</button>
     </div>
   )
 }
@@ -634,15 +634,15 @@ function ProviderCard({ name, provider, onChange, onDelete }: {
   }
 
   return (
-    <div className="bg-gray-800 rounded-lg p-4">
+    <div className="bg-elevated rounded-lg p-4">
       {/* 头部：名称 + 协议 + 操作按钮 */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-medium text-gray-300">{name}</h3>
+          <h3 className="text-sm font-medium text-txt-primary">{name}</h3>
           <select
             value={provider.protocol ?? (name === 'anthropic' ? 'anthropic' : 'openai')}
             onChange={e => onChange({ ...provider, protocol: e.target.value })}
-            className="text-xs bg-gray-700 px-2 py-0.5 rounded text-gray-400 outline-none"
+            className="text-xs bg-elevated px-2 py-0.5 rounded text-txt-secondary outline-none"
           >
             <option value="openai">openai</option>
             <option value="anthropic">anthropic</option>
@@ -655,7 +655,7 @@ function ProviderCard({ name, provider, onChange, onDelete }: {
             {testing ? '测试中...' : `测试${selectedModel ? ` ${selectedModel}` : ''}`}
           </button>
           <button onClick={() => { if (window.confirm(`确定删除供应商 "${name}"？`)) onDelete() }}
-            className="px-2 py-1 text-xs bg-red-700/60 text-red-300 rounded hover:bg-red-600/60">
+            className="px-2 py-1 text-xs bg-red-700/60 text-red-300 rounded hover:bg-error/60">
             删除
           </button>
         </div>
@@ -663,7 +663,7 @@ function ProviderCard({ name, provider, onChange, onDelete }: {
 
       {/* 测试结果 */}
       {testResult && (
-        <div className={`text-xs mb-3 px-2 py-1 rounded ${testResult.ok ? 'bg-emerald-900/30 text-emerald-400' : 'bg-red-900/30 text-red-400'}`}>
+        <div className={`text-xs mb-3 px-2 py-1 rounded ${testResult.ok ? 'bg-emerald-900/30 text-emerald-400' : 'bg-red-900/30 text-error'}`}>
           {testResult.msg}
         </div>
       )}
@@ -672,16 +672,16 @@ function ProviderCard({ name, provider, onChange, onDelete }: {
       <div className="space-y-3 text-sm">
         {/* API Key */}
         <div>
-          <label className="text-xs text-gray-400 block mb-1">API Key</label>
+          <label className="text-xs text-txt-secondary block mb-1">API Key</label>
           <div className="flex gap-1">
             <input
               type={showKey ? 'text' : 'password'}
               value={provider.apiKey}
               onChange={e => onChange({ ...provider, apiKey: e.target.value })}
               placeholder="填入 API Key"
-              className="flex-1 bg-gray-900 text-sm font-mono rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-blue-500"
+              className="flex-1 bg-surface text-sm font-mono rounded px-2 py-1.5 outline-none focus:ring-1 focus:border-accent"
             />
-            <button onClick={() => setShowKey(!showKey)} className="px-2 text-xs text-blue-400 hover:text-blue-300 shrink-0">
+            <button onClick={() => setShowKey(!showKey)} className="px-2 text-xs text-accent hover:text-accent shrink-0">
               {showKey ? '隐藏' : '显示'}
             </button>
           </div>
@@ -689,20 +689,20 @@ function ProviderCard({ name, provider, onChange, onDelete }: {
 
         {/* Base URL */}
         <div>
-          <label className="text-xs text-gray-400 block mb-1">Base URL（可选）</label>
+          <label className="text-xs text-txt-secondary block mb-1">Base URL（可选）</label>
           <input
             value={provider.baseURL ?? ''}
             onChange={e => onChange({ ...provider, baseURL: e.target.value || undefined })}
             placeholder="如 https://open.bigmodel.cn/api/coding/paas/v4"
-            className="w-full bg-gray-900 text-sm font-mono rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full bg-surface text-sm font-mono rounded px-2 py-1.5 outline-none focus:ring-1 focus:border-accent"
           />
         </div>
 
         {/* Models — 可选中 + 可拖拽排序 */}
         <div>
-          <label className="text-xs text-gray-400 block mb-1">
+          <label className="text-xs text-txt-secondary block mb-1">
             模型列表
-            <span className="text-gray-500 ml-2">点击选中测试 · 拖拽排序 · 首位为默认模型 · 👁 切换图片理解</span>
+            <span className="text-txt-secondary ml-2">点击选中测试 · 拖拽排序 · 首位为默认模型 · 👁 切换图片理解</span>
           </label>
           <div className="flex flex-wrap gap-1 mb-1 min-h-[28px]">
             {provider.models.map((m, idx) => {
@@ -721,16 +721,16 @@ function ProviderCard({ name, provider, onChange, onDelete }: {
                   className={[
                     'inline-flex items-center gap-1 text-xs px-2 py-1 rounded cursor-pointer select-none transition-all',
                     isSelected
-                      ? 'bg-blue-600/40 text-blue-300 ring-1 ring-blue-500/60'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600',
+                      ? 'bg-accent/40 text-accent ring-1 ring-blue-500/60'
+                      : 'bg-elevated text-txt-primary hover:bg-elevated',
                     isDragging ? 'opacity-40' : '',
                     isDragOver ? 'ring-1 ring-yellow-400/60' : '',
                   ].join(' ')}
                   title={`点击选中 · 双击测试 · 拖拽排序${idx === 0 ? ' · 当前为默认模型' : ''}`}
                 >
                   {/* 拖拽手柄 */}
-                  <span className="text-gray-500 cursor-grab active:cursor-grabbing mr-0.5">⠿</span>
-                  {idx === 0 && <span className="text-yellow-500 text-[10px]" title="默认模型">★</span>}
+                  <span className="text-txt-secondary cursor-grab active:cursor-grabbing mr-0.5">⠿</span>
+                  {idx === 0 && <span className="text-warning text-[10px]" title="默认模型">★</span>}
                   {m}
                   {/* vision 切换：点击将模型加入/移出 visionModels */}
                   <button
@@ -745,8 +745,8 @@ function ProviderCard({ name, provider, onChange, onDelete }: {
                     }}
                     className={`text-xs ${
                       (provider.visionModels ?? []).includes(m)
-                        ? 'text-blue-400 hover:text-blue-300'
-                        : 'text-gray-600 hover:text-gray-400'
+                        ? 'text-accent hover:text-accent'
+                        : 'text-txt-muted hover:text-txt-secondary'
                     }`}
                     title={`${(provider.visionModels ?? []).includes(m) ? '已启用' : '未启用'}图片理解`}
                   >
@@ -754,7 +754,7 @@ function ProviderCard({ name, provider, onChange, onDelete }: {
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); removeModel(m) }}
-                    className="text-gray-500 hover:text-red-400 ml-0.5"
+                    className="text-txt-secondary hover:text-error ml-0.5"
                   >×</button>
                 </span>
               )
@@ -766,9 +766,9 @@ function ProviderCard({ name, provider, onChange, onDelete }: {
               onChange={e => setNewModel(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addModel() } }}
               placeholder="输入模型名称，回车添加"
-              className="flex-1 bg-gray-900 text-xs font-mono rounded px-2 py-1.5 outline-none focus:ring-1 focus:ring-blue-500"
+              className="flex-1 bg-surface text-xs font-mono rounded px-2 py-1.5 outline-none focus:ring-1 focus:border-accent"
             />
-            <button onClick={addModel} className="px-2 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600">添加</button>
+            <button onClick={addModel} className="px-2 py-1 text-xs bg-elevated text-txt-primary rounded hover:bg-elevated">添加</button>
           </div>
         </div>
       </div>

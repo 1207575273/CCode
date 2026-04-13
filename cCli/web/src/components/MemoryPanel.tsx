@@ -84,23 +84,23 @@ export function MemoryPanel({ open, onClose }: MemoryPanelProps) {
       )}
 
       {/* 抽屉面板 */}
-      <div className={`fixed top-0 right-0 h-full w-[400px] bg-gray-900 border-l border-gray-700 z-50
+      <div className={`fixed top-0 right-0 h-full w-[400px] bg-surface border-l border-border z-50
         transform transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'}`}>
 
         {/* 标题栏 */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
-          <span className="text-sm font-semibold text-gray-200">记忆全景</span>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <span className="text-sm font-semibold text-txt-primary">记忆全景</span>
           <div className="flex items-center gap-2">
             <button
               onClick={loadData}
-              className="text-xs px-2 py-1 rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+              className="text-xs px-2 py-1 rounded bg-elevated text-txt-primary hover:bg-elevated transition-colors"
               title="刷新数据"
             >
               刷新
             </button>
             <button
               onClick={onClose}
-              className="text-xs px-2 py-1 rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+              className="text-xs px-2 py-1 rounded bg-elevated text-txt-primary hover:bg-elevated transition-colors"
             >
               关闭
             </button>
@@ -108,30 +108,30 @@ export function MemoryPanel({ open, onClose }: MemoryPanelProps) {
         </div>
 
         {loading && (
-          <div className="flex items-center justify-center h-32 text-gray-500 text-sm">加载中...</div>
+          <div className="flex items-center justify-center h-32 text-txt-secondary text-sm">加载中...</div>
         )}
 
         {error && (
-          <div className="px-4 py-3 text-red-400 text-xs">{error}</div>
+          <div className="px-4 py-3 text-error text-xs">{error}</div>
         )}
 
         {!loading && data && (
           <div className="flex flex-col h-[calc(100%-49px)] overflow-hidden">
 
             {/* System Prompt 概览 */}
-            <div className="px-4 py-3 border-b border-gray-800">
-              <div className="text-xs text-gray-500 mb-2">
+            <div className="px-4 py-3 border-b border-border">
+              <div className="text-xs text-txt-secondary mb-2">
                 System Prompt — 约 {data.systemPrompt.totalTokens.toLocaleString()} tokens
               </div>
               <div className="flex flex-wrap gap-2">
                 {data.systemPrompt.sections.map((s, i) => (
-                  <div key={i} className="px-2 py-1 rounded bg-gray-800 text-xs">
-                    <span className="text-gray-400">{s.name}</span>
-                    <span className="ml-1 text-gray-500">{s.tokens.toLocaleString()}</span>
+                  <div key={i} className="px-2 py-1 rounded bg-elevated text-xs">
+                    <span className="text-txt-secondary">{s.name}</span>
+                    <span className="ml-1 text-txt-secondary">{s.tokens.toLocaleString()}</span>
                   </div>
                 ))}
                 {data.systemPrompt.sections.length === 0 && (
-                  <span className="text-xs text-gray-600">尚未构建</span>
+                  <span className="text-xs text-txt-muted">尚未构建</span>
                 )}
               </div>
             </div>
@@ -139,7 +139,7 @@ export function MemoryPanel({ open, onClose }: MemoryPanelProps) {
             {/* 散点图 / 记忆列表 */}
             <div className="flex-1 min-h-0 px-2 py-2 overflow-y-auto">
               {points.length > 0 ? (
-                <div className="w-full h-full rounded border border-gray-800 overflow-hidden">
+                <div className="w-full h-full rounded border border-border overflow-hidden">
                   <ScatterPlot
                     points={points}
                     metas={metas}
@@ -150,7 +150,7 @@ export function MemoryPanel({ open, onClose }: MemoryPanelProps) {
               ) : data.entries.length > 0 ? (
                 /* 无向量但有记忆文件 → 展示列表 */
                 <div className="space-y-2">
-                  <div className="text-xs text-gray-500 px-2 mb-1">
+                  <div className="text-xs text-txt-secondary px-2 mb-1">
                     记忆条目 ({data.entries.length}) — {data.dimension > 0
                       ? 'Embedding 已配置，执行 /remember rebuild 重建向量索引'
                       : '未配置 Embedding，仅 BM25 关键词检索'}
@@ -161,29 +161,29 @@ export function MemoryPanel({ open, onClose }: MemoryPanelProps) {
                       className={`px-3 py-2 rounded border cursor-pointer transition-colors ${
                         selectedEntry?.id === entry.id
                           ? 'border-purple-600 bg-purple-900/20'
-                          : 'border-gray-800 hover:border-gray-600'
+                          : 'border-border hover:border-border'
                       }`}
                       onClick={() => setSelectedEntry(selectedEntry?.id === entry.id ? null : entry)}
                     >
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-medium text-gray-200 truncate flex-1">{entry.title}</span>
+                        <span className="text-xs font-medium text-txt-primary truncate flex-1">{entry.title}</span>
                         <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${
-                          entry.scope === 'global' ? 'bg-blue-900/50 text-blue-300' : 'bg-green-900/50 text-green-300'
+                          entry.scope === 'global' ? 'bg-blue-900/50 text-accent' : 'bg-green-900/50 text-green-300'
                         }`}>
                           {entry.scope}
                         </span>
                       </div>
                       <div className="flex gap-1.5 flex-wrap">
-                        <span className="text-xs text-gray-500">{entry.type}</span>
+                        <span className="text-xs text-txt-secondary">{entry.type}</span>
                         {entry.tags.map(tag => (
-                          <span key={tag} className="text-xs text-gray-600">#{tag}</span>
+                          <span key={tag} className="text-xs text-txt-muted">#{tag}</span>
                         ))}
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="flex items-center justify-center h-full text-gray-600 text-xs">
+                <div className="flex items-center justify-center h-full text-txt-muted text-xs">
                   暂无记忆数据
                 </div>
               )}
@@ -191,22 +191,22 @@ export function MemoryPanel({ open, onClose }: MemoryPanelProps) {
 
             {/* 选中详情（散点图模式） */}
             {selected && (
-              <div className="px-4 py-3 border-t border-gray-800 max-h-[200px] overflow-y-auto">
-                <div className="text-xs font-medium text-gray-200 mb-1 truncate">{selected.title}</div>
+              <div className="px-4 py-3 border-t border-border max-h-[200px] overflow-y-auto">
+                <div className="text-xs font-medium text-txt-primary mb-1 truncate">{selected.title}</div>
                 <div className="flex gap-2 mb-2 flex-wrap">
                   <span className={`text-xs px-1.5 py-0.5 rounded ${
-                    selected.scope === 'global' ? 'bg-blue-900/50 text-blue-300' : 'bg-green-900/50 text-green-300'
+                    selected.scope === 'global' ? 'bg-blue-900/50 text-accent' : 'bg-green-900/50 text-green-300'
                   }`}>
                     {selected.scope}
                   </span>
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-gray-400">{selected.type}</span>
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-elevated text-txt-secondary">{selected.type}</span>
                   {selected.tags.map(tag => (
-                    <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-gray-500">
+                    <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-elevated text-txt-secondary">
                       {tag}
                     </span>
                   ))}
                 </div>
-                <div className="text-xs text-gray-400 leading-relaxed whitespace-pre-wrap">
+                <div className="text-xs text-txt-secondary leading-relaxed whitespace-pre-wrap">
                   {selected.chunkText.slice(0, 300)}
                   {selected.chunkText.length > 300 && '...'}
                 </div>
@@ -215,23 +215,23 @@ export function MemoryPanel({ open, onClose }: MemoryPanelProps) {
 
             {/* 选中详情（列表模式） */}
             {selectedEntry && !selected && (
-              <div className="px-4 py-3 border-t border-gray-800 max-h-[200px] overflow-y-auto">
-                <div className="text-xs font-medium text-gray-200 mb-1">{selectedEntry.title}</div>
+              <div className="px-4 py-3 border-t border-border max-h-[200px] overflow-y-auto">
+                <div className="text-xs font-medium text-txt-primary mb-1">{selectedEntry.title}</div>
                 <div className="flex gap-2 mb-2 flex-wrap">
                   <span className={`text-xs px-1.5 py-0.5 rounded ${
-                    selectedEntry.scope === 'global' ? 'bg-blue-900/50 text-blue-300' : 'bg-green-900/50 text-green-300'
+                    selectedEntry.scope === 'global' ? 'bg-blue-900/50 text-accent' : 'bg-green-900/50 text-green-300'
                   }`}>
                     {selectedEntry.scope}
                   </span>
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-gray-400">{selectedEntry.type}</span>
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-elevated text-txt-secondary">{selectedEntry.type}</span>
                   {selectedEntry.tags.map(tag => (
-                    <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-gray-500">
+                    <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-elevated text-txt-secondary">
                       {tag}
                     </span>
                   ))}
-                  <span className="text-xs text-gray-600">{selectedEntry.source}</span>
+                  <span className="text-xs text-txt-muted">{selectedEntry.source}</span>
                 </div>
-                <div className="text-xs text-gray-400 leading-relaxed whitespace-pre-wrap">
+                <div className="text-xs text-txt-secondary leading-relaxed whitespace-pre-wrap">
                   {selectedEntry.content.slice(0, 300)}
                   {selectedEntry.content.length > 300 && '...'}
                 </div>

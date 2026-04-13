@@ -54,9 +54,9 @@ export function SubAgentDrawer({ agents, onStop }: SubAgentDrawerProps) {
         className={`
           fixed right-6 bottom-40 z-50
           w-12 h-12 rounded-full
-          bg-gray-800/90 border border-gray-600
+          bg-elevated/90 border border-border
           flex items-center justify-center
-          hover:bg-gray-700 active:scale-95
+          hover:bg-elevated active:scale-95
           transition-all duration-200 cursor-pointer
           ${runningCount > 0 ? 'animate-pulse' : ''}
         `}
@@ -65,12 +65,12 @@ export function SubAgentDrawer({ agents, onStop }: SubAgentDrawerProps) {
         <span className="text-lg">🤖</span>
         {/* Badge */}
         {runningCount > 0 && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-yellow-500 text-gray-900 text-xs font-bold flex items-center justify-center">
+          <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-warning text-txt-primary text-xs font-bold flex items-center justify-center">
             {runningCount}
           </span>
         )}
         {runningCount === 0 && agentList.length > 0 && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gray-600 text-gray-300 text-xs font-bold flex items-center justify-center">
+          <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-elevated text-txt-primary text-xs font-bold flex items-center justify-center">
             {agentList.length}
           </span>
         )}
@@ -89,17 +89,17 @@ export function SubAgentDrawer({ agents, onStop }: SubAgentDrawerProps) {
         className={`
           fixed top-0 right-0 h-full z-40
           w-[36rem] max-w-full
-          bg-gray-900 border-l border-gray-700
+          bg-surface border-l border-border
           transform transition-transform duration-300 ease-in-out
           flex flex-col
           ${open ? 'translate-x-0' : 'translate-x-full'}
         `}
       >
         {/* 标题栏 */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 shrink-0">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
           <div className="flex items-center gap-2">
-            <span className="text-base font-semibold text-gray-100">SubAgents</span>
-            <span className="text-xs text-gray-500">({agentList.length})</span>
+            <span className="text-base font-semibold text-txt-primary">SubAgents</span>
+            <span className="text-xs text-txt-secondary">({agentList.length})</span>
             {runningCount > 0 && (
               <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-900/50 text-yellow-300">
                 {runningCount} running
@@ -108,7 +108,7 @@ export function SubAgentDrawer({ agents, onStop }: SubAgentDrawerProps) {
           </div>
           <button
             onClick={() => setOpen(false)}
-            className="text-gray-500 hover:text-gray-300 transition-colors text-lg leading-none cursor-pointer"
+            className="text-txt-secondary hover:text-txt-primary transition-colors text-lg leading-none cursor-pointer"
           >
             ✕
           </button>
@@ -153,41 +153,41 @@ function AgentRow({ agent, expanded, onToggle, onStop }: AgentRowProps) {
         ? '◼'
         : '✗'
   const statusColor = agent.status === 'running'
-    ? 'text-yellow-400'
+    ? 'text-warning'
     : agent.status === 'stopping'
       ? 'text-orange-400'
       : agent.status === 'done'
-        ? 'text-green-400'
+        ? 'text-success'
         : agent.status === 'stopped'
-          ? 'text-yellow-400'
-          : 'text-red-400'
+          ? 'text-warning'
+          : 'text-error'
 
   return (
-    <div className="border border-gray-700 rounded-lg overflow-hidden">
+    <div className="border border-border rounded-lg overflow-hidden">
       {/* 折叠头 */}
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between px-3 py-2.5 bg-gray-800/50 hover:bg-gray-700/50 transition-colors text-left cursor-pointer"
+        className="w-full flex items-center justify-between px-3 py-2.5 bg-elevated hover:bg-elevated transition-colors text-left cursor-pointer"
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <span className={`${statusColor} font-mono text-sm shrink-0`}>
             {(agent.status === 'running' || agent.status === 'stopping') ? <Spinner /> : statusIcon}
           </span>
           {agent.agentType && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-400 font-mono shrink-0">
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-elevated text-txt-secondary font-mono shrink-0">
               {agent.agentType}
             </span>
           )}
-          <span className="text-sm font-medium text-gray-200 truncate">
+          <span className="text-sm font-medium text-txt-primary truncate">
             {agent.name ?? agent.description}
           </span>
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-2">
           {agent.status === 'running' && (
-            <span className="text-[10px] text-gray-500">
+            <span className="text-[10px] text-txt-secondary">
               turn {agent.turn}/{agent.maxTurns}
               {agent.currentTool && (
-                <span className="text-yellow-400/70"> ▸ {agent.currentTool}</span>
+                <span className="text-warning/70"> ▸ {agent.currentTool}</span>
               )}
             </span>
           )}
@@ -204,7 +204,7 @@ function AgentRow({ agent, expanded, onToggle, onStop }: AgentRowProps) {
               ⏹ 停止
             </button>
           )}
-          <span className="text-gray-600 text-[10px]">{expanded ? '▲' : '▼'}</span>
+          <span className="text-txt-muted text-[10px]">{expanded ? '▲' : '▼'}</span>
         </div>
       </button>
 
@@ -228,8 +228,8 @@ function EventList({ events }: { events: SubAgentDetailEvent[] }) {
 
   if (events.length === 0) {
     return (
-      <div className="px-3 py-2 bg-gray-900/50">
-        <p className="text-xs text-gray-500 italic">(等待事件...)</p>
+      <div className="px-3 py-2 bg-surface/50">
+        <p className="text-xs text-txt-secondary italic">(等待事件...)</p>
       </div>
     )
   }
@@ -238,7 +238,7 @@ function EventList({ events }: { events: SubAgentDetailEvent[] }) {
   const filtered = events.filter(e => e.type !== 'tool_start')
 
   return (
-    <div className="px-3 py-2 bg-gray-900/50 space-y-1 max-h-[32rem] overflow-y-auto">
+    <div className="px-3 py-2 bg-surface/50 space-y-1 max-h-[32rem] overflow-y-auto">
       {filtered.map((evt, i) => (
         <EventLine key={i} event={evt} />
       ))}
@@ -253,15 +253,15 @@ function EventLine({ event }: { event: SubAgentDetailEvent }) {
     case 'tool_done':
       return (
         <div className="flex items-start gap-2 text-xs">
-          <span className={event.success ? 'text-green-400' : 'text-red-400'} shrink-0>
+          <span className={event.success ? 'text-success' : 'text-error'} shrink-0>
             {event.success ? '✓' : '✗'}
           </span>
-          <span className="text-gray-300 font-mono">{event.toolName}</span>
+          <span className="text-txt-primary font-mono">{event.toolName}</span>
           {event.durationMs != null && (
-            <span className="text-gray-500">{formatDuration(event.durationMs)}</span>
+            <span className="text-txt-secondary">{formatDuration(event.durationMs)}</span>
           )}
           {event.resultSummary && (
-            <span className="text-gray-500 truncate max-w-[250px]">
+            <span className="text-txt-secondary truncate max-w-[250px]">
               ⎿ {event.resultSummary.split('\n')[0]}
             </span>
           )}
@@ -269,13 +269,13 @@ function EventLine({ event }: { event: SubAgentDetailEvent }) {
       )
     case 'text':
       return (
-        <div className="text-xs text-gray-300 pl-4 py-0.5 border-l-2 border-cyan-800 whitespace-pre-wrap break-all">
+        <div className="text-xs text-txt-primary pl-4 py-0.5 border-l-2 border-cyan-800 whitespace-pre-wrap break-all">
           {event.text}
         </div>
       )
     case 'error':
       return (
-        <div className="text-xs text-red-400 pl-1">✗ {event.error}</div>
+        <div className="text-xs text-error pl-1">✗ {event.error}</div>
       )
     default:
       return null
@@ -289,7 +289,7 @@ function EventLine({ event }: { event: SubAgentDetailEvent }) {
 /** CSS 动画 Spinner（避免引入额外依赖） */
 function Spinner() {
   return (
-    <span className="inline-block animate-spin text-yellow-400" style={{ animationDuration: '1s' }}>
+    <span className="inline-block animate-spin text-warning" style={{ animationDuration: '1s' }}>
       ⟳
     </span>
   )
