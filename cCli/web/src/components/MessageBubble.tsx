@@ -91,7 +91,7 @@ export function MessageBubble({ message, subAgents }: Props) {
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
       <div className={`max-w-[80%] rounded-lg px-4 py-3 ${
-        isUser ? 'bg-accent text-white' : 'bg-elevated text-txt-primary'
+        isUser ? 'bg-accent text-white' : 'bg-surface border border-border text-txt-primary'
       }`}>
         {/* 来源标签（user） / 模型标签（assistant） */}
         {isUser && sourceTag && (
@@ -127,7 +127,7 @@ export function MessageBubble({ message, subAgents }: Props) {
             )}
           </>
         ) : (
-          <div className="prose prose-invert prose-sm max-w-none prose-pre:bg-surface prose-pre:border prose-pre:border-border">
+          <div className="prose dark:prose-invert prose-sm max-w-none prose-pre:bg-surface prose-pre:border prose-pre:border-border">
             <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
               {message.content}
             </ReactMarkdown>
