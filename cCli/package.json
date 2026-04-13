@@ -1,6 +1,6 @@
 {
   "name": "ccode-cli",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "开源多模型 AI 编程 CLI 助手 — 支持 Claude/OpenAI/GLM/DeepSeek/Ollama",
   "type": "module",
   "bin": {

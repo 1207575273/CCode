@@ -4,6 +4,23 @@
 
 ---
 
+## [0.11.0] - 2026-04-14
+
+### Added
+- **keybinding 基线测试**：新增 5 个 UI 组件按键交互测试（37 用例），覆盖 InputBar/PermissionDialog/ModelPicker/ForkPanel/McpStatusView
+- **E2E 测试恢复**：恢复误删的 SubAgent 全栈 E2E 测试脚本（Shell + TS 版）
+
+### Changed
+- **ink 5 → 6.8.0**：终端 UI 框架升级，消除 ink-multiline-input 的 peer dependency 冲突
+- **react 18 → 19.2.5**：CLI 端（Ink）和 Web 端双端统一升级，零代码变更
+- **react-dom 18 → 19.2.5**：Web 端同步升级
+- **版本号收敛**：bin/ccli.ts 的硬编码 VERSION 改为 import APP_VERSION，bump 版本时只需改 3 处（version.ts + 2 个 package.json）
+
+### Fixed
+- **bin/ccli.ts 版本号滞后**：--help / --version 输出的版本号从 0.8.3 修正为当前版本
+
+---
+
 ## [0.10.0] - 2026-04-13
 
 ### Added

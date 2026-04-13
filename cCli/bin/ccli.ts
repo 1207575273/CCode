@@ -17,6 +17,7 @@
 import { runPipe, readStdin } from '../src/core/pipe-runner.js'
 import { initialize } from '../src/core/initializer.js'
 import { isSensitiveDirectory, confirmWorkspaceTrust } from '../src/core/workspace-trust.js'
+import { APP_VERSION } from '../src/version.js'
 
 // 过滤 Node.js 内部警告，不泄露到用户终端
 process.on('warning', (warning) => {
@@ -36,12 +37,10 @@ for (const warn of initResult.warnings) {
 
 // ═══ --help / -h ═══
 
-const VERSION = '0.8.3'
-
 function printHelp(): void {
   const help = `
   ╔══════════════════════════════════════════════════════════════╗
-  ║                      CCode CLI v${VERSION}                      ║
+  ║                      CCode CLI v${APP_VERSION}                      ║
   ║          开源多模型 AI 编程助手 / Multi-Model AI Agent          ║
   ╚══════════════════════════════════════════════════════════════╝
 
@@ -213,7 +212,7 @@ if (args.help) {
 }
 
 if (args.version) {
-  process.stdout.write(`ccode v${VERSION}\n`)
+  process.stdout.write(`ccode v${APP_VERSION}\n`)
   process.exit(0)
 }
 
