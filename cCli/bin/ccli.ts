@@ -14,26 +14,11 @@
  *    - ccode --resume <sessionId>
  */
 
-import { runPipe, readStdin } from '../src/core/pipe-runner.js'
-import { initialize } from '../src/core/initializer.js'
-import { isSensitiveDirectory, confirmWorkspaceTrust } from '../src/core/workspace-trust.js'
+// ═══ 快速退出路径 ═══
+// APP_VERSION 极轻量（只导出一个字符串常量），可安全静态 import。
+// 重模块（pipe-runner / initializer / workspace-trust）延迟到参数解析之后按需 dynamic import，
+// 使 --help / --version 跳过 2.4s 的模块加载开销。
 import { APP_VERSION } from '../src/version.js'
-
-// 过滤 Node.js 内部警告，不泄露到用户终端
-process.on('warning', (warning) => {
-  if (warning.name === 'MaxListenersExceededWarning') return
-})
-
-// ═══ 启动初始化 ═══
-const initResult = initialize()
-if (initResult.created.length > 0) {
-  process.stderr.write(`[init] 已创建: ${initResult.created.join(', ')}\n`)
-}
-for (const warn of initResult.warnings) {
-  process.stderr.write(`[init] ⚠ ${warn}\n`)
-}
-
-// ═══ 参数解析（无外部依赖） ═══
 
 // ═══ --help / -h ═══
 
@@ -216,10 +201,28 @@ if (args.version) {
   process.exit(0)
 }
 
+// ═══ 重模块加载（--help / --version 已在上方退出，不会走到这里） ═══
+
+// 过滤 Node.js 内部警告，不泄露到用户终端
+process.on('warning', (warning) => {
+  if (warning.name === 'MaxListenersExceededWarning') return
+})
+
+// 启动初始化
+const { initialize } = await import('../src/core/initializer.js')
+const initResult = initialize()
+if (initResult.created.length > 0) {
+  process.stderr.write(`[init] 已创建: ${initResult.created.join(', ')}\n`)
+}
+for (const warn of initResult.warnings) {
+  process.stderr.write(`[init] ⚠ ${warn}\n`)
+}
+
 // ═══ 模式判断 ═══
 
 if (args.prompt != null) {
   // 非交互模式：有 prompt → 直接执行
+  const { runPipe, readStdin } = await import('../src/core/pipe-runner.js')
   const stdinContent = await readStdin()
   await runPipe({
     prompt: args.prompt,
@@ -233,6 +236,7 @@ if (args.prompt != null) {
   })
 } else {
   // 敏感目录信任确认（用户主目录、根目录等）
+  const { isSensitiveDirectory, confirmWorkspaceTrust } = await import('../src/core/workspace-trust.js')
   if (isSensitiveDirectory(process.cwd())) {
     const trusted = await confirmWorkspaceTrust(process.cwd())
     if (!trusted) process.exit(0)
