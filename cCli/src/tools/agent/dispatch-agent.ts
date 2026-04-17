@@ -382,6 +382,7 @@ export class DispatchAgentTool implements StreamableTool {
           turn: currentTurn, maxTurns,
           partialResult: finalText,
           ...(report.tokenUsed ? { tokenUsed: report.tokenUsed } : {}),
+          guidance: buildStopGuidance(report.source, 'graceful'),
         }
         return { success: true, output: JSON.stringify(output), meta: { type: 'dispatch-agent', agentId, agentName, agentType, status: 'stopped' } }
       }
@@ -433,6 +434,7 @@ export class DispatchAgentTool implements StreamableTool {
             turn: currentTurn, maxTurns,
             partialResult: finalText,
             ...(report.tokenUsed ? { tokenUsed: report.tokenUsed } : {}),
+            guidance: buildStopGuidance(report.source, 'forced'),
           }
           return { success: true, output: JSON.stringify(output), meta: { type: 'dispatch-agent', agentId, agentName, agentType, status: 'stopped' } }
         }
@@ -471,6 +473,57 @@ export class DispatchAgentTool implements StreamableTool {
 // ═══════════════════════════════════════════════
 // 辅助函数
 // ═══════════════════════════════════════════════
+
+/**
+ * 为 StopReport 生成给主 Agent 看的自然语言行为指引。
+ *
+ * 背景：主 Agent 收到子 Agent 的 stop 结果时，仅凭 `source` 枚举值
+ * （user_web / user_cli / timeout / parent_agent）不足以让 LLM 判断后续动作，
+ * 实测 LLM 会把 user 主动停止误解为"子 Agent 失败"而自己代替执行，违背用户意图。
+ * 这里用明确的自然语言告知 LLM 该做什么、不该做什么。
+ *
+ * 导出供单元测试使用（见 tests/unit/dispatch-agent-stop-guidance.test.ts）。
+ */
+export function buildStopGuidance(
+  source: import('./store.js').StopSource,
+  resolution: 'graceful' | 'forced',
+): string {
+  switch (source) {
+    case 'user_web':
+    case 'user_cli': {
+      const channel = source === 'user_web' ? 'Web 端' : 'CLI 端'
+      return [
+        `⚠️ 用户在 ${channel} 主动停止了此子 Agent（resolution=${resolution}）。`,
+        '这表示用户对任务的方向或执行方式有新想法，**不是执行失败**。',
+        '',
+        '你**禁止**：',
+        '1. 自己代替子 Agent 执行该任务（例如直接调用工具继续完成）。',
+        '2. 立刻重新派发同一个子 Agent 去做相同或相似的事。',
+        '3. 假设用户只是"暂停"，然后自作主张接着干。',
+        '',
+        '你**必须**：',
+        '直接用自然语言向用户回复，简要告诉用户：',
+        '  (1) 子 Agent 已在第几轮被停止、已产出什么（如有 partialResult）；',
+        '  (2) 询问用户接下来希望：',
+        '      · 放弃该任务？',
+        '      · 换一种方式继续（请说明新的方向）？',
+        '      · 还是有别的指示？',
+        '在用户给出明确回复前，**不要开始任何新操作**（不要调用工具）。',
+      ].join('\n')
+    }
+    case 'timeout':
+      return [
+        `⚠️ 子 Agent 因超时被${resolution === 'forced' ? '强制' : '优雅'}停止。`,
+        '请根据 partialResult 判断任务是否已完成足够的部分：',
+        '- 若已完成关键部分，可总结已完成工作并询问用户是否继续。',
+        '- 若进度很少，考虑调整策略（增加 timeoutMs、拆分任务）后再次派发。',
+      ].join('\n')
+    case 'parent_agent':
+      return '你之前主动停止了该子 Agent，请根据当前任务上下文继续你的主流程。'
+    default:
+      return `子 Agent 被停止（source=${source}, resolution=${resolution}），请根据 partialResult 决定下一步。`
+  }
+}
 
 /** 构建受限 ToolRegistry */
 function buildSubRegistry(parentRegistry: ToolRegistry, toolPolicy: ToolPolicy): ToolRegistry {
@@ -593,7 +646,11 @@ function runSubAgentInBackground(opts: BackgroundRunOptions): void {
           type: 'subagent_done',
           agentId, name: agentName, description,
           success: true,
-          output: JSON.stringify({ status: 'stopped', ...report }),
+          output: JSON.stringify({
+            status: 'stopped',
+            ...report,
+            guidance: buildStopGuidance(report.source, 'graceful'),
+          }),
         })
         return
       }
@@ -637,7 +694,11 @@ function runSubAgentInBackground(opts: BackgroundRunOptions): void {
             type: 'subagent_done',
             agentId, name: agentName, description,
             success: true,
-            output: JSON.stringify({ status: 'stopped', ...report }),
+            output: JSON.stringify({
+              status: 'stopped',
+              ...report,
+              guidance: buildStopGuidance(report.source, 'forced'),
+            }),
           })
           return
         }

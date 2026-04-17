@@ -147,6 +147,12 @@ export interface AgentStoppedOutput {
   partialResult: string
   /** token 用量 */
   tokenUsed?: import('./store.js').TokenUsage
+  /**
+   * 给主 Agent 的自然语言行为指引 — 根据停止来源生成，
+   * 防止主 Agent 把"用户主动停止"误解成"执行失败"而自作主张代替执行。
+   * 详见 dispatch-agent.ts#buildStopGuidance。
+   */
+  guidance: string
 }
 
 /** dispatch_agent 输出联合类型 */

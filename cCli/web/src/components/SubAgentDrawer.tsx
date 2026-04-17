@@ -19,7 +19,12 @@ import type { SubAgentInfo, SubAgentDetailEvent } from './SubAgentCard'
 
 interface SubAgentDrawerProps {
   agents: Map<string, SubAgentInfo>
-  /** 停止子 Agent 回调 */
+  /**
+   * 停止单个子 Agent 回调。
+   * 后端收到后会走 graceful stop → 生成带 guidance 的 StopReport，
+   * 主 Agent 看到用户主动停止（source=user_web）会停下来询问用户下一步。
+   * 整条任务中断请用主对话框的 Ctrl+C / 中断机制。
+   */
   onStop?: (agentId: string) => void
 }
 
@@ -194,12 +199,12 @@ function AgentRow({ agent, expanded, onToggle, onStop }: AgentRowProps) {
           {agent.status === 'stopping' && (
             <span className="text-[10px] text-orange-400">正在停止...</span>
           )}
-          {/* 停止按钮 */}
+          {/* 停止按钮 — 仅停止此子 Agent，主 Agent 会收到停止报告后继续 */}
           {agent.status === 'running' && onStop && (
             <button
               onClick={(e) => { e.stopPropagation(); onStop(agent.agentId) }}
               className="px-1.5 py-0.5 text-[10px] rounded bg-red-900/50 text-red-300 hover:bg-red-800/70 transition-colors cursor-pointer"
-              title="停止此 Agent"
+              title="仅停止此子 Agent（主 Agent 将收到停止报告，由你决定继续或换方式）"
             >
               ⏹ 停止
             </button>

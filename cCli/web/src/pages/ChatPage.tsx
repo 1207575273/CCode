@@ -490,7 +490,10 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
 
       <MemoryPanel open={memoryPanelOpen} onClose={() => setMemoryPanelOpen(false)} />
 
-      <SubAgentDrawer agents={subAgents} onStop={(agentId) => send({ type: 'subagent_stop', agentId, reason: 'user' })} />
+      <SubAgentDrawer
+        agents={subAgents}
+        onStop={(agentId) => send({ type: 'subagent_stop', agentId, reason: 'user' })}
+      />
     </div>
   )
 }
