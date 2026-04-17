@@ -86,7 +86,7 @@ export type AgentEvent =
   | { type: 'done';               reason?: 'complete' | 'max_turns' | 'aborted' | 'stopped' }
   // 观测事件
   | { type: 'llm_start';          provider: string; model: string; messageCount: number; systemPrompt?: string }
-  | { type: 'llm_done';           inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; stopReason: string }
+  | { type: 'llm_done';           inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; stopReason: string; ttftMs: number; e2eMs: number; tps: number }
   | { type: 'llm_error';          error: string; partialOutputTokens?: number }
   | { type: 'tool_fallback';      toolName: string; fromLevel: string; toLevel: string; reason: string }
   | { type: 'post_tool_feedback'; toolName: string; toolCallId: string; feedback: string }
@@ -286,8 +286,21 @@ export class AgentLoop {
     // 从 done chunk 中取 stopReason，经 ProviderWrapper 标准化后直接使用
     let doneStopReason = 'end_turn'
 
+    // 性能层：计时变量
+    const requestStart = Date.now()
+    let firstContentChunk = false
+    let ttftMs = 0
+
     try {
       for await (const chunk of this.#provider.chat(chatRequest)) {
+        // 性能层：首个有内容的 chunk 才算 TTFT
+        // 部分 Provider 第一个 chunk 可能是 message_start 或空 content_block_start，
+        // 只在 text / thinking / tool_call 类型时才记录
+        if (!firstContentChunk && (chunk.type === 'text' || chunk.type === 'thinking' || chunk.type === 'tool_call')) {
+          ttftMs = Date.now() - requestStart
+          firstContentChunk = true
+        }
+
         const mapped = this.#mapChunk(chunk, pendingToolCalls)
         if (mapped) {
           if (mapped.type === 'text' && 'text' in mapped) accumulatedText += mapped.text
@@ -316,6 +329,18 @@ export class AgentLoop {
         }
       }
 
+      // 性能层：E2E + TPS 计算
+      const e2eMs = Date.now() - requestStart
+      // 纯工具调用场景：Anthropic 的 tool_call 是流结束后才 yield，
+      // ttftMs ≈ e2eMs 使 generationMs ≈ 0。此时退化用 e2eMs 作为分母，
+      // 给出"整体吞吐率"而非"纯 generation 阶段吞吐率"。
+      const generationMs = e2eMs - ttftMs
+      const tpsBase = generationMs > 50 ? generationMs : e2eMs  // 50ms 阈值避免极小值放大噪声
+      const tps = tpsBase > 0 && outputTokens > 0
+        ? Math.round(outputTokens / (tpsBase / 1000) * 10) / 10
+        : 0
+      dbg(`[PERF] TTFT=${ttftMs}ms E2E=${e2eMs}ms TPS=${tps} tokens/s (base=${tpsBase}ms)\n`)
+
       // Prompt Cache 破裂检测：systemPrompt + tools 指纹变化 → 缓存失效
       this.#llmCallIndex++
       const fingerprint = simpleHash(
@@ -331,7 +356,7 @@ export class AgentLoop {
       }
       this.#lastCacheFingerprint = fingerprint
 
-      yield { type: 'llm_done', inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, stopReason: doneStopReason }
+      yield { type: 'llm_done', inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, stopReason: doneStopReason, ttftMs, e2eMs, tps }
       // 更新上下文窗口追踪（精确值来自 API 返回的 inputTokens）
       // 仅主 Agent 更新 — 子 Agent（isSidechain）有独立上下文，不应覆盖主 Agent 的追踪值
       if (inputTokens > 0 && !this.#config.isSidechain) {
@@ -340,7 +365,8 @@ export class AgentLoop {
       return { toolCalls: pendingToolCalls, text: accumulatedText, aborted: false }
     } catch (err) {
       if (isAbortError(err)) {
-        yield { type: 'llm_done', inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, stopReason: 'abort' }
+        const e2eMs = Date.now() - requestStart
+        yield { type: 'llm_done', inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, stopReason: 'abort', ttftMs, e2eMs, tps: 0 }
       } else {
         yield makeLlmError(err instanceof Error ? err.message : String(err), outputTokens)
       }

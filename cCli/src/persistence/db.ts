@@ -1,11 +1,16 @@
+// src/persistence/db.ts
+
 /**
- * SQLite 懒加载单例 — 提供 usage_logs 和 pricing_rules 表。
+ * SQLite 懒加载单例 — 版本化迁移框架。
  *
  * 首次 getDb() 调用时：
  * 1. 创建 ~/.ccode/data/ 目录
  * 2. 打开 ccode.db
- * 3. 建表（IF NOT EXISTS）
- * 4. 写入默认计价规则（IF NOT EXISTS 去重）
+ * 3. 执行 runMigrations()（建表、加字段、种子数据全在 migrations 里）
+ *
+ * 版本管理：
+ * - 主 schema 用 PRAGMA user_version（usage_logs / pricing_rules / schema_comments / memory_meta）
+ * - memory_vectors 用 memory_meta.vectors_schema_version（维度是运行时参数，延迟建表）
  */
 
 import Database from 'libsql'
@@ -16,70 +21,150 @@ import { mkdirSync } from 'node:fs'
 
 let _db: DatabaseType | null = null
 
+// ═══════════════════════════════════════════════
+// 迁移框架
+// ═══════════════════════════════════════════════
+
+type MigrationFn = (db: DatabaseType) => void
+
+/**
+ * 迁移函数数组 — 按索引顺序执行。
+ *
+ * migrations[0] = v0 → v1（基线建表，包含全部表）
+ * migrations[N] = vN → v(N+1)（未来扩展...）
+ *
+ * 约定：
+ * - 每个函数接收 db 实例，内部自行执行 SQL
+ * - 破坏性迁移（DROP TABLE）只允许出现在早期版本（用户量小时）
+ * - 数据迁移（INSERT/UPDATE）放在同一个函数内，和 DDL 一起执行
+ * - 函数内部不设置 user_version（由 runMigrations 统一设置）
+ */
+const migrations: MigrationFn[] = [
+  // ══════════════════════════════════════════════
+  // v0 → v1：基线 schema — 全量建表
+  // ══════════════════════════════════════════════
+  // 全新安装或旧库（无版本号）统一走这里。
+  //
+  // ⚠️ 本次迁移会清空全部历史数据（usage_logs / pricing_rules / memory_vectors）。
+  // 当前阶段项目处于早期迭代，历史数据价值有限，可以接受。
+  (db) => {
+    // ── 1. 清理旧表 ──
+    db.exec('DROP TABLE IF EXISTS usage_logs')
+    db.exec('DROP TABLE IF EXISTS pricing_rules')
+    db.exec('DROP TABLE IF EXISTS schema_comments')
+    db.exec('DROP TABLE IF EXISTS memory_meta')
+    db.exec('DROP TABLE IF EXISTS memory_vectors')
+    db.exec('DROP INDEX IF EXISTS idx_memory_vec')
+
+    // ── 2. 观测层：Token 使用记录 + 性能指标 ──
+    db.exec(`
+      CREATE TABLE usage_logs (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id      TEXT NOT NULL,
+        timestamp       TEXT NOT NULL,
+        provider        TEXT NOT NULL,
+        model           TEXT NOT NULL,
+        input_tokens    INTEGER NOT NULL,
+        output_tokens   INTEGER NOT NULL,
+        cache_read      INTEGER NOT NULL DEFAULT 0,
+        cache_write     INTEGER NOT NULL DEFAULT 0,
+        duration_ms     INTEGER,
+        ttft_ms         INTEGER,
+        tps             REAL,
+        cost_amount     REAL,
+        cost_currency   TEXT NOT NULL DEFAULT 'USD',
+        pricing_rule_id INTEGER
+      );
+      CREATE INDEX idx_usage_session   ON usage_logs(session_id);
+      CREATE INDEX idx_usage_timestamp ON usage_logs(timestamp);
+    `)
+
+    // ── 3. 计价规则 ──
+    db.exec(`
+      CREATE TABLE pricing_rules (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        provider          TEXT NOT NULL,
+        model_pattern     TEXT NOT NULL,
+        input_price       REAL NOT NULL,
+        output_price      REAL NOT NULL,
+        cache_read_price  REAL NOT NULL DEFAULT 0,
+        cache_write_price REAL NOT NULL DEFAULT 0,
+        currency          TEXT NOT NULL DEFAULT 'USD',
+        effective_from    TEXT NOT NULL,
+        effective_to      TEXT,
+        source            TEXT,
+        priority          INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX idx_pricing_lookup
+        ON pricing_rules(provider, model_pattern, effective_from);
+    `)
+
+    // ── 4. 字段注释元数据 ──
+    db.exec(`
+      CREATE TABLE schema_comments (
+        table_name    TEXT NOT NULL,
+        column_name   TEXT NOT NULL,
+        comment       TEXT NOT NULL,
+        PRIMARY KEY (table_name, column_name)
+      );
+    `)
+
+    // ── 5. 记忆系统配置 ──
+    // memory_vectors 延迟建表：维度由 EmbeddingProvider 动态决定，
+    // 在 ensureMemoryVectors(dimension) 时按需创建。
+    db.exec(`
+      CREATE TABLE memory_meta (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `)
+
+    // ── 6. 种子数据 ──
+    seedDefaultPricing(db)
+    seedSchemaComments(db)
+  },
+]
+
+/** 目标版本 = migrations 数组长度 */
+const SCHEMA_VERSION = migrations.length
+
+/**
+ * 执行数据库迁移。
+ *
+ * 读取 user_version → 事务内逐个执行待跑的迁移 → 成功后更新 user_version。
+ *
+ * ⚠️ PRAGMA user_version 不参与事务回滚（它写在 DB 文件头，不受 rollback 影响）。
+ * 因此必须放在事务外面，迁移事务成功后再设置。
+ */
+function runMigrations(db: DatabaseType): void {
+  const rows = db.pragma('user_version') as Array<{ user_version: number }>
+  const current = rows[0]?.user_version ?? 0
+
+  if (current >= SCHEMA_VERSION) return
+
+  // 逐个执行迁移（不套外层事务——migration 内部的 seed 函数自带事务，
+  // SQLite 不支持嵌套事务，外层包裹会导致 "cannot start a transaction within a transaction"）
+  for (let i = current; i < SCHEMA_VERSION; i++) {
+    const migration = migrations[i]
+    if (migration) migration(db)
+  }
+
+  // 迁移成功后才更新版本号（PRAGMA 不受事务保护，必须放在最后）
+  db.pragma(`user_version = ${SCHEMA_VERSION}`)
+}
+
+// ═══════════════════════════════════════════════
+// 公共 API
+// ═══════════════════════════════════════════════
+
 /** 创建并初始化数据库（可注入路径，测试用） */
 export function createDb(dbPath: string): DatabaseType {
   const db = new Database(dbPath)
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
 
-  db.exec(`
-    -- ═══ Token 使用记录表 ═══
-    -- 每次 LLM 调用产生一条记录，记录四维 token 消耗和费用
-    CREATE TABLE IF NOT EXISTS usage_logs (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,  -- 自增主键
-      session_id      TEXT NOT NULL,                      -- 所属会话 ID
-      timestamp       TEXT NOT NULL,                      -- 记录时间 (ISO 8601)
-      provider        TEXT NOT NULL,                      -- LLM 供应商 (anthropic/openai/google/...)
-      model           TEXT NOT NULL,                      -- 模型标识 (claude-opus-4-6/gpt-4o/...)
-      input_tokens    INTEGER NOT NULL,                   -- 输入 token 数
-      output_tokens   INTEGER NOT NULL,                   -- 输出 token 数
-      cache_read      INTEGER NOT NULL DEFAULT 0,         -- 缓存读取 token 数
-      cache_write     INTEGER NOT NULL DEFAULT 0,         -- 缓存写入 token 数
-      duration_ms     INTEGER,                            -- LLM 调用耗时（毫秒）
-      cost_amount     REAL,                               -- 计算费用（美元），无匹配规则时为 NULL
-      cost_currency   TEXT NOT NULL DEFAULT 'USD',        -- 费用币种
-      pricing_rule_id INTEGER                             -- 匹配的计价规则 ID
-    );
+  runMigrations(db)
 
-    -- ═══ 计价规则表 ═══
-    -- 按 provider + model 通配符匹配，支持时间范围和优先级
-    CREATE TABLE IF NOT EXISTS pricing_rules (
-      id                INTEGER PRIMARY KEY AUTOINCREMENT,  -- 自增主键
-      provider          TEXT NOT NULL,                      -- LLM 供应商
-      model_pattern     TEXT NOT NULL,                      -- 模型匹配模式（支持末尾 * 通配符）
-      input_price       REAL NOT NULL,                      -- 输入价格 (货币/百万 token)
-      output_price      REAL NOT NULL,                      -- 输出价格 (货币/百万 token)
-      cache_read_price  REAL NOT NULL DEFAULT 0,            -- 缓存读取价格 (货币/百万 token)
-      cache_write_price REAL NOT NULL DEFAULT 0,            -- 缓存写入价格 (货币/百万 token)
-      currency          TEXT NOT NULL DEFAULT 'USD',        -- 价格币种
-      effective_from    TEXT NOT NULL,                      -- 生效起始日期 (ISO 8601)
-      effective_to      TEXT,                               -- 生效截止日期（NULL 表示永久有效）
-      source            TEXT,                               -- 价格来源说明
-      priority          INTEGER NOT NULL DEFAULT 0          -- 匹配优先级（越大越优先）
-    );
-
-    -- ═══ 字段注释元数据表 ═══
-    -- SQLite 不支持列级 COMMENT，用此表存储字段说明，可运行时查询
-    CREATE TABLE IF NOT EXISTS schema_comments (
-      table_name    TEXT NOT NULL,       -- 所属表名
-      column_name   TEXT NOT NULL,       -- 字段名
-      comment       TEXT NOT NULL,       -- 字段说明
-      PRIMARY KEY (table_name, column_name)
-    );
-
-    -- ═══ 索引 ═══
-    CREATE INDEX IF NOT EXISTS idx_pricing_lookup
-      ON pricing_rules(provider, model_pattern, effective_from);
-
-    CREATE INDEX IF NOT EXISTS idx_usage_session
-      ON usage_logs(session_id);
-
-    CREATE INDEX IF NOT EXISTS idx_usage_timestamp
-      ON usage_logs(timestamp);
-  `)
-
-  seedDefaultPricing(db)
-  seedSchemaComments(db)
   return db
 }
 
@@ -99,6 +184,113 @@ export function closeDb(): void {
     _db = null
   }
 }
+
+// ═══════════════════════════════════════════════
+// memory_vectors：延迟建表 + 维度感知重建
+// ═══════════════════════════════════════════════
+
+/** memory_vectors schema 版本 */
+const VECTORS_SCHEMA_VERSION = 1
+
+/**
+ * 确保 memory_vectors 表存在且 schema 正确。
+ *
+ * 调用时机：LibsqlVectorStore.initialize()
+ * 调用者传入 dimension，本函数负责：
+ *   1. 维度变化 → DROP + 重建（向量索引不支持动态修改维度）
+ *   2. vectors_schema_version 落后 → 执行增量迁移
+ *   3. 全部到位 → 跳过
+ *
+ * @param dimension 向量维度（如 1024、1536）。传 0 表示不建向量表（纯 BM25 模式）
+ */
+export function ensureMemoryVectors(dimension: number): void {
+  const db = getDb()
+
+  if (dimension <= 0) return
+
+  // 检查维度是否变化
+  const existingDim = getMemoryMeta(db, 'embedding_dimension')
+  if (existingDim !== null && parseInt(existingDim, 10) !== dimension) {
+    // 维度变化：必须 DROP 重建（F32_BLOB 维度写死在列定义里）
+    db.exec('DROP TABLE IF EXISTS memory_vectors')
+    db.exec('DROP INDEX IF EXISTS idx_memory_vec')
+    setMemoryMeta(db, 'vectors_schema_version', '0')
+  }
+
+  // 检查 schema 版本
+  const currentVer = parseInt(getMemoryMeta(db, 'vectors_schema_version') ?? '0', 10)
+
+  if (currentVer < VECTORS_SCHEMA_VERSION) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS memory_vectors (
+        id          TEXT PRIMARY KEY,
+        entry_id    TEXT NOT NULL,
+        scope       TEXT NOT NULL,
+        project_slug TEXT,
+        embedding   F32_BLOB(${dimension}),
+        chunk_text  TEXT NOT NULL,
+        chunk_index INTEGER NOT NULL,
+        tags        TEXT,
+        type        TEXT NOT NULL,
+        source      TEXT NOT NULL,
+        created     TEXT NOT NULL,
+        updated     TEXT NOT NULL
+      );
+    `)
+
+    // DiskANN 向量索引
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_memory_vec
+        ON memory_vectors(libsql_vector_idx(embedding));
+    `)
+
+    // 常规索引
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_memory_entry_id
+        ON memory_vectors(entry_id);
+      CREATE INDEX IF NOT EXISTS idx_memory_scope
+        ON memory_vectors(scope);
+    `)
+
+    setMemoryMeta(db, 'vectors_schema_version', String(VECTORS_SCHEMA_VERSION))
+  }
+
+  // 记录当前维度
+  setMemoryMeta(db, 'embedding_dimension', String(dimension))
+}
+
+/**
+ * 获取已存储的 embedding 维度。
+ * 未初始化或纯 BM25 模式返回 null。
+ */
+export function getStoredEmbeddingDimension(): number | null {
+  const db = getDb()
+  const val = getMemoryMeta(db, 'embedding_dimension')
+  return val ? parseInt(val, 10) : null
+}
+
+// ═══════════════════════════════════════════════
+// memory_meta 辅助函数
+// ═══════════════════════════════════════════════
+
+function getMemoryMeta(db: DatabaseType, key: string): string | null {
+  try {
+    const row = db.prepare('SELECT value FROM memory_meta WHERE key = ?')
+      .get(key) as { value: string } | undefined
+    return row?.value ?? null
+  } catch {
+    return null
+  }
+}
+
+function setMemoryMeta(db: DatabaseType, key: string, value: string): void {
+  db.prepare('INSERT OR REPLACE INTO memory_meta (key, value) VALUES (?, ?)')
+    .run(key, value)
+}
+
+// ═══════════════════════════════════════════════
+// 种子数据
+// ═══════════════════════════════════════════════
 
 /** 写入默认计价规则（幂等：按 provider+model_pattern 去重） */
 function seedDefaultPricing(db: DatabaseType): void {
@@ -158,18 +350,20 @@ function seedSchemaComments(db: DatabaseType): void {
     ['usage_logs', 'output_tokens',   '输出 token 数'],
     ['usage_logs', 'cache_read',      '缓存读取 token 数'],
     ['usage_logs', 'cache_write',     '缓存写入 token 数'],
-    ['usage_logs', 'duration_ms',     'LLM 调用耗时（毫秒）'],
-    ['usage_logs', 'cost_amount',     '计算费用（美元），无匹配规则时为 NULL'],
+    ['usage_logs', 'duration_ms',     'LLM 调用端到端耗时（毫秒）— E2E Latency'],
+    ['usage_logs', 'ttft_ms',         '首 Token 延迟（毫秒）— Time To First Token'],
+    ['usage_logs', 'tps',             '输出吞吐率（tokens/sec）— Tokens Per Second'],
+    ['usage_logs', 'cost_amount',     '计算费用，无匹配规则时为 NULL'],
     ['usage_logs', 'cost_currency',   '费用币种'],
     ['usage_logs', 'pricing_rule_id', '匹配的计价规则 ID'],
     // pricing_rules
     ['pricing_rules', 'id',                '自增主键'],
     ['pricing_rules', 'provider',          'LLM 供应商'],
     ['pricing_rules', 'model_pattern',     '模型匹配模式（支持末尾 * 通配符）'],
-    ['pricing_rules', 'input_price',       '输入价格 ($/百万 token)'],
-    ['pricing_rules', 'output_price',      '输出价格 ($/百万 token)'],
-    ['pricing_rules', 'cache_read_price',  '缓存读取价格 ($/百万 token)'],
-    ['pricing_rules', 'cache_write_price', '缓存写入价格 ($/百万 token)'],
+    ['pricing_rules', 'input_price',       '输入价格 (货币/百万 token)'],
+    ['pricing_rules', 'output_price',      '输出价格 (货币/百万 token)'],
+    ['pricing_rules', 'cache_read_price',  '缓存读取价格 (货币/百万 token)'],
+    ['pricing_rules', 'cache_write_price', '缓存写入价格 (货币/百万 token)'],
     ['pricing_rules', 'currency',          '价格币种'],
     ['pricing_rules', 'effective_from',    '生效起始日期 (ISO 8601)'],
     ['pricing_rules', 'effective_to',      '生效截止日期（NULL 表示永久有效）'],
@@ -179,6 +373,9 @@ function seedSchemaComments(db: DatabaseType): void {
     ['schema_comments', 'table_name',  '所属表名'],
     ['schema_comments', 'column_name', '字段名'],
     ['schema_comments', 'comment',     '字段说明'],
+    // memory_meta
+    ['memory_meta', 'key',   '配置键名'],
+    ['memory_meta', 'value', '配置值'],
   ]
 
   const tx = db.transaction(() => {
@@ -187,97 +384,4 @@ function seedSchemaComments(db: DatabaseType): void {
     }
   })
   tx()
-}
-
-// ═══════════════════════════════════════════════
-// 记忆系统表（由 MemoryManager 初始化时调用）
-// ═══════════════════════════════════════════════
-
-/**
- * 初始化记忆系统的 SQLite 表。
- *
- * memory_meta: 存储配置信息（如 embedding 维度）
- * memory_vectors: 存储向量索引（F32_BLOB + DiskANN）
- *
- * 维度由 EmbeddingProvider.dimension 动态决定，建表时拼入 DDL。
- * 如果维度变化（用户更换 Embedding 模型），需要 DROP + 重建。
- *
- * @param dimension 向量维度（如 1024、1536）。传 0 表示不建向量表（纯 BM25 模式）
- */
-export function ensureMemoryTables(dimension: number): void {
-  const db = getDb()
-
-  // memory_meta: 键值配置表
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS memory_meta (
-      key   TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-  `)
-
-  if (dimension <= 0) return
-
-  // 检查已有维度是否一致
-  const existing = db.prepare('SELECT value FROM memory_meta WHERE key = ?').get('embedding_dimension') as { value: string } | undefined
-  if (existing) {
-    const existingDim = parseInt(existing.value, 10)
-    if (existingDim !== dimension) {
-      // 维度变化，需要重建向量表
-      db.exec('DROP TABLE IF EXISTS memory_vectors')
-      db.exec('DROP INDEX IF EXISTS idx_memory_vec')
-      db.prepare('DELETE FROM memory_meta WHERE key = ?').run('embedding_dimension')
-    }
-  }
-
-  // memory_vectors: 向量索引表
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS memory_vectors (
-      id          TEXT PRIMARY KEY,
-      entry_id    TEXT NOT NULL,
-      scope       TEXT NOT NULL,
-      project_slug TEXT,
-      embedding   F32_BLOB(${dimension}),
-      chunk_text  TEXT NOT NULL,
-      chunk_index INTEGER NOT NULL,
-      tags        TEXT,
-      type        TEXT NOT NULL,
-      source      TEXT NOT NULL,
-      created     TEXT NOT NULL,
-      updated     TEXT NOT NULL
-    );
-  `)
-
-  // DiskANN 向量索引
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_memory_vec
-      ON memory_vectors(libsql_vector_idx(embedding));
-  `)
-
-  // 常规索引
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_memory_entry_id
-      ON memory_vectors(entry_id);
-    CREATE INDEX IF NOT EXISTS idx_memory_scope
-      ON memory_vectors(scope);
-  `)
-
-  // 记录维度
-  db.prepare(`
-    INSERT OR REPLACE INTO memory_meta (key, value) VALUES ('embedding_dimension', ?)
-  `).run(String(dimension))
-}
-
-/**
- * 获取已存储的 embedding 维度。
- * 未初始化或纯 BM25 模式返回 null。
- */
-export function getStoredEmbeddingDimension(): number | null {
-  const db = getDb()
-  try {
-    const row = db.prepare('SELECT value FROM memory_meta WHERE key = ?').get('embedding_dimension') as { value: string } | undefined
-    return row ? parseInt(row.value, 10) : null
-  } catch {
-    /* 表不存在或查询失败，返回默认值 */
-    return null
-  }
 }

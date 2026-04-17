@@ -347,12 +347,12 @@ describe('subagent-store 停止机制', () => {
     registerSubAgent({ agentId: 'a1', name: 'task-a1', description: '测试', agentType: 'general', modelName: 'test', maxTurns: 10 })
 
     // 第一次 llm_done
-    consumeAgentEvent('a1', { type: 'llm_done', inputTokens: 100, outputTokens: 50, cacheReadTokens: 10, cacheWriteTokens: 5, stopReason: 'end_turn' } as AgentEvent)
+    consumeAgentEvent('a1', { type: 'llm_done', inputTokens: 100, outputTokens: 50, cacheReadTokens: 10, cacheWriteTokens: 5, stopReason: 'end_turn', ttftMs: 0, e2eMs: 0, tps: 0 } as AgentEvent)
     let state = getSubAgent('a1')!
     expect(state.tokenUsed).toEqual({ inputTokens: 100, outputTokens: 50, cacheReadTokens: 10, cacheWriteTokens: 5 })
 
     // 第二次 llm_done（累加）
-    consumeAgentEvent('a1', { type: 'llm_done', inputTokens: 200, outputTokens: 80, cacheReadTokens: 20, cacheWriteTokens: 0, stopReason: 'end_turn' } as AgentEvent)
+    consumeAgentEvent('a1', { type: 'llm_done', inputTokens: 200, outputTokens: 80, cacheReadTokens: 20, cacheWriteTokens: 0, stopReason: 'end_turn', ttftMs: 0, e2eMs: 0, tps: 0 } as AgentEvent)
     state = getSubAgent('a1')!
     expect(state.tokenUsed).toEqual({ inputTokens: 300, outputTokens: 130, cacheReadTokens: 30, cacheWriteTokens: 5 })
   })

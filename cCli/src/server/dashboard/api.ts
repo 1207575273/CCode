@@ -128,6 +128,100 @@ export function createApiRoutes(): Hono {
         `).all(...params)
       }
 
+      // ── 性能层查询 ──
+
+      /** 按模型聚合的性能指标 */
+      const perfByRange = (since: string, until?: string) => {
+        const { where, params } = buildWhere(since, until)
+        return db.prepare(`
+          SELECT provider, model,
+            COUNT(*) as callCount,
+            ROUND(AVG(ttft_ms)) as avgTtft,
+            MIN(ttft_ms) as minTtft,
+            MAX(ttft_ms) as maxTtft,
+            ROUND(AVG(duration_ms)) as avgE2e,
+            MAX(duration_ms) as maxE2e,
+            ROUND(AVG(tps), 1) as avgTps,
+            ROUND(
+              SUM(cache_read) * 100.0 / NULLIF(SUM(cache_read) + SUM(input_tokens), 0),
+              1
+            ) as cacheHitPct
+          FROM usage_logs ${where}
+          ${where ? 'AND' : 'WHERE'} ttft_ms IS NOT NULL
+          GROUP BY provider, model
+        `).all(...params)
+      }
+
+      /** 性能趋势（按时间分组） */
+      const perfTrendByHour = (since: string, until?: string) => {
+        const { where, params } = buildWhere(since, until)
+        return db.prepare(`
+          SELECT strftime('%Y-%m-%d %H:00', timestamp) as date,
+            ROUND(AVG(ttft_ms)) as avgTtft,
+            MAX(ttft_ms) as maxTtft,
+            ROUND(AVG(tps), 1) as avgTps,
+            ROUND(AVG(duration_ms)) as avgE2e,
+            COUNT(*) as callCount,
+            ROUND(
+              SUM(cache_read) * 100.0 / NULLIF(SUM(cache_read) + SUM(input_tokens), 0),
+              1
+            ) as cacheHitPct
+          FROM usage_logs ${where}
+          ${where ? 'AND' : 'WHERE'} ttft_ms IS NOT NULL
+          GROUP BY strftime('%Y-%m-%d %H:00', timestamp)
+          ORDER BY date
+        `).all(...params)
+      }
+
+      const perfTrendByDay = (since: string, until?: string) => {
+        const { where, params } = buildWhere(since, until)
+        return db.prepare(`
+          SELECT DATE(timestamp) as date,
+            ROUND(AVG(ttft_ms)) as avgTtft,
+            MAX(ttft_ms) as maxTtft,
+            ROUND(AVG(tps), 1) as avgTps,
+            ROUND(AVG(duration_ms)) as avgE2e,
+            COUNT(*) as callCount,
+            ROUND(
+              SUM(cache_read) * 100.0 / NULLIF(SUM(cache_read) + SUM(input_tokens), 0),
+              1
+            ) as cacheHitPct
+          FROM usage_logs ${where}
+          ${where ? 'AND' : 'WHERE'} ttft_ms IS NOT NULL
+          GROUP BY DATE(timestamp)
+          ORDER BY date
+        `).all(...params)
+      }
+
+      /** TTFT 分布直方图 */
+      const ttftDistribution = (since: string, until?: string) => {
+        const { where, params } = buildWhere(since, until)
+        return db.prepare(`
+          SELECT
+            CASE
+              WHEN ttft_ms < 500 THEN '<500ms'
+              WHEN ttft_ms < 1000 THEN '500ms-1s'
+              WHEN ttft_ms < 2000 THEN '1s-2s'
+              WHEN ttft_ms < 3000 THEN '2s-3s'
+              WHEN ttft_ms < 5000 THEN '3s-5s'
+              ELSE '>5s'
+            END as bucket,
+            COUNT(*) as count,
+            CASE
+              WHEN ttft_ms < 500 THEN 1
+              WHEN ttft_ms < 1000 THEN 2
+              WHEN ttft_ms < 2000 THEN 3
+              WHEN ttft_ms < 3000 THEN 4
+              WHEN ttft_ms < 5000 THEN 5
+              ELSE 6
+            END as sortOrder
+          FROM usage_logs ${where}
+          ${where ? 'AND' : 'WHERE'} ttft_ms IS NOT NULL
+          GROUP BY bucket, sortOrder
+          ORDER BY sortOrder
+        `).all(...params)
+      }
+
       const sessions = sessionStore.list({ limit: 50 })
       const customFrom = c.req.query('from')
       const customTo = c.req.query('to')
@@ -137,21 +231,33 @@ export function createApiRoutes(): Hono {
           stats: statsByRange(todayStart.toISOString()),
           byProvider: byProvider(todayStart.toISOString()),
           trend: trendByHour(todayStart.toISOString()),
+          perf: perfByRange(todayStart.toISOString()),
+          perfTrend: perfTrendByHour(todayStart.toISOString()),
+          ttftDist: ttftDistribution(todayStart.toISOString()),
         },
         week: {
           stats: statsByRange(weekStart.toISOString()),
           byProvider: byProvider(weekStart.toISOString()),
           trend: trendByDay(weekStart.toISOString()),
+          perf: perfByRange(weekStart.toISOString()),
+          perfTrend: perfTrendByDay(weekStart.toISOString()),
+          ttftDist: ttftDistribution(weekStart.toISOString()),
         },
         month: {
           stats: statsByRange(monthStart.toISOString()),
           byProvider: byProvider(monthStart.toISOString()),
           trend: trendByDay(monthStart.toISOString()),
+          perf: perfByRange(monthStart.toISOString()),
+          perfTrend: perfTrendByDay(monthStart.toISOString()),
+          ttftDist: ttftDistribution(monthStart.toISOString()),
         },
         custom: customFrom ? {
           stats: statsByRange(customFrom, customTo),
           byProvider: byProvider(customFrom, customTo),
           trend: trendByDay(customFrom, customTo),
+          perf: perfByRange(customFrom, customTo),
+          perfTrend: perfTrendByDay(customFrom, customTo),
+          ttftDist: ttftDistribution(customFrom, customTo),
         } : null,
         recentSessions: sessions,
       })

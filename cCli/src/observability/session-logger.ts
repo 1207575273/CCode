@@ -107,6 +107,9 @@ export class SessionLogger {
           cacheReadTokens: event.cacheReadTokens,
           cacheWriteTokens: event.cacheWriteTokens,
           stopReason: event.stopReason,
+          ttftMs: event.ttftMs,
+          e2eMs: event.e2eMs,
+          tps: event.tps,
         })
         break
 

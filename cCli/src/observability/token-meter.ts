@@ -22,6 +22,10 @@ export interface SessionCostStats {
   /** 按币种分组的累计费用 { USD: 1.23, CNY: 4.56 } */
   costByCurrency: Record<string, number>
   callCount: number
+  /** 最近一次 LLM 调用的 TTFT（ms），StatusBar 展示用 */
+  lastTtftMs: number
+  /** 最近一次 LLM 调用的 TPS，StatusBar 展示用 */
+  lastTps: number
 }
 
 export interface AggregateStats {
@@ -61,8 +65,8 @@ export class TokenMeter {
   constructor(db?: DatabaseType) {
     this.#db = db ?? getDb()
     this.#insertStmt = this.#db.prepare(`
-      INSERT INTO usage_logs (session_id, timestamp, provider, model, input_tokens, output_tokens, cache_read, cache_write, cost_amount, cost_currency, pricing_rule_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO usage_logs (session_id, timestamp, provider, model, input_tokens, output_tokens, cache_read, cache_write, duration_ms, ttft_ms, tps, cost_amount, cost_currency, pricing_rule_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     this.#pricingStmt = this.#db.prepare(`
       SELECT id, model_pattern, input_price, output_price, cache_read_price, cache_write_price, currency
@@ -132,6 +136,9 @@ export class TokenMeter {
       event.outputTokens,
       event.cacheReadTokens,
       event.cacheWriteTokens,
+      event.e2eMs,
+      event.ttftMs,
+      event.tps,
       cost,
       currency,
       rule?.id ?? null,
@@ -146,11 +153,19 @@ export class TokenMeter {
       this.#stats.costByCurrency[currency] = (this.#stats.costByCurrency[currency] ?? 0) + cost
     }
     this.#stats.callCount++
+    this.#stats.lastTtftMs = event.ttftMs
+    this.#stats.lastTps = event.tps
   }
 
   /** 当前会话统计（内存累计，无 SQL 查询） */
   getSessionStats(): SessionCostStats {
     return { ...this.#stats, costByCurrency: { ...this.#stats.costByCurrency } }
+  }
+
+  /** 当前会话缓存命中率（0~1），用于 StatusBar 实时展示 */
+  getCacheHitRate(): number {
+    const total = this.#stats.totalCacheReadTokens + this.#stats.totalInputTokens
+    return total > 0 ? this.#stats.totalCacheReadTokens / total : 0
   }
 
   /** 今日汇总（SQL 聚合，按币种分组，使用本地日期） */
@@ -214,6 +229,8 @@ export class TokenMeter {
       totalCacheWriteTokens: 0,
       costByCurrency: {},
       callCount: 0,
+      lastTtftMs: 0,
+      lastTps: 0,
     }
   }
 }
