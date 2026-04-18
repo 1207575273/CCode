@@ -14,7 +14,7 @@
  * 距离→相似度转换：score = 1 - (distance / 2)
  */
 
-import { getDb, ensureMemoryTables } from '@persistence/db.js'
+import { getDb, ensureMemoryVectors } from '@persistence/db.js'
 import type { IVectorStore, VectorChunkInput, VectorSearchHit, VectorSearchOptions, MemoryScope } from '@memory/types.js'
 
 export class LibsqlVectorStore implements IVectorStore {
@@ -25,7 +25,7 @@ export class LibsqlVectorStore implements IVectorStore {
   }
 
   async initialize(): Promise<void> {
-    ensureMemoryTables(this.dimension)
+    ensureMemoryVectors(this.dimension)
   }
 
   /** 清空向量表并重建（解决 DiskANN shadow table 损坏问题） */
@@ -33,7 +33,7 @@ export class LibsqlVectorStore implements IVectorStore {
     const db = getDb()
     db.exec('DROP TABLE IF EXISTS memory_vectors')
     db.exec('DROP INDEX IF EXISTS idx_memory_vec')
-    ensureMemoryTables(this.dimension)
+    ensureMemoryVectors(this.dimension)
   }
 
   async upsert(chunks: VectorChunkInput[]): Promise<void> {

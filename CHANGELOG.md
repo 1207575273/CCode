@@ -4,6 +4,32 @@
 
 ---
 
+## [0.13.0] - 2026-04-18
+
+### Changed
+- **CLI 启动 7 倍提速**：`tsup` 全量 bundle（`noExternal: [/.*/]` + `force-external` plugin），`node dist/bin/ccli.js --version` 3.3s → ~0.46s。source 代码零改动，仅 `tsup.config.ts` 和构建产物变化。
+- **Agent 工具描述优化**：`dispatch_agent` 描述加入"如何选择 `run_in_background`"判断指引，引导 LLM 对独立闭环任务（搭项目、长构建、完整交付）优先后台执行，避免主 Agent 空转等待。
+- **AgentLoop.run() 类型收紧**：返回类型从 `AsyncIterable<AgentEvent>` 改为 `AsyncGenerator<AgentEvent, void, unknown>`，配套沉淀 Node.js 异步迭代原理长文。
+
+### Added
+- **subagent_spawn 事件**：`dispatch_agent` 注册完子 Agent 后立即 yield 携带 `parentToolCallId` 的事件，UI 在 running 期间就能把工具调用和 SubAgentCard 绑定，不再等 `tool_done`。
+- **子 Agent 停止 guidance**：`StopReport` 新增 `guidance` 字段，用自然语言告知主 Agent "用户主动停止"与"失败"的区别，避免主 Agent 自作主张接手任务。
+- **Web 主界面 SubAgentCard 挂载**：ChatPage 订阅 `subagent_spawn`，running 期间实时渲染卡片，状态图标加 `animate-spin` 旋转动画（和抽屉内表现一致）。
+- **ToolContext.toolCallId**：`StreamableTool` 可在 yield 事件时携带父工具调用 ID。
+
+### Fixed
+- **Web 端停止子 Agent 按钮失效**：Bridge Server 补齐 `subagent_stop` 消息类型的转发。
+- **SubAgentDrawer button 嵌套 HTML 违规**：外层折叠触发器改为 `div + role="button"`（键盘支持保留），消除 React 的 "button cannot be a descendant of button" 警告。
+- **shrink-0 属性错位**：EventLine 里的 `shrink-0` 原本被当作布尔属性附加到 span 上，移回 className。
+
+### Docs
+- **Node-CLI 启动性能优化全景**：新增"方案 E 实施记录"章节，包含 3 个真实踩坑（react-devtools-core 解析失败 / ESM 不支持 CJS require / tsup 字段 external 被 noExternal 覆盖）的现象/根因/解法、最终 `tsup.config.ts`、实测收益表、7 条可复用经验。
+- **Web 主界面 SubAgent 卡片挂载修复**：沉淀根因链路 + 方案选型对比 + 时序图。
+- **AsyncIterable 与 AsyncGenerator 魔法细节**：深度技术文档讲 Node.js 异步迭代协议、`async function*` 运行时魔法、改造收益评估。
+- **数据库迁移与版本号诊断指南**：扩充 7.3 节版本号查询路径 + 新增 3.4 节迁移触发时机。
+
+---
+
 ## [0.11.0] - 2026-04-14
 
 ### Added

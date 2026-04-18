@@ -19,7 +19,12 @@ import type { SubAgentInfo, SubAgentDetailEvent } from './SubAgentCard'
 
 interface SubAgentDrawerProps {
   agents: Map<string, SubAgentInfo>
-  /** 停止子 Agent 回调 */
+  /**
+   * 停止单个子 Agent 回调。
+   * 后端收到后会走 graceful stop → 生成带 guidance 的 StopReport，
+   * 主 Agent 看到用户主动停止（source=user_web）会停下来询问用户下一步。
+   * 整条任务中断请用主对话框的 Ctrl+C / 中断机制。
+   */
   onStop?: (agentId: string) => void
 }
 
@@ -164,9 +169,17 @@ function AgentRow({ agent, expanded, onToggle, onStop }: AgentRowProps) {
 
   return (
     <div className="border border-border rounded-lg overflow-hidden">
-      {/* 折叠头 */}
-      <button
+      {/* 折叠头 — 用 div 而非 button，因为内部还要嵌停止 button（HTML 禁止 button 嵌 button） */}
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onToggle}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onToggle()
+          }
+        }}
         className="w-full flex items-center justify-between px-3 py-2.5 bg-elevated hover:bg-elevated transition-colors text-left cursor-pointer"
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -194,19 +207,19 @@ function AgentRow({ agent, expanded, onToggle, onStop }: AgentRowProps) {
           {agent.status === 'stopping' && (
             <span className="text-[10px] text-orange-400">正在停止...</span>
           )}
-          {/* 停止按钮 */}
+          {/* 停止按钮 — 仅停止此子 Agent，主 Agent 会收到停止报告后继续 */}
           {agent.status === 'running' && onStop && (
             <button
               onClick={(e) => { e.stopPropagation(); onStop(agent.agentId) }}
               className="px-1.5 py-0.5 text-[10px] rounded bg-red-900/50 text-red-300 hover:bg-red-800/70 transition-colors cursor-pointer"
-              title="停止此 Agent"
+              title="仅停止此子 Agent（主 Agent 将收到停止报告，由你决定继续或换方式）"
             >
               ⏹ 停止
             </button>
           )}
           <span className="text-txt-muted text-[10px]">{expanded ? '▲' : '▼'}</span>
         </div>
-      </button>
+      </div>
 
       {/* 展开详情：事件流 */}
       {expanded && <EventList events={agent.events} />}
@@ -253,7 +266,7 @@ function EventLine({ event }: { event: SubAgentDetailEvent }) {
     case 'tool_done':
       return (
         <div className="flex items-start gap-2 text-xs">
-          <span className={event.success ? 'text-success' : 'text-error'} shrink-0>
+          <span className={`shrink-0 ${event.success ? 'text-success' : 'text-error'}`}>
             {event.success ? '✓' : '✗'}
           </span>
           <span className="text-txt-primary font-mono">{event.toolName}</span>

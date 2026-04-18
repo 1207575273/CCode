@@ -63,10 +63,29 @@ export class DispatchAgentTool implements StreamableTool {
       '可用类型：',
       typeList,
       '',
-      '注意事项：',
+      '重要：如何选择 run_in_background',
+      '',
+      '[必须 run_in_background=true] 当任务是"独立闭环交付"——你不需要子 Agent 的产出来做后续推理，',
+      '子 Agent 跑完就是跑完。典型场景：',
+      '• 搭建/初始化一个完整项目（新建后端服务、脚手架、目录结构）',
+      '• 长时间构建/安装/部署（npm install、docker build、编译大型项目）',
+      '• 独立的修复/重构任务（修一个完整 bug、完成一个完整 feature）',
+      '• 用户直接下发的"帮我做 X"类任务（做完即交付，不需要主 Agent 继续串联）',
+      '这类任务同步等待会让主 Agent 空转几十秒到几分钟，浪费时间和 token。',
+      '',
+      '[保持 run_in_background=false（默认）] 当你需要子 Agent 的结果继续推理：',
+      '• 搜索代码/分析目录后，你要基于结果决定下一步（如"搜完认证逻辑→修 bug"）',
+      '• 生成方案/调研/回答子问题，你要基于返回的文本继续组织回复',
+      '• 子 Agent 的输出会喂给主 Agent 的下一轮推理',
+      '',
+      '判断诀窍：问自己"子 Agent 返回后，我还需要基于它的返回做什么吗？"',
+      '  • 答"不需要，就是完成了" → run_in_background=true',
+      '  • 答"需要，我还要根据结果继续推理/回答" → run_in_background=false',
+      '',
+      '其他注意事项：',
       '• 子 Agent 的结果已经过验证，不要重复验证或重新执行子 Agent 已完成的命令',
       '• 直接将子 Agent 的结果转述给用户即可',
-      '• run_in_background=true 时后台执行，用 task_output 读取结果',
+      '• run_in_background=true 时立即返回 agentId，用 task_output 读取后续结果',
       '• 多个独立任务可以同时派发多个子 Agent 并行执行',
     ].join('\n')
   }
@@ -100,7 +119,10 @@ export class DispatchAgentTool implements StreamableTool {
         },
         run_in_background: {
           type: 'boolean' as const,
-          description: '后台执行，立即返回 agentId。用 task_output 读取结果',
+          description:
+            '后台执行。true 时立即返回 agentId（不阻塞主 Agent），用 task_output 读取结果。\n' +
+            '独立闭环任务（搭项目、长构建、完整交付类任务）务必设为 true，避免主 Agent 空转等待。\n' +
+            '需要基于子 Agent 返回结果做后续推理时保持 false（默认）。',
         },
       },
       required: ['description', 'prompt'] as const,
@@ -166,6 +188,20 @@ export class DispatchAgentTool implements StreamableTool {
     registerSubAgent({ agentId, name: agentName, description, agentType, modelName, maxTurns })
     if (subLogger.sessionId) {
       setSubAgentSessionId(agentId, subLogger.sessionId)
+    }
+
+    // 派生宣告事件 — 让 UI 在 running 期间就能把 dispatch_agent 工具调用和子 Agent 卡片绑定
+    // 必须携带 parentToolCallId（从 ctx 读取），前端通过它回补对应 ToolEvent 的 agentId
+    if (ctx.toolCallId) {
+      yield {
+        type: 'subagent_spawn',
+        parentToolCallId: ctx.toolCallId,
+        agentId,
+        name: agentName,
+        agentType,
+        description,
+        maxTurns,
+      }
     }
 
     // 构建受限工具集
@@ -382,6 +418,7 @@ export class DispatchAgentTool implements StreamableTool {
           turn: currentTurn, maxTurns,
           partialResult: finalText,
           ...(report.tokenUsed ? { tokenUsed: report.tokenUsed } : {}),
+          guidance: buildStopGuidance(report.source, 'graceful'),
         }
         return { success: true, output: JSON.stringify(output), meta: { type: 'dispatch-agent', agentId, agentName, agentType, status: 'stopped' } }
       }
@@ -433,6 +470,7 @@ export class DispatchAgentTool implements StreamableTool {
             turn: currentTurn, maxTurns,
             partialResult: finalText,
             ...(report.tokenUsed ? { tokenUsed: report.tokenUsed } : {}),
+            guidance: buildStopGuidance(report.source, 'forced'),
           }
           return { success: true, output: JSON.stringify(output), meta: { type: 'dispatch-agent', agentId, agentName, agentType, status: 'stopped' } }
         }
@@ -471,6 +509,57 @@ export class DispatchAgentTool implements StreamableTool {
 // ═══════════════════════════════════════════════
 // 辅助函数
 // ═══════════════════════════════════════════════
+
+/**
+ * 为 StopReport 生成给主 Agent 看的自然语言行为指引。
+ *
+ * 背景：主 Agent 收到子 Agent 的 stop 结果时，仅凭 `source` 枚举值
+ * （user_web / user_cli / timeout / parent_agent）不足以让 LLM 判断后续动作，
+ * 实测 LLM 会把 user 主动停止误解为"子 Agent 失败"而自己代替执行，违背用户意图。
+ * 这里用明确的自然语言告知 LLM 该做什么、不该做什么。
+ *
+ * 导出供单元测试使用（见 tests/unit/dispatch-agent-stop-guidance.test.ts）。
+ */
+export function buildStopGuidance(
+  source: import('./store.js').StopSource,
+  resolution: 'graceful' | 'forced',
+): string {
+  switch (source) {
+    case 'user_web':
+    case 'user_cli': {
+      const channel = source === 'user_web' ? 'Web 端' : 'CLI 端'
+      return [
+        `⚠️ 用户在 ${channel} 主动停止了此子 Agent（resolution=${resolution}）。`,
+        '这表示用户对任务的方向或执行方式有新想法，**不是执行失败**。',
+        '',
+        '你**禁止**：',
+        '1. 自己代替子 Agent 执行该任务（例如直接调用工具继续完成）。',
+        '2. 立刻重新派发同一个子 Agent 去做相同或相似的事。',
+        '3. 假设用户只是"暂停"，然后自作主张接着干。',
+        '',
+        '你**必须**：',
+        '直接用自然语言向用户回复，简要告诉用户：',
+        '  (1) 子 Agent 已在第几轮被停止、已产出什么（如有 partialResult）；',
+        '  (2) 询问用户接下来希望：',
+        '      · 放弃该任务？',
+        '      · 换一种方式继续（请说明新的方向）？',
+        '      · 还是有别的指示？',
+        '在用户给出明确回复前，**不要开始任何新操作**（不要调用工具）。',
+      ].join('\n')
+    }
+    case 'timeout':
+      return [
+        `⚠️ 子 Agent 因超时被${resolution === 'forced' ? '强制' : '优雅'}停止。`,
+        '请根据 partialResult 判断任务是否已完成足够的部分：',
+        '- 若已完成关键部分，可总结已完成工作并询问用户是否继续。',
+        '- 若进度很少，考虑调整策略（增加 timeoutMs、拆分任务）后再次派发。',
+      ].join('\n')
+    case 'parent_agent':
+      return '你之前主动停止了该子 Agent，请根据当前任务上下文继续你的主流程。'
+    default:
+      return `子 Agent 被停止（source=${source}, resolution=${resolution}），请根据 partialResult 决定下一步。`
+  }
+}
 
 /** 构建受限 ToolRegistry */
 function buildSubRegistry(parentRegistry: ToolRegistry, toolPolicy: ToolPolicy): ToolRegistry {
@@ -593,7 +682,11 @@ function runSubAgentInBackground(opts: BackgroundRunOptions): void {
           type: 'subagent_done',
           agentId, name: agentName, description,
           success: true,
-          output: JSON.stringify({ status: 'stopped', ...report }),
+          output: JSON.stringify({
+            status: 'stopped',
+            ...report,
+            guidance: buildStopGuidance(report.source, 'graceful'),
+          }),
         })
         return
       }
@@ -637,7 +730,11 @@ function runSubAgentInBackground(opts: BackgroundRunOptions): void {
             type: 'subagent_done',
             agentId, name: agentName, description,
             success: true,
-            output: JSON.stringify({ status: 'stopped', ...report }),
+            output: JSON.stringify({
+              status: 'stopped',
+              ...report,
+              guidance: buildStopGuidance(report.source, 'forced'),
+            }),
           })
           return
         }

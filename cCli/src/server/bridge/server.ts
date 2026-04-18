@@ -361,7 +361,8 @@ function routeMessage(senderId: string, msg: { type: string; [key: string]: unkn
     case 'chat':
     case 'permission':
     case 'question':
-    case 'abort': {
+    case 'abort':
+    case 'subagent_stop': {
       if (!sender.sessionId) break
       const json = JSON.stringify(msg)
       for (const client of clients.values()) {

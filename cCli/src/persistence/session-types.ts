@@ -75,6 +75,10 @@ export interface SessionEvent {
   cacheWriteTokens?: number
   stopReason?: string        // 'end_turn' | 'max_tokens' | 'abort' | 'error'
   messageCount?: number      // 发送给 LLM 的消息数
+  /** 性能层指标 */
+  ttftMs?: number            // 首 Token 延迟（ms）
+  e2eMs?: number             // 端到端耗时（ms）
+  tps?: number               // 输出吞吐率（tokens/sec）
 
   /** 工具/MCP 相关 */
   success?: boolean
