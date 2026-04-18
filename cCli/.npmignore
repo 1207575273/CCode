@@ -25,3 +25,6 @@ nul
 test/
 *.sh
 .nvmrc
+
+# sourcemap 仅本地调试用，发布时不需要（11MB+ 占包体一半）
+*.map
