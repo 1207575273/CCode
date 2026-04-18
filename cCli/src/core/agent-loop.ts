@@ -111,6 +111,19 @@ export type AgentEvent =
     | { type: 'post_tool_feedback'; toolName: string; toolCallId: string; feedback: string }
     | { type: 'permission_grant'; toolName: string; always: boolean }
     // 子 Agent 事件 — dispatch_agent 的 stream() 通过 yield* 透传到主 AgentLoop
+    /**
+     * 子 Agent 派生宣告 — dispatch_agent 生成 agentId 的瞬间 yield，
+     * 建立 parentToolCallId ↔ agentId 关联，UI 据此在 running 期间就挂载卡片。
+     */
+    | {
+    type: 'subagent_spawn';
+    parentToolCallId: string;
+    agentId: string;
+    name: string;
+    agentType: string;
+    description: string;
+    maxTurns: number
+}
     | {
     type: 'subagent_progress';
     agentId: string;
@@ -604,7 +617,9 @@ export class AgentLoop {
         }
 
         // 构建 ToolContext（流式工具需要 provider/registry 来创建子 AgentLoop）
-        const ctx = buildToolContext(this.#provider, this.#registry, this.#config, history)
+        // 传入 tc.toolCallId：StreamableTool（如 dispatch_agent）可借此在 yield 事件时
+        // 携带 parentToolCallId，供 UI 建立工具调用 ↔ 子 Agent 的关联
+        const ctx = buildToolContext(this.#provider, this.#registry, this.#config, history, tc.toolCallId)
 
         const start = Date.now()
         const tool = this.#registry.get(tc.toolName)
@@ -761,7 +776,13 @@ function makeLlmError(error: string, partialTokens: number): AgentEvent {
 }
 
 /** 构建 ToolContext，兼容 exactOptionalPropertyTypes（不传 undefined 值） */
-function buildToolContext(provider: LLMProvider, registry: ToolRegistry, config: AgentConfig, history?: ReadonlyArray<Message>): import('@tools/core/types.js').ToolContext {
+function buildToolContext(
+    provider: LLMProvider,
+    registry: ToolRegistry,
+    config: AgentConfig,
+    history?: ReadonlyArray<Message>,
+    toolCallId?: string,
+): import('@tools/core/types.js').ToolContext {
     const ctx: import('@tools/core/types.js').ToolContext = {
         cwd: process.cwd(),
         provider,
@@ -786,6 +807,9 @@ function buildToolContext(provider: LLMProvider, registry: ToolRegistry, config:
     }
     if (history !== undefined) {
         ctx.history = history
+    }
+    if (toolCallId !== undefined) {
+        ctx.toolCallId = toolCallId
     }
     return ctx
 }

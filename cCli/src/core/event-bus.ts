@@ -38,6 +38,13 @@ export type BridgeEvent =
   | { type: 'client_connect'; clientId: string; clientType: 'cli' | 'web' }
   | { type: 'client_disconnect'; clientId: string }
   | { type: 'todo_update'; todos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' }> }
+  /**
+   * 子 Agent 派生宣告 — dispatch_agent 工具在生成 agentId 的瞬间 yield，
+   * 主要供 Web / CLI UI 建立 "dispatch_agent 工具调用" 与 "子 Agent 状态"
+   * 的关联（parentToolCallId → agentId），让 running 期间主界面就能挂载
+   * SubAgentCard，不必等到 tool_done / 第一个 subagent_progress 才绑定。
+   */
+  | { type: 'subagent_spawn'; parentToolCallId: string; agentId: string; name: string; agentType: string; description: string; maxTurns: number }
   | { type: 'subagent_progress'; agentId: string; name: string; agentType: string; description: string; turn: number; maxTurns: number; currentTool?: string }
   | { type: 'subagent_done'; agentId: string; name: string; description: string; success: boolean; output: string }
   | { type: 'subagent_event'; agentId: string; detail: SubAgentDetail }

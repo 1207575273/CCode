@@ -23,6 +23,12 @@ export interface ToolContext {
   systemPrompt?: string
   /** 主 Agent 的对话历史快照（只读，供 dispatch_agent 构建子 Agent 初始消息） */
   history?: ReadonlyArray<import('@core/types.js').Message>
+  /**
+   * 当前工具调用的 toolCallId — StreamableTool 需要它建立
+   * "tool_start 事件 ↔ 自己 yield 的子事件" 的关联（例如 dispatch_agent
+   * 在 subagent_spawn 事件里带上 parentToolCallId，供 UI 绑定子 Agent 卡片）。
+   */
+  toolCallId?: string
 }
 
 export interface ToolResult {

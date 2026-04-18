@@ -63,10 +63,29 @@ export class DispatchAgentTool implements StreamableTool {
       '可用类型：',
       typeList,
       '',
-      '注意事项：',
+      '重要：如何选择 run_in_background',
+      '',
+      '[必须 run_in_background=true] 当任务是"独立闭环交付"——你不需要子 Agent 的产出来做后续推理，',
+      '子 Agent 跑完就是跑完。典型场景：',
+      '• 搭建/初始化一个完整项目（新建后端服务、脚手架、目录结构）',
+      '• 长时间构建/安装/部署（npm install、docker build、编译大型项目）',
+      '• 独立的修复/重构任务（修一个完整 bug、完成一个完整 feature）',
+      '• 用户直接下发的"帮我做 X"类任务（做完即交付，不需要主 Agent 继续串联）',
+      '这类任务同步等待会让主 Agent 空转几十秒到几分钟，浪费时间和 token。',
+      '',
+      '[保持 run_in_background=false（默认）] 当你需要子 Agent 的结果继续推理：',
+      '• 搜索代码/分析目录后，你要基于结果决定下一步（如"搜完认证逻辑→修 bug"）',
+      '• 生成方案/调研/回答子问题，你要基于返回的文本继续组织回复',
+      '• 子 Agent 的输出会喂给主 Agent 的下一轮推理',
+      '',
+      '判断诀窍：问自己"子 Agent 返回后，我还需要基于它的返回做什么吗？"',
+      '  • 答"不需要，就是完成了" → run_in_background=true',
+      '  • 答"需要，我还要根据结果继续推理/回答" → run_in_background=false',
+      '',
+      '其他注意事项：',
       '• 子 Agent 的结果已经过验证，不要重复验证或重新执行子 Agent 已完成的命令',
       '• 直接将子 Agent 的结果转述给用户即可',
-      '• run_in_background=true 时后台执行，用 task_output 读取结果',
+      '• run_in_background=true 时立即返回 agentId，用 task_output 读取后续结果',
       '• 多个独立任务可以同时派发多个子 Agent 并行执行',
     ].join('\n')
   }
@@ -100,7 +119,10 @@ export class DispatchAgentTool implements StreamableTool {
         },
         run_in_background: {
           type: 'boolean' as const,
-          description: '后台执行，立即返回 agentId。用 task_output 读取结果',
+          description:
+            '后台执行。true 时立即返回 agentId（不阻塞主 Agent），用 task_output 读取结果。\n' +
+            '独立闭环任务（搭项目、长构建、完整交付类任务）务必设为 true，避免主 Agent 空转等待。\n' +
+            '需要基于子 Agent 返回结果做后续推理时保持 false（默认）。',
         },
       },
       required: ['description', 'prompt'] as const,
@@ -166,6 +188,20 @@ export class DispatchAgentTool implements StreamableTool {
     registerSubAgent({ agentId, name: agentName, description, agentType, modelName, maxTurns })
     if (subLogger.sessionId) {
       setSubAgentSessionId(agentId, subLogger.sessionId)
+    }
+
+    // 派生宣告事件 — 让 UI 在 running 期间就能把 dispatch_agent 工具调用和子 Agent 卡片绑定
+    // 必须携带 parentToolCallId（从 ctx 读取），前端通过它回补对应 ToolEvent 的 agentId
+    if (ctx.toolCallId) {
+      yield {
+        type: 'subagent_spawn',
+        parentToolCallId: ctx.toolCallId,
+        agentId,
+        name: agentName,
+        agentType,
+        description,
+        maxTurns,
+      }
     }
 
     // 构建受限工具集
