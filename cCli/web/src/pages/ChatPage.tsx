@@ -238,6 +238,32 @@ export function ChatPage({ targetSessionId }: ChatPageProps) {
       case 'todo_update':
         setTodos(event.todos)
         break
+      case 'subagent_spawn':
+        // dispatch_agent 生成 agentId 瞬间就来的事件，用两个动作建立 "dispatch_agent
+        // ToolEvent ↔ 子 Agent" 的关联，让主界面 running 期间就能挂载 SubAgentCard：
+        // 1. 立即在 subAgents Map 里建 turn=0 的 running 占位条目（subagent_progress 来了会覆盖）
+        // 2. 通过 parentToolCallId 精确回补对应 ToolEvent 的 agentId
+        setSubAgents(prev => {
+          if (prev.has(event.agentId)) return prev
+          const next = new Map(prev)
+          next.set(event.agentId, {
+            agentId: event.agentId,
+            name: event.name,
+            agentType: event.agentType,
+            description: event.description,
+            status: 'running',
+            turn: 0,
+            maxTurns: event.maxTurns,
+            events: [],
+          })
+          return next
+        })
+        setToolEvents(prev => prev.map(e =>
+          e.toolCallId === event.parentToolCallId
+            ? { ...e, agentId: event.agentId }
+            : e,
+        ))
+        break
       case 'subagent_progress':
         setSubAgents(prev => {
           const next = new Map(prev)

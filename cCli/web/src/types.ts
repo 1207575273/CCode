@@ -56,6 +56,7 @@ export type ServerEvent =
   | { type: 'compact_status'; status: 'start' | 'done' | 'error'; strategy?: string; message?: string }
   | { type: 'cli_status'; connected: boolean; sessionId: string }
   | { type: 'todo_update'; todos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' }> }
+  | { type: 'subagent_spawn'; parentToolCallId: string; agentId: string; name: string; agentType: string; description: string; maxTurns: number }
   | { type: 'subagent_progress'; agentId: string; name: string; agentType: string; description: string; turn: number; maxTurns: number; currentTool?: string }
   | { type: 'subagent_done'; agentId: string; name: string; description: string; success: boolean; output: string }
   | { type: 'subagent_event'; agentId: string; detail: { kind: 'tool_start'; toolName: string; toolCallId: string; args?: Record<string, unknown> } | { kind: 'tool_done'; toolName: string; toolCallId: string; durationMs?: number; success?: boolean; resultSummary?: string } | { kind: 'text'; text: string } | { kind: 'error'; error: string } }

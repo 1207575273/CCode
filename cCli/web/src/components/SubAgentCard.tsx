@@ -40,7 +40,8 @@ interface SubAgentCardProps {
 export function SubAgentCard({ agent }: SubAgentCardProps) {
   const [expanded, setExpanded] = useState(false)
 
-  const statusIcon = agent.status === 'running' || agent.status === 'stopping'
+  const isSpinning = agent.status === 'running' || agent.status === 'stopping'
+  const statusIcon = isSpinning
     ? '⟳'
     : agent.status === 'done'
       ? '✓'
@@ -65,7 +66,14 @@ export function SubAgentCard({ agent }: SubAgentCardProps) {
         className="w-full flex items-center justify-between px-3 py-2 bg-elevated hover:bg-elevated transition-colors text-left"
       >
         <div className="flex items-center gap-2">
-          <span className={`${statusColor} font-mono`}>{statusIcon}</span>
+          {/* running/stopping 时使用 animate-spin 使 ⟳ 真正转起来，
+              与抽屉里的 Spinner 表现保持一致，避免用户误以为卡住 */}
+          <span
+            className={`${statusColor} font-mono ${isSpinning ? 'inline-block animate-spin' : ''}`}
+            style={isSpinning ? { animationDuration: '1s' } : undefined}
+          >
+            {statusIcon}
+          </span>
           {agent.agentType && (
             <span className="text-xs px-1.5 py-0.5 rounded bg-elevated text-txt-secondary font-mono">
               {agent.agentType}
