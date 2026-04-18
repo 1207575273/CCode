@@ -169,9 +169,17 @@ function AgentRow({ agent, expanded, onToggle, onStop }: AgentRowProps) {
 
   return (
     <div className="border border-border rounded-lg overflow-hidden">
-      {/* 折叠头 */}
-      <button
+      {/* 折叠头 — 用 div 而非 button，因为内部还要嵌停止 button（HTML 禁止 button 嵌 button） */}
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onToggle}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onToggle()
+          }
+        }}
         className="w-full flex items-center justify-between px-3 py-2.5 bg-elevated hover:bg-elevated transition-colors text-left cursor-pointer"
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -211,7 +219,7 @@ function AgentRow({ agent, expanded, onToggle, onStop }: AgentRowProps) {
           )}
           <span className="text-txt-muted text-[10px]">{expanded ? '▲' : '▼'}</span>
         </div>
-      </button>
+      </div>
 
       {/* 展开详情：事件流 */}
       {expanded && <EventList events={agent.events} />}
@@ -258,7 +266,7 @@ function EventLine({ event }: { event: SubAgentDetailEvent }) {
     case 'tool_done':
       return (
         <div className="flex items-start gap-2 text-xs">
-          <span className={event.success ? 'text-success' : 'text-error'} shrink-0>
+          <span className={`shrink-0 ${event.success ? 'text-success' : 'text-error'}`}>
             {event.success ? '✓' : '✗'}
           </span>
           <span className="text-txt-primary font-mono">{event.toolName}</span>
