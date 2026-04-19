@@ -45,6 +45,16 @@ export interface LLMCallSessionConfig {
 // LLMCallSession
 // ═══════════════════════════════════════════════
 
+/**
+ * ⚠️ config 为**构造时快照**,不随外部 AgentConfig 变化而更新。
+ *
+ * 原 agent-loop.#callLLM 每次调用都从 this.#config 读取 signal/systemPrompt/isSidechain,
+ * 抽出到 Session 后这几个字段变成构造期快照。当前 AgentConfig 在 AgentLoop 构造后不会
+ * 被外部修改(没有 setConfig 接口),AbortController.signal 创建后也不换,实际无影响。
+ *
+ * 若未来需要动态刷新(例如运行期切换 systemPrompt),应让 invoke() 接收 overrides
+ * 或改由调用方按需注入,不要假设 session 会感知 AgentConfig 的外部变更。
+ */
 export class LLMCallSession {
     readonly #provider: LLMProvider
     readonly #registry: ToolRegistry
@@ -68,7 +78,10 @@ export class LLMCallSession {
     async* invoke(messages: ReadonlyArray<Message>): AsyncGenerator<AgentEvent, LLMCallResult> {
         const chatRequest = {
             model: this.#config.model,
-            messages: [...messages],  // 拷贝一份避免 provider 误改
+            // 转为 Message[] 以匹配 provider ChatRequest 的 messages 字段签名(当前非 Readonly)。
+            // 并非防御性拷贝 —— provider 层只读消费,此处拷贝纯粹是类型兼容。
+            // 若未来 ChatRequest.messages 改为 ReadonlyArray<Message>,此处 spread 可去掉。
+            messages: [...messages],
             tools: this.#registry.toToolDefinitions(),
             ...(this.#config.signal !== undefined ? {signal: this.#config.signal} : {}),
             ...(this.#config.systemPrompt !== undefined ? {systemPrompt: this.#config.systemPrompt} : {}),

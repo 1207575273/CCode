@@ -1,6 +1,6 @@
 // src/core/event-bus.ts
 
-import type { AgentEvent } from './agent-loop.js'
+import type { AgentEvent } from './agent-events.js'
 import { dbg } from '../debug.js'
 
 /** 状态栏推送数据 */

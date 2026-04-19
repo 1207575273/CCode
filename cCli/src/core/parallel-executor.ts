@@ -14,7 +14,7 @@ import type { ToolCallContent } from './types.js'
 import type { ToolRegistry } from '@tools/core/registry.js'
 import type { ToolContext } from '@tools/core/types.js'
 import { isStreamableTool } from '@tools/core/types.js'
-import type { AgentEvent } from './agent-loop.js'
+import type { AgentEvent } from './agent-events.js'
 import { executeToolPipeline, type ToolPipelineDeps, type ToolPipelineOutcome } from './tool-pipeline.js'
 
 // ═══════════════════════════════════════════════

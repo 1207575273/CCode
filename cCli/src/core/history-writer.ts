@@ -68,11 +68,20 @@ export class HistoryWriter {
      * 追加一批 tool_result 合并为一条 user 消息(并行路径)。
      * Anthropic 协议要求同一轮的所有 tool_result 在同一条 user 消息里,
      * 故并行工具必须走本 API 而不是多次 appendToolResult。
+     *
+     * 原子性:先全量 validate,全部合法再 consume + push。若中途发现 orphan,
+     * 抛异常时 pending 状态保持不变,history 也不追加,避免部分 consume
+     * 导致后续 tool_result 无法正常配对。
      */
     appendToolResults(results: ReadonlyArray<ToolResultContent>): void {
         if (results.length === 0) return
+        // Pass 1: 全部 validate,任何一个 orphan 都抛出(pending 不动)
         for (const r of results) {
-            this.#assertPairedAndConsume(r.toolCallId)
+            this.#assertPaired(r.toolCallId)
+        }
+        // Pass 2: 全部合法,统一 consume + push
+        for (const r of results) {
+            this.#pendingToolCallIds.delete(r.toolCallId)
         }
         this.#history.push({role: 'user', content: [...results]})
     }
@@ -97,7 +106,8 @@ export class HistoryWriter {
         return [...this.#pendingToolCallIds]
     }
 
-    #assertPairedAndConsume(toolCallId: string): void {
+    /** 仅 validate 不消费(供 appendToolResults 的原子化 validate 阶段使用) */
+    #assertPaired(toolCallId: string): void {
         if (!this.#pendingToolCallIds.has(toolCallId)) {
             throw new Error(
                 `HistoryWriter: tool_result '${toolCallId}' has no matching pending tool_call. ` +
@@ -105,16 +115,26 @@ export class HistoryWriter {
                 `Pending: [${[...this.#pendingToolCallIds].join(', ')}]`,
             )
         }
+    }
+
+    #assertPairedAndConsume(toolCallId: string): void {
+        this.#assertPaired(toolCallId)
         this.#pendingToolCallIds.delete(toolCallId)
     }
 
-    /** 扫描现有 history,把没有配对 tool_result 的 tool_call 塞进 pending(支持 resume 场景) */
+    /**
+     * 扫描现有 history,把没有配对 tool_result 的 tool_call 塞进 pending(支持 resume 场景)。
+     * Message.content 可以是 string / MessageContent / MessageContent[] 三种形态,
+     * 本方法需统一处理(单对象和数组都要扫,string 跳过)。
+     */
     #seedPendingFromExisting(): void {
         const seenCalls = new Set<string>()
         const seenResults = new Set<string>()
         for (const msg of this.#history) {
-            if (!Array.isArray(msg.content)) continue
-            for (const c of msg.content) {
+            if (typeof msg.content === 'string') continue
+            // content 既可能是数组也可能是单 MessageContent 对象,统一包裹后扫描
+            const blocks = Array.isArray(msg.content) ? msg.content : [msg.content]
+            for (const c of blocks) {
                 if (typeof c !== 'object' || c === null || !('type' in c)) continue
                 if (c.type === 'tool_call') {
                     seenCalls.add((c as ToolCallContent).toolCallId)

@@ -138,6 +138,29 @@ describe('HistoryWriter', () => {
         writer.appendToolResults([mkToolResult('a', '1'), mkToolResult('orphan', '2')]),
       ).toThrow(/tool_result 'orphan'/)
     })
+
+    it('部分失败时保持 pending 原子性:合法 ID 不应被提前 consume(回归测试)', () => {
+      const history: Message[] = []
+      const writer = new HistoryWriter(history)
+      writer.appendAssistant('', [
+        mkToolCall('a', 'read_file', {}),
+        mkToolCall('b', 'read_file', {}),
+      ])
+
+      // a 和 b 都是合法 pending, orphan 不合法 → 应整批拒绝
+      expect(() =>
+        writer.appendToolResults([mkToolResult('a', '1'), mkToolResult('b', '2'), mkToolResult('orphan', '3')]),
+      ).toThrow(/tool_result 'orphan'/)
+
+      // 关键断言:失败后 a / b 仍应在 pending,history 未追加
+      expect([...writer.pendingToolCallIds].sort()).toEqual(['a', 'b'])
+      expect(history).toHaveLength(1)  // 只有之前 appendAssistant 那一条 assistant 消息
+
+      // 后续可以正常对 a / b 追加 tool_result(证明 pending 未被破坏)
+      writer.appendToolResults([mkToolResult('a', '1'), mkToolResult('b', '2')])
+      expect(writer.pendingToolCallIds).toEqual([])
+      expect(history).toHaveLength(2)
+    })
   })
 
   describe('appendSystemNote', () => {
@@ -192,6 +215,25 @@ describe('HistoryWriter', () => {
         },
       ]
       const writer = new HistoryWriter(history)
+      expect(writer.pendingToolCallIds).toEqual([])
+    })
+
+    it('msg.content 是单个 MessageContent 对象(非数组)时也应被扫描(回归测试)', () => {
+      // types.ts:35 允许 content: MessageContent | MessageContent[] | string
+      // 旧实现只查 Array.isArray,单对象场景会静默漏扫 pending。
+      const history: Message[] = [
+        { role: 'user', content: 'hi' },
+        {
+          role: 'assistant',
+          // ← 注意:单对象,不是数组
+          content: { type: 'tool_call', toolCallId: 'solo-call', toolName: 'bash', args: {} },
+        },
+      ]
+      const writer = new HistoryWriter(history)
+      expect(writer.pendingToolCallIds).toEqual(['solo-call'])
+
+      // 可以正常配对 tool_result
+      writer.appendToolResult(mkToolResult('solo-call', 'done'))
       expect(writer.pendingToolCallIds).toEqual([])
     })
   })
