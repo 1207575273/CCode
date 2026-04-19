@@ -24,14 +24,13 @@
 import type {LLMProvider} from '@providers/provider.js'
 import {summarizeArgs} from './args-summarizer.js'
 import type {ToolRegistry} from '@tools/core/registry.js'
-import type {ToolResult, ToolResultMeta} from '@tools/core/types.js'
-import {isStreamableTool} from '@tools/core/types.js'
+import type {ToolResultMeta} from '@tools/core/types.js'
 import type {Message, MessageContent, StreamChunk, ToolCallContent, ToolResultContent} from './types.js'
 import {classifyToolCalls, executeSafeToolsInParallel} from './parallel-executor.js'
 import type {HookManager} from '@hooks/hook-manager.js'
 import {contextTracker} from './context-tracker.js'
 import {RepetitionDetector} from './repetition-detector.js'
-import {truncate, truncateForLLM, truncateForSummary, truncateForFull} from './result-truncator.js'
+import {executeToolPipeline, type ToolPipelineDeps} from './tool-pipeline.js'
 import {dbg} from '../debug.js'
 
 // ═══════════════════════════════════════════════
@@ -491,235 +490,81 @@ export class AgentLoop {
             process.stderr.write(`[parallel] ${toolCalls.length} tools → safe: ${safe.map(t => t.toolName).join(',')} | dangerous: ${dangerous.map(t => t.toolName).join(',')}\n`)
         }
 
-        // 1. 并行执行安全工具
+        // 1. 并行执行安全工具 — 每个工具跑完整 pipeline,护栏与串行路径一致
         if (safe.length > 0) {
             const events: AgentEvent[] = []
             const ctx = buildToolContext(this.#provider, this.#registry, this.#config, history)
-            const results = await executeSafeToolsInParallel(
-                safe, this.#registry, (e) => events.push(e), ctx, this.#config.maxParallelTools,
+            const deps: ToolPipelineDeps = {
+                registry: this.#registry,
+                repetitionDetector: this.#repetitionDetector,
+                ...(this.#config.hookManager !== undefined ? {hookManager: this.#config.hookManager} : {}),
+                ...(this.#config.isSidechain !== undefined ? {isSidechain: this.#config.isSidechain} : {}),
+            }
+            const outcomes = await executeSafeToolsInParallel(
+                safe, deps, (e) => events.push(e), ctx, this.#config.maxParallelTools,
             )
             // yield 收集到的事件
             for (const e of events) {
                 yield e
             }
-            // 所有并行工具结果合并到一条 user 消息（Anthropic 要求同一条消息包含所有 tool_result）
-            const toolResults: ToolResultContent[] = results.map(pr => {
-                // 失败时合并 output + error（output 可能含 stderr 等诊断信息）
-                const raw = pr.success
-                    ? pr.output
-                    : [pr.output, pr.error].filter(Boolean).join('\n') || 'error'
-                return {
-                    type: 'tool_result' as const,
-                    toolCallId: pr.toolCallId,
-                    result: truncateForLLM(raw, pr.toolName),
-                    ...(pr.success === false ? {isError: true as const} : {}),
-                }
-            })
+            // 所有并行工具的 tool_result 合并到一条 user 消息(Anthropic 要求同一批 tool_result 在同条消息)
+            const toolResults: ToolResultContent[] = outcomes.map(o => o.toolResult)
             if (toolResults.length > 0) {
                 history.push({role: 'user', content: toolResults})
             }
+            // 每个工具的 warn / postHookFeedbacks 按原始顺序追加为独立 user 消息
+            for (const o of outcomes) {
+                if (o.warnMessage !== undefined) {
+                    history.push({role: 'user', content: o.warnMessage})
+                }
+                if (o.postHookFeedbacks !== undefined) {
+                    for (const fb of o.postHookFeedbacks) {
+                        history.push({role: 'user', content: fb})
+                    }
+                }
+            }
         }
 
-        // 2. 串行执行危险工具
+        // 2. 串行执行危险工具(含 StreamableTool,如 dispatch_agent)
         for (const tc of dangerous) {
             yield* this.#executeOneTool(tc, history)
         }
     }
 
     /**
-     * 执行单个工具调用。
+     * 执行单个工具调用 — 串行路径。
      *
-     * 普通工具：await tool.execute()
-     * 流式工具（StreamableTool）：yield* tool.stream()，中间事件实时透传
+     * 完整执行管道(重复检测、权限、Pre/Post Hook、核心执行、截断)统一由
+     * executeToolPipeline 承担。本函数只负责:
+     *   - 构造 ToolContext 与 pipeline deps
+     *   - yield* pipeline 透传事件(tool_start / permission_request / post_tool_feedback / tool_done 等)
+     *   - 按 outcome 顺序追加 history(tool_result → warn → postHookFeedbacks)
      *
-     * yield: tool_start → [permission_request → permission_grant] → [subagent_progress*] → tool_done
+     * 详见 src/core/tool-pipeline.ts 与 docs/plans/20260420012229_agent-loop重构评审.md S-P0.1。
      */
     async* #executeOneTool(tc: ToolCallContent, history: Message[]): AsyncGenerator<AgentEvent> {
-        yield {type: 'tool_start', toolName: tc.toolName, toolCallId: tc.toolCallId, args: tc.args}
-
-        // ── 重复调用检测 ──
-        // 在权限检查之前执行，因为 block 级别的拦截根本不需要走后续流程
-        const verdict = this.#repetitionDetector.check(tc)
-        if (verdict.action === 'block') {
-            dbg(`[REPETITION-BLOCK] ${tc.toolName} × ${verdict.count}, skipping execution\n`)
-            history.push({
-                role: 'user',
-                content: [{type: 'tool_result', toolCallId: tc.toolCallId, result: verdict.message, isError: true}]
-            })
-            yield {
-                type: 'tool_done',
-                toolName: tc.toolName,
-                toolCallId: tc.toolCallId,
-                durationMs: 0,
-                success: false,
-                resultSummary: `循环调用已拦截 (${tc.toolName} × ${verdict.count})`
-            }
-            return
-        }
-
-        // 权限检查：isSidechain 模式跳过弹窗（主 Agent 派发即授权）
-        const allowed = yield* this.#checkPermission(tc)
-        if (!allowed) {
-            history.push({
-                role: 'user',
-                content: [{type: 'tool_result', toolCallId: tc.toolCallId, result: 'rejected by user', isError: true}]
-            })
-            yield {
-                type: 'tool_done',
-                toolName: tc.toolName,
-                toolCallId: tc.toolCallId,
-                durationMs: 0,
-                success: false,
-                resultSummary: 'rejected by user'
-            }
-            return
-        }
-
-        // PreToolUse Hook：检查是否被拦截或参数被修改
-        let toolArgs = tc.args
-        if (this.#config.hookManager) {
-            const preResults = await this.#config.hookManager.run('PreToolUse', {
-                trigger: tc.toolName,
-                env: {CCODE_TOOL_NAME: tc.toolName, CCODE_TOOL_CALL_ID: tc.toolCallId},
-                stdin: JSON.stringify({toolName: tc.toolName, args: tc.args}),
-            })
-            for (const r of preResults) {
-                if (!r) continue
-                if (r['decision'] === 'block') {
-                    const reason = typeof r['reason'] === 'string' ? r['reason'] : 'blocked by hook'
-                    history.push({
-                        role: 'user',
-                        content: [{
-                            type: 'tool_result',
-                            toolCallId: tc.toolCallId,
-                            result: `blocked: ${reason}`,
-                            isError: true
-                        }]
-                    })
-                    yield {
-                        type: 'tool_done',
-                        toolName: tc.toolName,
-                        toolCallId: tc.toolCallId,
-                        durationMs: 0,
-                        success: false,
-                        resultSummary: reason
-                    }
-                    return
-                }
-                if (r['decision'] === 'modify' && typeof r['modifiedArgs'] === 'object' && r['modifiedArgs'] !== null) {
-                    toolArgs = r['modifiedArgs'] as Record<string, unknown>
-                }
-            }
-        }
-
-        // 构建 ToolContext（流式工具需要 provider/registry 来创建子 AgentLoop）
-        // 传入 tc.toolCallId：StreamableTool（如 dispatch_agent）可借此在 yield 事件时
-        // 携带 parentToolCallId，供 UI 建立工具调用 ↔ 子 Agent 的关联
         const ctx = buildToolContext(this.#provider, this.#registry, this.#config, history, tc.toolCallId)
+        const deps: ToolPipelineDeps = {
+            registry: this.#registry,
+            repetitionDetector: this.#repetitionDetector,
+            ...(this.#config.hookManager !== undefined ? {hookManager: this.#config.hookManager} : {}),
+            ...(this.#config.isSidechain !== undefined ? {isSidechain: this.#config.isSidechain} : {}),
+        }
 
-        const start = Date.now()
-        const tool = this.#registry.get(tc.toolName)
+        const outcome = yield* executeToolPipeline(tc, ctx, deps)
 
-        // 【雷区一防御】工具执行必须 try/catch，确保任何异常都产生 tool_result，
-        // 绝不能让 assistant 消息中的 tool_call 成为孤儿（无对应 tool_result）。
-        // registry.execute() 内部已有 catch，但 StreamableTool 的 yield* 没有。
-        let result: ToolResult
-        try {
-            if (tool && isStreamableTool(tool)) {
-                // 流式工具（如 dispatch_agent）：yield* 透传中间事件，return 值为最终结果
-                result = yield* (tool.stream(toolArgs, ctx) as AsyncGenerator<AgentEvent, ToolResult>)
-            } else {
-                // 普通工具：await execute()
-                result = await this.#registry.execute(tc.toolName, toolArgs, ctx)
+        // 按 outcome 顺序追加 history(并行路径走 parallel-executor,在那里做合并追加)
+        history.push({role: 'user', content: [outcome.toolResult]})
+        if (outcome.warnMessage !== undefined) {
+            history.push({role: 'user', content: outcome.warnMessage})
+        }
+        if (outcome.postHookFeedbacks !== undefined) {
+            for (const fb of outcome.postHookFeedbacks) {
+                history.push({role: 'user', content: fb})
             }
-        } catch (err) {
-            // 【雷区二防御】异常的完整 stack 传回 LLM，让模型能定位错误并自我纠错
-            const errDetail = err instanceof Error
-                ? `${err.message}\n${err.stack ?? ''}`
-                : String(err)
-            result = {success: false, output: '', error: errDetail}
-        }
-
-        const durationMs = Date.now() - start
-
-        // 失败时合并 output + error 传给 LLM（output 可能含 stderr 等诊断信息，不能丢）
-        const toolResultRaw = result.success
-            ? result.output
-            : [result.output, result.error].filter(Boolean).join('\n') || 'error'
-        // 兜底截断：防 bash/task_output 等工具返回超长结果膨胀 history
-        const toolResultText = truncateForLLM(toolResultRaw, tc.toolName)
-
-        history.push({
-            role: 'user',
-            content: [{
-                type: 'tool_result',
-                toolCallId: tc.toolCallId,
-                result: toolResultText,
-                ...(result.success === false ? {isError: true} : {}),
-            }],
-        })
-
-        // ── 重复调用 warn 级别：注入警告到 history，让 LLM 下一轮看到 ──
-        if (verdict.action === 'warn') {
-            const warning = this.#repetitionDetector.buildWarningMessage(verdict.toolName, verdict.count)
-            dbg(`[REPETITION-WARN] ${tc.toolName} × ${verdict.count}\n`)
-            history.push({role: 'user', content: warning})
-        }
-
-        // PostToolUse Hook：工具执行后通知 + 消费反馈（Reflection 闭环）
-        // 放在 history.push(工具结果) 之后，这样 LLM 先看到工具结果，再看到验证反馈。
-        // hook 脚本可返回 { additionalContext: "tsc error: ..." }，追加到 history 引导 LLM 自行修正。
-        if (this.#config.hookManager) {
-            const postResults = await this.#config.hookManager.run('PostToolUse', {
-                trigger: tc.toolName,
-                env: {CCODE_TOOL_NAME: tc.toolName, CCODE_TOOL_CALL_ID: tc.toolCallId},
-                stdin: JSON.stringify({
-                    toolName: tc.toolName,
-                    result: {success: result.success, output: truncate(result.output, 1000)}
-                }),
-            })
-
-            for (const r of postResults) {
-                if (!r) continue
-                const ctx = r['additionalContext']
-                if (typeof ctx === 'string' && ctx.trim()) {
-                    history.push({role: 'user', content: `[PostToolUse feedback for ${tc.toolName}]: ${ctx}`})
-                    // yield 事件让 SessionLogger 持久化到 JSONL
-                    yield {type: 'post_tool_feedback', toolName: tc.toolName, toolCallId: tc.toolCallId, feedback: ctx}
-                }
-            }
-        }
-
-        const rawOutput = result.success ? result.output : (result.error ?? 'error')
-        const resultSummary = truncateForSummary(rawOutput)
-        const resultFull = truncateForFull(rawOutput)
-
-        yield {
-            type: 'tool_done', toolName: tc.toolName, toolCallId: tc.toolCallId,
-            durationMs, success: result.success, resultSummary, resultFull,
-            ...(result.meta !== undefined ? {meta: result.meta} : {}),
         }
     }
 
-    /** 安全工具直接放行；危险工具 yield permission_request 暂停等待用户确认 */
-    async* #checkPermission(tc: ToolCallContent): AsyncGenerator<AgentEvent, boolean> {
-        // isSidechain 模式：子 Agent 内所有工具自动批准（主 Agent 派发即授权）
-        if (this.#config.isSidechain) return true
-
-        if (!this.#registry.isDangerous(tc.toolName)) return true
-
-        let resolvePermission!: (v: boolean) => void
-        const promise = new Promise<boolean>(r => {
-            resolvePermission = r
-        })
-        yield {type: 'permission_request', toolName: tc.toolName, args: tc.args, resolve: resolvePermission}
-        const allowed = await promise
-
-        if (allowed) {
-            yield {type: 'permission_grant', toolName: tc.toolName, always: false}
-        }
-        return allowed
-    }
 }
 
 // ═══════════════════════════════════════════════

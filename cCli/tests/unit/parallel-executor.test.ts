@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import { classifyToolCalls, executeSafeToolsInParallel } from '@core/parallel-executor.js'
 import { ToolRegistry } from '@tools/core/registry.js'
+import { RepetitionDetector } from '@core/repetition-detector.js'
 import type { ToolCallContent } from '@core/types.js'
 import type { AgentEvent } from '@core/agent-loop.js'
+import type { ToolPipelineDeps } from '@core/tool-pipeline.js'
 import type { Tool, ToolContext } from '@tools/core/types.js'
 
 // ═══════════════════════════════════════════════
@@ -53,6 +55,14 @@ function makeToolCall(toolName: string, id?: string): ToolCallContent {
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/** 构造 pipeline 最小依赖(不带 hookManager 和 isSidechain) */
+function makeDeps(registry: ToolRegistry): ToolPipelineDeps {
+  return {
+    registry,
+    repetitionDetector: new RepetitionDetector(),
+  }
 }
 
 const ctx: ToolContext = { cwd: '/tmp' }
@@ -123,67 +133,66 @@ describe('classifyToolCalls', () => {
 
 // ═══════════════════════════════════════════════
 // executeSafeToolsInParallel
+//
+// 2026-04-20 S-P0.1 重构后,本函数改为对每个工具跑完整 pipeline,返回 ToolPipelineOutcome[]。
+// 原返回字段(success/output/error/toolName/durationMs)不再直接暴露 —— 这些属于 pipeline
+// 内部行为,已由 agent-loop.test.ts 覆盖。本文件只测 executeSafeToolsInParallel 的
+// 并发编排语义(顺序、事件透传、异常隔离、分批)。
 // ═══════════════════════════════════════════════
 
 describe('executeSafeToolsInParallel', () => {
   it('空数组立即返回空结果', async () => {
     const reg = new ToolRegistry()
     const onEvent = vi.fn()
-    const results = await executeSafeToolsInParallel([], reg, onEvent, ctx)
+    const outcomes = await executeSafeToolsInParallel([], makeDeps(reg), onEvent, ctx)
 
-    expect(results).toHaveLength(0)
+    expect(outcomes).toHaveLength(0)
     expect(onEvent).not.toHaveBeenCalled()
   })
 
-  it('单工具执行并收集 tool_start / tool_done 事件', async () => {
+  it('单工具执行并发射 tool_start / tool_done 事件', async () => {
     const reg = new ToolRegistry()
     reg.register(makeTool('read_file'))
 
     const events: AgentEvent[] = []
-    const onEvent = (e: AgentEvent) => events.push(e)
-
-    const results = await executeSafeToolsInParallel(
+    const outcomes = await executeSafeToolsInParallel(
       [makeToolCall('read_file', 'c1')],
-      reg,
-      onEvent,
+      makeDeps(reg),
+      e => events.push(e),
       ctx,
     )
 
-    expect(results).toHaveLength(1)
-    expect(results[0]?.success).toBe(true)
-    expect(results[0]?.output).toBe('read_file result')
+    expect(outcomes).toHaveLength(1)
+    expect(outcomes[0]?.toolResult.toolCallId).toBe('c1')
+    expect(outcomes[0]?.toolResult.isError).toBeUndefined()
+    expect(outcomes[0]?.toolResult.result).toBe('read_file result')
 
     const starts = events.filter(e => e.type === 'tool_start')
     const dones = events.filter(e => e.type === 'tool_done')
     expect(starts).toHaveLength(1)
     expect(dones).toHaveLength(1)
-
-    const startEvt = starts[0]
-    expect(startEvt?.type === 'tool_start' && startEvt.toolCallId).toBe('c1')
-
     const doneEvt = dones[0]
     expect(doneEvt?.type === 'tool_done' && doneEvt.success).toBe(true)
   })
 
-  it('多工具执行并按原始顺序返回结果', async () => {
+  it('多工具按原始顺序返回 outcome', async () => {
     const reg = new ToolRegistry()
     reg.register(makeTool('tool_a'))
     reg.register(makeTool('tool_b'))
     reg.register(makeTool('tool_c'))
 
-    const events: AgentEvent[] = []
     const toolCalls = [
       makeToolCall('tool_a', 'id-a'),
       makeToolCall('tool_b', 'id-b'),
       makeToolCall('tool_c', 'id-c'),
     ]
+    const events: AgentEvent[] = []
+    const outcomes = await executeSafeToolsInParallel(toolCalls, makeDeps(reg), e => events.push(e), ctx)
 
-    const results = await executeSafeToolsInParallel(toolCalls, reg, e => events.push(e), ctx)
-
-    expect(results).toHaveLength(3)
-    expect(results[0]?.toolCallId).toBe('id-a')
-    expect(results[1]?.toolCallId).toBe('id-b')
-    expect(results[2]?.toolCallId).toBe('id-c')
+    expect(outcomes).toHaveLength(3)
+    expect(outcomes[0]?.toolResult.toolCallId).toBe('id-a')
+    expect(outcomes[1]?.toolResult.toolCallId).toBe('id-b')
+    expect(outcomes[2]?.toolResult.toolCallId).toBe('id-c')
 
     expect(events.filter(e => e.type === 'tool_start')).toHaveLength(3)
     expect(events.filter(e => e.type === 'tool_done')).toHaveLength(3)
@@ -191,48 +200,43 @@ describe('executeSafeToolsInParallel', () => {
 
   it('多工具实际并行执行（时间验证）', async () => {
     const reg = new ToolRegistry()
-    // 每个工具执行 80ms，3 个并行应在约 80-200ms 内完成
     reg.register(makeTool('slow_a', false, 80))
     reg.register(makeTool('slow_b', false, 80))
     reg.register(makeTool('slow_c', false, 80))
 
-    const toolCalls = [
-      makeToolCall('slow_a'),
-      makeToolCall('slow_b'),
-      makeToolCall('slow_c'),
-    ]
+    const toolCalls = [makeToolCall('slow_a'), makeToolCall('slow_b'), makeToolCall('slow_c')]
 
     const start = Date.now()
-    const results = await executeSafeToolsInParallel(toolCalls, reg, () => {}, ctx)
+    const outcomes = await executeSafeToolsInParallel(toolCalls, makeDeps(reg), () => {}, ctx)
     const elapsed = Date.now() - start
 
-    expect(results).toHaveLength(3)
-    expect(results.every(r => r.success)).toBe(true)
-    // 并行执行：应远小于 3 * 80ms = 240ms
+    expect(outcomes).toHaveLength(3)
+    expect(outcomes.every(o => o.toolResult.isError !== true)).toBe(true)
+    // 并行执行:应远小于 3 * 80ms = 240ms
     expect(elapsed).toBeLessThan(220)
   })
 
-  it('失败工具（success: false）正确记录结果', async () => {
+  it('失败工具(success=false)的 outcome 标记 isError', async () => {
     const reg = new ToolRegistry()
     reg.register(makeFailingTool('bad_tool'))
 
     const events: AgentEvent[] = []
-    const results = await executeSafeToolsInParallel(
+    const outcomes = await executeSafeToolsInParallel(
       [makeToolCall('bad_tool', 'fail-1')],
-      reg,
+      makeDeps(reg),
       e => events.push(e),
       ctx,
     )
 
-    expect(results).toHaveLength(1)
-    expect(results[0]?.success).toBe(false)
-    expect(results[0]?.error).toBe('bad_tool failed')
+    expect(outcomes).toHaveLength(1)
+    expect(outcomes[0]?.toolResult.isError).toBe(true)
+    expect(String(outcomes[0]?.toolResult.result)).toContain('bad_tool failed')
 
     const doneEvt = events.find(e => e.type === 'tool_done')
     expect(doneEvt?.type === 'tool_done' && doneEvt.success).toBe(false)
   })
 
-  it('抛出异常的工具被捕获，不影响其他工具', async () => {
+  it('抛出异常的工具被雷区一防御捕获,不影响其他工具', async () => {
     const reg = new ToolRegistry()
     reg.register(makeThrowingTool('throw_tool'))
     reg.register(makeTool('ok_tool'))
@@ -242,18 +246,16 @@ describe('executeSafeToolsInParallel', () => {
       makeToolCall('ok_tool', 'id-ok'),
     ]
 
-    const results = await executeSafeToolsInParallel(toolCalls, reg, () => {}, ctx)
+    const outcomes = await executeSafeToolsInParallel(toolCalls, makeDeps(reg), () => {}, ctx)
 
-    expect(results).toHaveLength(2)
-    expect(results[0]?.success).toBe(false)
-    expect(results[0]?.error).toContain('throw_tool threw')
-    expect(results[1]?.success).toBe(true)
+    expect(outcomes).toHaveLength(2)
+    expect(outcomes[0]?.toolResult.isError).toBe(true)
+    expect(String(outcomes[0]?.toolResult.result)).toContain('throw_tool threw')
+    expect(outcomes[1]?.toolResult.isError).toBeUndefined()
   })
 
   it('超过 maxParallel 时分批执行', async () => {
     const reg = new ToolRegistry()
-
-    // 创建 4 个工具，每个执行 50ms，maxParallel = 2 → 需要 2 批
     for (const name of ['t1', 't2', 't3', 't4']) {
       const toolName = name
       reg.register({
@@ -271,21 +273,21 @@ describe('executeSafeToolsInParallel', () => {
     const toolCalls = ['t1', 't2', 't3', 't4'].map(n => makeToolCall(n))
 
     const start = Date.now()
-    const results = await executeSafeToolsInParallel(toolCalls, reg, () => {}, ctx, 2)
+    const outcomes = await executeSafeToolsInParallel(toolCalls, makeDeps(reg), () => {}, ctx, 2)
     const elapsed = Date.now() - start
 
-    expect(results).toHaveLength(4)
-    expect(results.every(r => r.success)).toBe(true)
-    // 两批各 50ms，总计约 100ms（给 50ms 容差）
+    expect(outcomes).toHaveLength(4)
+    expect(outcomes.every(o => o.toolResult.isError !== true)).toBe(true)
+    // 两批各 50ms,总计约 100ms(给容差)
     expect(elapsed).toBeGreaterThanOrEqual(90)
     expect(elapsed).toBeLessThan(300)
 
     // 结果按原始顺序排列
-    expect(results[0]?.toolName).toBe('t1')
-    expect(results[3]?.toolName).toBe('t4')
+    expect(outcomes[0]?.toolResult.toolCallId).toBe('id-t1')
+    expect(outcomes[3]?.toolResult.toolCallId).toBe('id-t4')
   })
 
-  it('resultSummary 超过 200 字符时截断', async () => {
+  it('resultSummary 超过 200 字符时截断(tool_done 事件)', async () => {
     const longOutput = 'x'.repeat(300)
     const reg = new ToolRegistry()
     reg.register({
@@ -299,7 +301,7 @@ describe('executeSafeToolsInParallel', () => {
     const events: AgentEvent[] = []
     await executeSafeToolsInParallel(
       [makeToolCall('verbose_tool', 'v1')],
-      reg,
+      makeDeps(reg),
       e => events.push(e),
       ctx,
     )
@@ -307,7 +309,7 @@ describe('executeSafeToolsInParallel', () => {
     const doneEvt = events.find(e => e.type === 'tool_done')
     if (doneEvt?.type === 'tool_done') {
       expect(doneEvt.resultSummary).toBeDefined()
-      // 超过 200 字符时截断为 200 字符 + '...'，共 203 字符
+      // 超过 200 字符:前 200 字符 + '...',共 203 字符
       expect(doneEvt.resultSummary).toMatch(/^x{200}\.\.\.$/)
     } else {
       expect.fail('未找到 tool_done 事件')
@@ -319,7 +321,7 @@ describe('executeSafeToolsInParallel', () => {
     reg.register(makeTool('timed_tool'))
 
     const events: AgentEvent[] = []
-    await executeSafeToolsInParallel([makeToolCall('timed_tool')], reg, e => events.push(e), ctx)
+    await executeSafeToolsInParallel([makeToolCall('timed_tool')], makeDeps(reg), e => events.push(e), ctx)
 
     const doneEvt = events.find(e => e.type === 'tool_done')
     expect(doneEvt?.type === 'tool_done' && doneEvt.durationMs).toBeGreaterThanOrEqual(0)

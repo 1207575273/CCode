@@ -567,11 +567,10 @@ describe('AgentLoop', () => {
 
   // ─────────────────────────────────────────────
   // P0.1 验收用例:并行路径下的护栏一致性
-  // 当前(重构前)these tests must fail —— 并行路径绕过 RepetitionDetector / Hook,
-  // 这恰好是 P0.1 要修的正确性 bug。P0.1 落地后,把 .skip 去掉,两项应全绿。
+  // 已通过 — executeToolPipeline 合并了串行/并行的执行路径,护栏在两侧一致生效。
   // ─────────────────────────────────────────────
 
-  it.skip('[P0.1 验收] 并行路径下 PreToolUse Hook 也应触发(当前 fail,重构后应过)', async () => {
+  it('[P0.1 验收] 并行路径下 PreToolUse Hook 也应触发', async () => {
     const execSpy = vi.fn(async () => ({ success: true, output: 'should not run' }))
     const registry = new ToolRegistry()
     registry.register({
@@ -599,7 +598,7 @@ describe('AgentLoop', () => {
     expect(execSpy).not.toHaveBeenCalled()
   })
 
-  it.skip('[P0.1 验收] 并行路径下 RepetitionDetector 也应拦截(当前 fail,重构后应过)', async () => {
+  it('[P0.1 验收] 并行路径下 RepetitionDetector 也应拦截', async () => {
     const execSpy = vi.fn(async () => ({ success: true, output: 'ok' }))
     const registry = new ToolRegistry()
     registry.register({
