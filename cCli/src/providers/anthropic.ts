@@ -188,13 +188,38 @@ export class AnthropicProvider implements LLMProvider {
     systemPrompt: string | undefined,
     request: ChatRequest,
   ): AsyncIterable<StreamChunk> {
+    // Prompt caching：system prompt 与 tools 定义在会话内稳定不变，打上 cache_control 断点让 Anthropic
+    // 缓存这段前缀（默认 TTL 5min），长会话多轮请求里这部分 input token 基本走 cache_read 计费。
+    // - 开关：CCODE_DISABLE_PROMPT_CACHE=1 回退到原字符串/普通 tools 形式，兼容不支持 cache_control 的
+    //   第三方 Anthropic 协议代理（MiniMax / OpenRouter 等 baseURL 场景）
+    // - 长度保护：Anthropic 缓存最小命中门槛约 1024 tokens，system < 4000 字符（约 1000 tokens）就不加，
+    //   避免请求体变复杂却拿不到缓存
+    // - tools cache_control 只标最后一个：缓存断点向前累积，一个断点即可覆盖整个 tools 数组
+    const cacheEnabled = process.env.CCODE_DISABLE_PROMPT_CACHE !== '1'
+    const MIN_CACHE_CHARS = 4000
+    const cacheSystem = cacheEnabled
+      && typeof systemPrompt === 'string'
+      && systemPrompt.length >= MIN_CACHE_CHARS
+
+    const systemParam: string | Anthropic.TextBlockParam[] | undefined = cacheSystem
+      ? [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }]
+      : systemPrompt
+
+    let toolsParam: Anthropic.Tool[] | undefined = tools
+    if (cacheEnabled && tools && tools.length > 0) {
+      const lastIdx = tools.length - 1
+      toolsParam = tools.map((t, i) =>
+        i === lastIdx ? { ...t, cache_control: { type: 'ephemeral' as const } } : t,
+      )
+    }
+
     const stream = this.#client.messages.stream({
       model,
       max_tokens: request.maxTokens ?? 8192,
       ...(request.temperature !== undefined && { temperature: request.temperature }),
-      ...(systemPrompt ? { system: systemPrompt } : {}),
+      ...(systemParam !== undefined ? { system: systemParam } : {}),
       messages: anthropicMessages,
-      ...(tools && tools.length > 0 ? { tools } : {}),
+      ...(toolsParam && toolsParam.length > 0 ? { tools: toolsParam } : {}),
     }, {
       ...(request.signal !== undefined ? { signal: request.signal } : {}),
     })

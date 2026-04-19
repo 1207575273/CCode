@@ -475,10 +475,27 @@ export function App({
             const td = sumTokens(todayRows)
             const mt = sumTokens(monthRows)
 
+            // Prompt Caching 可观测行：
+            // - 有 read/write → 展示数据和命中率
+            // - 会话无请求 → 明确标注，避免与"未命中"混淆
+            // - 有请求但全零 → 中立提示（可能 provider 不支持，如 glm；也可能 system 过短未达 Anthropic 最小缓存门槛）
+            //   不暗示"首轮写入中"，因为 MiniMax 等隐式缓存 provider 永远 write=0
+            const r = session.totalCacheReadTokens
+            const w = session.totalCacheWriteTokens
+            let cacheLine: string
+            if (r > 0 || w > 0) {
+              const hitRate = tokenMeter.getCacheHitRate()
+              cacheLine = `缓存命中:  ${fmt(r)} read / ${fmt(w)} write | hit rate ${(hitRate * 100).toFixed(1)}%`
+            } else if (session.callCount === 0) {
+              cacheLine = '缓存命中:  --（本次会话尚无请求）'
+            } else {
+              cacheLine = '缓存命中:  --（未命中：provider 可能不支持 Prompt Caching 或 system 过短）'
+            }
             const text = [
               '── Token Usage ──',
               '',
               `本次会话:  ${fmt(session.totalInputTokens)} in / ${fmt(session.totalOutputTokens)} out | ${fmtCostMap(session.costByCurrency)} (${session.callCount} calls)`,
+              cacheLine,
               `今日汇总:  ${fmt(td.inp)} in / ${fmt(td.out)} out | ${fmtAggRows(todayRows)} (${td.calls} calls)`,
               `本月汇总:  ${fmt(mt.inp)} in / ${fmt(mt.out)} out | ${fmtAggRows(monthRows)} (${mt.calls} calls)`,
             ].join('\n')
