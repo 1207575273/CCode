@@ -22,15 +22,15 @@
  */
 
 import type {LLMProvider} from '@providers/provider.js'
-import {summarizeArgs} from './args-summarizer.js'
 import type {ToolRegistry} from '@tools/core/registry.js'
-import type {Message, MessageContent, StreamChunk, ToolCallContent, ToolResultContent} from './types.js'
+import type {Message, StreamChunk, ToolCallContent, ToolResultContent} from './types.js'
 import {classifyToolCalls, executeSafeToolsInParallel} from './parallel-executor.js'
 import type {HookManager} from '@hooks/hook-manager.js'
 import {contextTracker} from './context-tracker.js'
 import {RepetitionDetector} from './repetition-detector.js'
 import {executeToolPipeline, type ToolPipelineDeps} from './tool-pipeline.js'
 import type {AgentEvent} from './agent-events.js'
+import {HistoryWriter} from './history-writer.js'
 import {dbg} from '../debug.js'
 
 // AgentEvent 及其子 union、UserQuestion 等类型定义在 ./agent-events.ts,
@@ -147,9 +147,11 @@ export class AgentLoop {
      *   docs/experience/20260417150016_AsyncIterable与AsyncGenerator的魔法细节.md
      */
     async* run(messages: Message[]): AsyncGenerator<AgentEvent, void, unknown> {
-        // 直接引用传入数组（不复制）。ContextManager 通过 getHistoryRef() 传入，
-        // run() 中追加的 assistant + tool_result 自动反映到 ContextManager 内部。
-        const history = messages
+        // HistoryWriter 对外部传入的数组做非复制包装,内部 push 直接作用于原数组 —
+        // ContextManager 通过 getHistoryRef() 传入后,run() 期间追加的 assistant /
+        // tool_result 自动反映到 ContextManager 内部。writer 同时负责 tool_call ↔
+        // tool_result 成对运行时断言(雷区一硬检查)。
+        const writer = new HistoryWriter(messages)
         const maxTurns = this.#config.maxTurns ?? DEFAULT_MAX_TURNS
         const minToolRounds = this.#config.minTurns ?? 0
         /** 实际执行了工具的轮次数（不含纯文本轮） */
@@ -162,36 +164,17 @@ export class AgentLoop {
                 return
             }
 
-            const llmResult = yield* this.#callLLM(history)
+            const llmResult = yield* this.#callLLM(messages)
             if (llmResult.aborted) return
 
-            // 追加 assistant 消息到 history（text + tool_calls 摘要）
-            // tool_call 只记录 id/name，不记录完整 args（args 可能包含 write_file 的整个文件内容，
-            // 放入 history 会导致每轮 LLM 调用 token 数爆炸）
-            const assistantContent: MessageContent[] = []
-            if (llmResult.text) {
-                assistantContent.push({type: 'text', text: llmResult.text})
-            }
-            for (const tc of llmResult.toolCalls) {
-                assistantContent.push({
-                    type: 'tool_call',
-                    toolCallId: tc.toolCallId,
-                    toolName: tc.toolName,
-                    args: summarizeArgs(tc.toolName, tc.args),  // 精简摘要：保留关键信息（命令/路径/模式），不含大段内容
-                })
-            }
-            if (assistantContent.length > 0) {
-                history.push({role: 'assistant', content: assistantContent})
-            }
+            // 追加 assistant 消息(text + tool_calls 摘要,writer 内部调用 summarizeArgs)
+            writer.appendAssistant(llmResult.text, llmResult.toolCalls)
 
             if (llmResult.toolCalls.length === 0) {
                 // 续跑检测：前台 SubAgent 且工具轮次不足时注入继续消息
                 // 后台 SubAgent 不续跑——任务完成即退出，避免无用 LLM 调用挂起导致 session_end 缺失
                 if (toolRounds < minToolRounds && this.#config.isSidechain && !this.#config.isBackground) {
-                    history.push({
-                        role: 'user',
-                        content: 'You have not completed the task yet. Continue executing tools to finish the task. Do NOT just describe what to do — actually call tools.',
-                    })
+                    writer.appendSystemNote('You have not completed the task yet. Continue executing tools to finish the task. Do NOT just describe what to do — actually call tools.')
                     continue
                 }
                 yield {type: 'done', reason: 'complete'}
@@ -199,7 +182,7 @@ export class AgentLoop {
             }
 
             toolRounds++
-            yield* this.#executeToolCalls(llmResult.toolCalls, history)
+            yield* this.#executeToolCalls(llmResult.toolCalls, writer)
 
             // 检查点 2：工具执行完毕后（安全 — tool_result 已写入 history）
             if (this.#stopRequested) {
@@ -383,11 +366,11 @@ export class AgentLoop {
     /**
      * 分发工具调用：parallelTools=false 时全部串行；否则安全工具并行、危险工具串行。
      */
-    async* #executeToolCalls(toolCalls: ToolCallContent[], history: Message[]): AsyncGenerator<AgentEvent> {
+    async* #executeToolCalls(toolCalls: ToolCallContent[], writer: HistoryWriter): AsyncGenerator<AgentEvent> {
         // parallelTools === false → 全部串行（兼容模式）
         if (this.#config.parallelTools === false) {
             for (const tc of toolCalls) {
-                yield* this.#executeOneTool(tc, history)
+                yield* this.#executeOneTool(tc, writer)
             }
             return
         }
@@ -402,7 +385,7 @@ export class AgentLoop {
         // 1. 并行执行安全工具 — 每个工具跑完整 pipeline,护栏与串行路径一致
         if (safe.length > 0) {
             const events: AgentEvent[] = []
-            const ctx = buildToolContext(this.#provider, this.#registry, this.#config, history)
+            const ctx = buildToolContext(this.#provider, this.#registry, this.#config, writer.history)
             const deps: ToolPipelineDeps = {
                 registry: this.#registry,
                 repetitionDetector: this.#repetitionDetector,
@@ -418,17 +401,15 @@ export class AgentLoop {
             }
             // 所有并行工具的 tool_result 合并到一条 user 消息(Anthropic 要求同一批 tool_result 在同条消息)
             const toolResults: ToolResultContent[] = outcomes.map(o => o.toolResult)
-            if (toolResults.length > 0) {
-                history.push({role: 'user', content: toolResults})
-            }
+            writer.appendToolResults(toolResults)
             // 每个工具的 warn / postHookFeedbacks 按原始顺序追加为独立 user 消息
             for (const o of outcomes) {
                 if (o.warnMessage !== undefined) {
-                    history.push({role: 'user', content: o.warnMessage})
+                    writer.appendSystemNote(o.warnMessage)
                 }
                 if (o.postHookFeedbacks !== undefined) {
                     for (const fb of o.postHookFeedbacks) {
-                        history.push({role: 'user', content: fb})
+                        writer.appendSystemNote(fb)
                     }
                 }
             }
@@ -436,7 +417,7 @@ export class AgentLoop {
 
         // 2. 串行执行危险工具(含 StreamableTool,如 dispatch_agent)
         for (const tc of dangerous) {
-            yield* this.#executeOneTool(tc, history)
+            yield* this.#executeOneTool(tc, writer)
         }
     }
 
@@ -451,8 +432,8 @@ export class AgentLoop {
      *
      * 详见 src/core/tool-pipeline.ts 与 docs/plans/20260420012229_agent-loop重构评审.md S-P0.1。
      */
-    async* #executeOneTool(tc: ToolCallContent, history: Message[]): AsyncGenerator<AgentEvent> {
-        const ctx = buildToolContext(this.#provider, this.#registry, this.#config, history, tc.toolCallId)
+    async* #executeOneTool(tc: ToolCallContent, writer: HistoryWriter): AsyncGenerator<AgentEvent> {
+        const ctx = buildToolContext(this.#provider, this.#registry, this.#config, writer.history, tc.toolCallId)
         const deps: ToolPipelineDeps = {
             registry: this.#registry,
             repetitionDetector: this.#repetitionDetector,
@@ -462,14 +443,14 @@ export class AgentLoop {
 
         const outcome = yield* executeToolPipeline(tc, ctx, deps)
 
-        // 按 outcome 顺序追加 history(并行路径走 parallel-executor,在那里做合并追加)
-        history.push({role: 'user', content: [outcome.toolResult]})
+        // 按 outcome 顺序追加 history(并行路径走 #executeToolCalls,在那里做合并追加)
+        writer.appendToolResult(outcome.toolResult)
         if (outcome.warnMessage !== undefined) {
-            history.push({role: 'user', content: outcome.warnMessage})
+            writer.appendSystemNote(outcome.warnMessage)
         }
         if (outcome.postHookFeedbacks !== undefined) {
             for (const fb of outcome.postHookFeedbacks) {
-                history.push({role: 'user', content: fb})
+                writer.appendSystemNote(fb)
             }
         }
     }
