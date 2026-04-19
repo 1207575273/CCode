@@ -13,6 +13,7 @@ import type { ToolRegistry } from '@tools/core/registry.js'
 import type { ToolContext } from '@tools/core/types.js'
 import { isStreamableTool } from '@tools/core/types.js'
 import type { AgentEvent } from './agent-loop.js'
+import { truncateForSummary, truncateForFull } from './result-truncator.js'
 
 // ═══════════════════════════════════════════════
 // 类型定义
@@ -39,8 +40,7 @@ export interface ClassifiedToolCalls {
 // ═══════════════════════════════════════════════
 
 const DEFAULT_MAX_PARALLEL = 10
-const RESULT_SUMMARY_MAX_LEN = 200
-const RESULT_FULL_MAX_LEN = 100_000
+// 截断常量由 result-truncator.ts 统一定义(docs/plans/20260420012229_agent-loop重构评审.md P0-02)
 
 // ═══════════════════════════════════════════════
 // 核心函数
@@ -158,12 +158,8 @@ async function executeSingleTool(
     const durationMs = Date.now() - startTime
 
     const rawOutput = result.success ? result.output : (result.error ?? 'error')
-    const resultSummary = rawOutput.length > RESULT_SUMMARY_MAX_LEN
-      ? rawOutput.slice(0, RESULT_SUMMARY_MAX_LEN) + '...'
-      : rawOutput
-    const resultFull = rawOutput.length > RESULT_FULL_MAX_LEN
-      ? rawOutput.slice(0, RESULT_FULL_MAX_LEN) + `\n... (truncated, total ${rawOutput.length} chars)`
-      : rawOutput
+    const resultSummary = truncateForSummary(rawOutput)
+    const resultFull = truncateForFull(rawOutput)
 
     onEvent({
       type: 'tool_done',
@@ -188,8 +184,8 @@ async function executeSingleTool(
     const durationMs = Date.now() - startTime
     const errorMsg = err instanceof Error ? err.message : String(err)
 
-    const resultSummary = errorMsg.slice(0, RESULT_SUMMARY_MAX_LEN)
-    const resultFull = errorMsg.slice(0, RESULT_FULL_MAX_LEN)
+    const resultSummary = truncateForSummary(errorMsg)
+    const resultFull = truncateForFull(errorMsg)
     onEvent({
       type: 'tool_done',
       toolName: tc.toolName,

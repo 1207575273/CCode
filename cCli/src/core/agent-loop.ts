@@ -31,6 +31,7 @@ import {classifyToolCalls, executeSafeToolsInParallel} from './parallel-executor
 import type {HookManager} from '@hooks/hook-manager.js'
 import {contextTracker} from './context-tracker.js'
 import {RepetitionDetector} from './repetition-detector.js'
+import {truncate, truncateForLLM, truncateForSummary, truncateForFull} from './result-truncator.js'
 import {dbg} from '../debug.js'
 
 // ═══════════════════════════════════════════════
@@ -179,12 +180,7 @@ export interface AgentConfig {
 /** 主 Agent 默认最大轮次 */
 const DEFAULT_MAX_TURNS = 100
 
-/** resultSummary 最大长度（CLI 展示用） */
-const RESULT_SUMMARY_MAX_LENGTH = 200
-/** resultFull 最大长度（Web 展示 + JSONL 持久化用，超过此长度截断） */
-const RESULT_FULL_MAX_LENGTH = 100_000
-/** 回传 LLM history 的工具结果最大字符数（兜底截断，防 bash/task_output 极端场景） */
-const LLM_RESULT_MAX_CHARS = 40_000
+// 截断常量和函数统一由 ./result-truncator.ts 提供(docs/plans/20260420012229_agent-loop重构评审.md P0-02)
 
 // ═══════════════════════════════════════════════
 // AgentLoop 类
@@ -695,8 +691,8 @@ export class AgentLoop {
         }
 
         const rawOutput = result.success ? result.output : (result.error ?? 'error')
-        const resultSummary = truncate(rawOutput, RESULT_SUMMARY_MAX_LENGTH)
-        const resultFull = truncate(rawOutput, RESULT_FULL_MAX_LENGTH)
+        const resultSummary = truncateForSummary(rawOutput)
+        const resultFull = truncateForFull(rawOutput)
 
         yield {
             type: 'tool_done', toolName: tc.toolName, toolCallId: tc.toolCallId,
@@ -729,32 +725,6 @@ export class AgentLoop {
 // ═══════════════════════════════════════════════
 // 工具函数
 // ═══════════════════════════════════════════════
-
-function truncate(text: string, maxLength: number): string {
-    if (text.length <= maxLength) return text
-    return maxLength >= 10000
-        ? text.slice(0, maxLength) + `\n... (truncated, total ${text.length} chars)`
-        : text.slice(0, maxLength) + '...'
-}
-
-/** 工具专属的截断后引导提示 */
-const TRUNCATION_HINTS: Record<string, string> = {
-    bash: '请用 grep/head/tail 过滤输出，或拆分为更小的命令',
-    task_output: '输出过长，请用 bash 配合 grep/tail 过滤关键信息',
-    grep: '请缩小 pattern 范围或指定更精确的搜索路径',
-    read_file: '请指定行号范围读取特定区域',
-}
-
-/**
- * 截断工具结果后塞入 LLM history（兜底层）。
- * 大部分工具内部已有截断（read_file 20K / grep 50 条），此处防 bash/task_output 极端场景。
- */
-function truncateForLLM(output: string, toolName: string): string {
-    if (output.length <= LLM_RESULT_MAX_CHARS) return output
-    const hint = TRUNCATION_HINTS[toolName] ?? '结果过长已截断，请尝试缩小查询范围'
-    return output.slice(0, LLM_RESULT_MAX_CHARS) +
-        `\n\n[结果已截断：共 ${output.length} 字符，仅保留前 ${LLM_RESULT_MAX_CHARS} 字符。${hint}]`
-}
 
 /**
  * 判断是否为 abort 错误。
