@@ -34,10 +34,12 @@ describe('ContextTracker', () => {
     expect(contextTracker.getState().level).toBe('warning')
   })
 
-  it('85% 应为 critical', () => {
+  // 2026-04-20 阈值下调后(commit 82ec9a2):CRITICAL 与 OVERFLOW 均为 0.85,
+  // critical 分支在当前配置下不可达(保留类型以便未来重新分档),故不再单测 critical。
+  it('>= 85% 应为 overflow', () => {
     const effective = 128_000 - 16_384
     contextTracker.update(Math.floor(effective * 0.87))
-    expect(contextTracker.getState().level).toBe('critical')
+    expect(contextTracker.getState().level).toBe('overflow')
   })
 
   it('95% 应为 overflow', () => {
@@ -46,12 +48,12 @@ describe('ContextTracker', () => {
     expect(contextTracker.getState().level).toBe('overflow')
   })
 
-  it('shouldAutoCompact 在 >= 95% 时返回 true', () => {
+  it('shouldAutoCompact 在 >= 85% 时返回 true', () => {
     const effective = 128_000 - 16_384
-    contextTracker.update(Math.floor(effective * 0.94))
+    contextTracker.update(Math.floor(effective * 0.80))
     expect(contextTracker.shouldAutoCompact()).toBe(false)
 
-    contextTracker.update(Math.floor(effective * 0.96))
+    contextTracker.update(Math.floor(effective * 0.86))
     expect(contextTracker.shouldAutoCompact()).toBe(true)
   })
 
