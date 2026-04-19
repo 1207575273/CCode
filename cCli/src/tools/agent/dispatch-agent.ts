@@ -48,6 +48,15 @@ const ALWAYS_EXCLUDE = ['dispatch_agent', 'ask_user_question', 'control_agent']
 /** SubAgent 默认 maxTurns（未匹配到定义时的兜底） */
 const DEFAULT_MAX_TURNS = 50
 
+/**
+ * 子 Agent finalText 为空时的兜底文案 — 工具优先原则：
+ * 引导主 Agent 调 task_output 查看工具调用痕迹，而不是空字符串让主 Agent 懵。
+ * 对应 completed/stopped/error 三种状态的空 result/partialResult。
+ */
+function emptyTextFallback(agentId: string): string {
+  return `(子 Agent 未产出文本输出，请调用 task_output(agent_id='${agentId}') 查看工具调用详情)`
+}
+
 // ═══════════════════════════════════════════════
 // DispatchAgentTool
 // ═══════════════════════════════════════════════
@@ -87,6 +96,16 @@ export class DispatchAgentTool implements StreamableTool {
       '• 直接将子 Agent 的结果转述给用户即可',
       '• run_in_background=true 时立即返回 agentId，用 task_output 读取后续结果',
       '• 多个独立任务可以同时派发多个子 Agent 并行执行',
+      '',
+      '返回结构约定：',
+      '• status="async_launched" — 后台已启动但未完成，无 result 字段。',
+      '    获取结果请调用 task_output(agent_id=<返回的 agentId>)。',
+      '• status="completed"      — 前台同步完成，result 字段为子 Agent 的最终文本输出。',
+      '    若 result 为占位符（表明子 Agent 没产出文本，只调了工具），',
+      '    同样可用 task_output(agent_id=<agentId>) 查看子 Agent 的工具调用详情。',
+      '• status="stopped"        — 被用户/超时/父 Agent 停止，partialResult 为中断前已产出文本，',
+      '    guidance 字段含下一步行为指引。',
+      '• status="error"          — 执行异常，error 字段为错误消息，partialResult 可选。',
     ].join('\n')
   }
 
@@ -416,7 +435,7 @@ export class DispatchAgentTool implements StreamableTool {
           source: report.source,
           reason: report.reason,
           turn: currentTurn, maxTurns,
-          partialResult: finalText,
+          partialResult: finalText || emptyTextFallback(agentId),
           ...(report.tokenUsed ? { tokenUsed: report.tokenUsed } : {}),
           guidance: buildStopGuidance(report.source, 'graceful'),
         }
@@ -435,7 +454,7 @@ export class DispatchAgentTool implements StreamableTool {
         agentType,
         model: modelName,
         prompt,
-        result: finalText,
+        result: finalText || emptyTextFallback(agentId),
       }
       return { success: true, output: JSON.stringify(output), meta: { type: 'dispatch-agent', agentId, agentName, agentType, status: 'completed' } }
 
@@ -468,7 +487,7 @@ export class DispatchAgentTool implements StreamableTool {
             source: report.source,
             reason: report.reason,
             turn: currentTurn, maxTurns,
-            partialResult: finalText,
+            partialResult: finalText || emptyTextFallback(agentId),
             ...(report.tokenUsed ? { tokenUsed: report.tokenUsed } : {}),
             guidance: buildStopGuidance(report.source, 'forced'),
           }
@@ -490,7 +509,7 @@ export class DispatchAgentTool implements StreamableTool {
         name: agentName,
         agentType,
         error: errorMsg,
-        ...(finalText ? { partialResult: finalText } : {}),
+        partialResult: finalText || emptyTextFallback(agentId),
       }
       return {
         success: false,

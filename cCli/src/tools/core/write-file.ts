@@ -37,8 +37,10 @@ export class WriteFileTool implements Tool {
       const lines = content.split('\n')
       return {
         success: true,
-        // 反馈信息要足够明确，让弱模型也能确认"这一步已完成，该继续下一步了"
-        output: `✅ 文件已成功写入，无需重复写入。路径: ${path}，${content.length} 字符 / ${lines.length} 行。请继续执行下一个步骤。`,
+        // 纯事实陈述 — tool_result.success=true 已是成功信号，不再加 emoji/引导语
+        // 旧文案带"无需重复写入"/"请继续执行下一个步骤"，弱模型会误读为"缓存问题要重写"或冗余命令，
+        // 详见 docs/plans/20260419225347_dispatch_agent_空result与后台超时问题诊断.md §3.4
+        output: `文件已写入: ${path} (${content.length} 字符 / ${lines.length} 行)`,
         meta: {
           type: 'write',
           path: rawPath,

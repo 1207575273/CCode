@@ -17,6 +17,9 @@
  *
  * 尝试过的"软约束"方案（对弱模型无效）：
  *   1. write_file 返回增强反馈："✅ 文件已成功写入，无需重复写入。请继续执行下一个步骤。"
+ *      （2026-04-19 复盘：该文案中"无需重复写入"反被 GLM-5 误读为"缓存问题需重写"，
+ *        诱发了新一轮三次原地循环；现已改为纯事实陈述 "文件已写入: <path> (...)"，
+ *        见 docs/plans/20260419225347_dispatch_agent_空result与后台超时问题诊断.md §3.4）
  *   2. SubAgent systemPrompt 加入 "NEVER call the same tool with the same arguments twice"
  *   → 对简单任务有效，对复杂任务模型完全无视
  *
