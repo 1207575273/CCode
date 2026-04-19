@@ -15,10 +15,14 @@ const DEFAULT_CONTEXT_WINDOW = 128_000
 /** 默认输出预留（max_tokens） */
 const DEFAULT_OUTPUT_RESERVE = 16_384
 
-/** 状态级别阈值 */
+/** 状态级别阈值
+ *  OVERFLOW 2026-04-20 从 0.95 下调至 0.85 — 原阈值太晚触发,弱模型(GLM)在 tool-trim
+ *  估算不准时容易 overshoot;提前触发给 tool-trim/summary 策略更宽裕的回旋空间。
+ *  副作用:CRITICAL 与 OVERFLOW 相等,level='critical' 分支变为不可达(仅影响 UI 颜色分档,
+ *  功能无影响)。若未来重新分档,可将 CRITICAL 下调至 0.78 左右。 */
 const WARNING_THRESHOLD = 0.70
 const CRITICAL_THRESHOLD = 0.85
-const OVERFLOW_THRESHOLD = 0.95
+const OVERFLOW_THRESHOLD = 0.85
 
 export type ContextLevel = 'normal' | 'warning' | 'critical' | 'overflow'
 
