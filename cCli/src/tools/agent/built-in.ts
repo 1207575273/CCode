@@ -17,8 +17,11 @@ import { agentDefinitionRegistry } from './definition-registry.js'
 // 超时常量
 // ═══════════════════════════════════════════════
 
-/** 通用型 Agent 超时：10 分钟（代码实现 + 构建 + 验证） */
-const TIMEOUT_GENERAL_MS = 10 * 60 * 1000
+/** 通用型 Agent 超时：15 分钟（代码实现 + 构建 + 验证）
+ *  2026-04-19 从 10 分钟上调至 15 分钟 — scaffold + install + 多文件改的组合任务在 10 分钟内
+ *  经常临门一脚被 kill；依赖同批次 write_file 文案修复消除弱模型死循环诱因(否则多烧的 5 分钟
+ *  只会让死循环烧更多 token)。详见 docs/plans/20260419225347_...诊断.md §9.3 Fix-4 */
+const TIMEOUT_GENERAL_MS = 15 * 60 * 1000
 /** 探索/规划型 Agent 超时：5 分钟（只读搜索 + 分析） */
 const TIMEOUT_READONLY_MS = 5 * 60 * 1000
 
