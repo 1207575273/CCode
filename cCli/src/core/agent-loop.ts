@@ -23,15 +23,18 @@
 
 import type {LLMProvider} from '@providers/provider.js'
 import type {ToolRegistry} from '@tools/core/registry.js'
-import type {Message, StreamChunk, ToolCallContent, ToolResultContent} from './types.js'
+import type {Message, ToolCallContent, ToolResultContent} from './types.js'
 import {classifyToolCalls, executeSafeToolsInParallel} from './parallel-executor.js'
 import type {HookManager} from '@hooks/hook-manager.js'
-import {contextTracker} from './context-tracker.js'
 import {RepetitionDetector} from './repetition-detector.js'
 import {executeToolPipeline, type ToolPipelineDeps} from './tool-pipeline.js'
 import type {AgentEvent} from './agent-events.js'
 import {HistoryWriter} from './history-writer.js'
-import {dbg} from '../debug.js'
+import {LLMCallSession} from './llm-call-session.js'
+
+// isAbortError 原在本文件,2026-04-20 搬到 llm-call-session.ts(S-P1.1),
+// 这里 re-export 保持 dispatch-agent / useChat 等外部 import 兼容。
+export {isAbortError} from './llm-call-session.js'
 
 // AgentEvent 及其子 union、UserQuestion 等类型定义在 ./agent-events.ts,
 // 此处 re-export 保持所有外部 import 的向后兼容(P1-01,docs/plans/20260420012229_agent-loop重构评审.md)
@@ -98,9 +101,8 @@ export class AgentLoop {
     readonly #provider: LLMProvider
     readonly #registry: ToolRegistry
     readonly #config: AgentConfig
-    /** 上一次 LLM 调用的参数指纹（用于 Prompt Cache 破裂检测） */
-    #lastCacheFingerprint: string | null = null
-    #llmCallIndex = 0
+    /** LLM 调用会话 — 封装流式消费、TTFT/TPS、Prompt Cache 指纹(S-P1.1) */
+    readonly #llmSession: LLMCallSession
     /** 工具调用重复检测器（防止弱模型陷入循环调用） */
     readonly #repetitionDetector = new RepetitionDetector()
     /** 外部请求优雅停止 — 当前轮结束后退出循环 */
@@ -114,6 +116,13 @@ export class AgentLoop {
         this.#provider = provider
         this.#registry = registry
         this.#config = config
+        this.#llmSession = new LLMCallSession(provider, registry, {
+            model: config.model,
+            providerName: config.provider,
+            ...(config.signal !== undefined ? {signal: config.signal} : {}),
+            ...(config.systemPrompt !== undefined ? {systemPrompt: config.systemPrompt} : {}),
+            ...(config.isSidechain !== undefined ? {isSidechain: config.isSidechain} : {}),
+        })
     }
 
     /** 暴露 provider 给 StreamableTool（子 Agent 需要继承 provider） */
@@ -164,7 +173,7 @@ export class AgentLoop {
                 return
             }
 
-            const llmResult = yield* this.#callLLM(messages)
+            const llmResult = yield* this.#llmSession.invoke(messages)
             if (llmResult.aborted) return
 
             // 追加 assistant 消息(text + tool_calls 摘要,writer 内部调用 summarizeArgs)
@@ -196,168 +205,9 @@ export class AgentLoop {
     }
 
     // ─────────────────────────────────────────────
-    // LLM 调用
+    // LLM 调用 — 完整逻辑已搬到 src/core/llm-call-session.ts (S-P1.1)
+    //           见 this.#llmSession.invoke(messages)
     // ─────────────────────────────────────────────
-
-    /**
-     * 调用 LLM 并收集流式输出。
-     *
-     * yield: llm_start → text* → llm_done | llm_error
-     * return: 收集到的工具调用列表 + 是否因错误中止
-     */
-    async* #callLLM(
-        history: Message[],
-    ): AsyncGenerator<AgentEvent, { toolCalls: ToolCallContent[]; text: string; aborted: boolean }> {
-        const chatRequest = {
-            model: this.#config.model,
-            messages: history,
-            tools: this.#registry.toToolDefinitions(),
-            ...(this.#config.signal !== undefined ? {signal: this.#config.signal} : {}),
-            ...(this.#config.systemPrompt !== undefined ? {systemPrompt: this.#config.systemPrompt} : {}),
-        }
-
-        yield {
-            type: 'llm_start',
-            provider: this.#config.provider,
-            model: this.#config.model,
-            messageCount: history.length,
-            ...(this.#config.systemPrompt !== undefined ? {systemPrompt: this.#config.systemPrompt} : {}),
-        }
-
-        const pendingToolCalls: ToolCallContent[] = []
-        let accumulatedText = ''
-        let inputTokens = 0
-        let outputTokens = 0
-        let cacheReadTokens = 0
-        let cacheWriteTokens = 0
-        // 从 done chunk 中取 stopReason，经 ProviderWrapper 标准化后直接使用
-        let doneStopReason = 'end_turn'
-
-        // 性能层：计时变量
-        const requestStart = Date.now()
-        let firstContentChunk = false
-        let ttftMs = 0
-
-        try {
-            for await (const chunk of this.#provider.chat(chatRequest)) {
-                // 性能层：首个有内容的 chunk 才算 TTFT
-                // 部分 Provider 第一个 chunk 可能是 message_start 或空 content_block_start，
-                // 只在 text / thinking / tool_call 类型时才记录
-                if (!firstContentChunk && (chunk.type === 'text' || chunk.type === 'thinking' || chunk.type === 'tool_call')) {
-                    ttftMs = Date.now() - requestStart
-                    firstContentChunk = true
-                }
-
-                const mapped = this.#mapChunk(chunk, pendingToolCalls)
-                if (mapped) {
-                    if (mapped.type === 'text' && 'text' in mapped) accumulatedText += mapped.text
-                    if (mapped.type === 'error') {
-                        const errorMsg = chunk.error ?? 'unknown error'
-                        // Provider 将 abort 错误包装为 error chunk（不抛出）→ 重新抛出使 catch 路径生效
-                        if (errorMsg.toLowerCase().includes('aborted')) {
-                            const abortErr = new Error(errorMsg)
-                            abortErr.name = 'AbortError'
-                            throw abortErr
-                        }
-                        yield makeLlmError(errorMsg, outputTokens)
-                        yield mapped
-                        return {toolCalls: [], text: '', aborted: true}
-                    }
-                    yield mapped
-                }
-                if (chunk.type === 'usage' && chunk.usage) {
-                    inputTokens = chunk.usage.inputTokens
-                    outputTokens = chunk.usage.outputTokens
-                    cacheReadTokens = chunk.usage.cacheReadTokens
-                    cacheWriteTokens = chunk.usage.cacheWriteTokens
-                }
-                if (chunk.type === 'done') {
-                    doneStopReason = chunk.stopReason ?? 'end_turn'
-                }
-            }
-
-            // 性能层：E2E + TPS 计算
-            const e2eMs = Date.now() - requestStart
-            // 纯工具调用场景：Anthropic 的 tool_call 是流结束后才 yield，
-            // ttftMs ≈ e2eMs 使 generationMs ≈ 0。此时退化用 e2eMs 作为分母，
-            // 给出"整体吞吐率"而非"纯 generation 阶段吞吐率"。
-            const generationMs = e2eMs - ttftMs
-            const tpsBase = generationMs > 50 ? generationMs : e2eMs  // 50ms 阈值避免极小值放大噪声
-            const tps = tpsBase > 0 && outputTokens > 0
-                ? Math.round(outputTokens / (tpsBase / 1000) * 10) / 10
-                : 0
-            dbg(`[PERF] TTFT=${ttftMs}ms E2E=${e2eMs}ms TPS=${tps} tokens/s (base=${tpsBase}ms)\n`)
-
-            // Prompt Cache 破裂检测：systemPrompt + tools 指纹变化 → 缓存失效
-            this.#llmCallIndex++
-            const fingerprint = simpleHash(
-                (this.#config.systemPrompt ?? '') +
-                JSON.stringify(this.#registry.toToolDefinitions().map(t => t.name)),
-            )
-            if (this.#lastCacheFingerprint !== null && this.#lastCacheFingerprint !== fingerprint) {
-                // 指纹变化 = 缓存前缀不同，Prompt Cache 必然 miss
-                dbg(`[CACHE-BREAK] LLM call #${this.#llmCallIndex}: prompt/tools fingerprint changed (${this.#lastCacheFingerprint} → ${fingerprint})\n`)
-            } else if (this.#llmCallIndex > 1 && cacheReadTokens === 0 && inputTokens > 2000) {
-                // 指纹没变但 cacheRead=0，可能是 TTL 过期或 API 侧未命中
-                dbg(`[CACHE-MISS] LLM call #${this.#llmCallIndex}: cacheReadTokens=0 with ${inputTokens} input tokens\n`)
-            }
-            this.#lastCacheFingerprint = fingerprint
-
-            yield {
-                type: 'llm_done',
-                inputTokens,
-                outputTokens,
-                cacheReadTokens,
-                cacheWriteTokens,
-                stopReason: doneStopReason,
-                ttftMs,
-                e2eMs,
-                tps
-            }
-            // 更新上下文窗口追踪（精确值来自 API 返回的 inputTokens）
-            // 仅主 Agent 更新 — 子 Agent（isSidechain）有独立上下文，不应覆盖主 Agent 的追踪值
-            if (inputTokens > 0 && !this.#config.isSidechain) {
-                contextTracker.update(inputTokens)
-            }
-            return {toolCalls: pendingToolCalls, text: accumulatedText, aborted: false}
-        } catch (err) {
-            if (isAbortError(err)) {
-                const e2eMs = Date.now() - requestStart
-                yield {
-                    type: 'llm_done',
-                    inputTokens,
-                    outputTokens,
-                    cacheReadTokens,
-                    cacheWriteTokens,
-                    stopReason: 'abort',
-                    ttftMs,
-                    e2eMs,
-                    tps: 0
-                }
-            } else {
-                yield makeLlmError(err instanceof Error ? err.message : String(err), outputTokens)
-            }
-            throw err
-        }
-    }
-
-    /** StreamChunk → AgentEvent 映射，null 表示不产生事件 */
-    #mapChunk(chunk: StreamChunk, pendingToolCalls: ToolCallContent[]): AgentEvent | null {
-        switch (chunk.type) {
-            case 'text':
-                return chunk.text ? {type: 'text', text: chunk.text} : null
-            case 'thinking':
-                return {type: 'thinking', text: chunk.thinking ?? ''}
-            case 'tool_call': {
-                if (chunk.toolCall) pendingToolCalls.push(chunk.toolCall);
-                return null
-            }
-            case 'error':
-                return {type: 'error', error: chunk.error ?? 'unknown error'}
-            default:
-                return null // usage / done 不产生业务事件
-        }
-    }
 
     // ─────────────────────────────────────────────
     // 工具执行
@@ -461,26 +311,12 @@ export class AgentLoop {
 // 工具函数
 // ═══════════════════════════════════════════════
 
-/**
- * 判断是否为 abort 错误。
- * Node.js 原生 fetch 抛 AbortError（name='AbortError'），
- * 但 LangChain 等库可能包装为普通 Error，message 含 "aborted"。
- */
-export function isAbortError(err: unknown): boolean {
-    if (!(err instanceof Error)) return false
-    if (err.name === 'AbortError') return true
-    if (err.message.toLowerCase().includes('aborted')) return true
-    return false
-}
+// isAbortError / makeLlmError / simpleHash 原本都在这里,2026-04-20 S-P1.1 搬到
+// src/core/llm-call-session.ts(它们都是 LLM 调用的内部工具)。
+// isAbortError 通过文件顶部的 `export { ... } from './llm-call-session.js'` re-export,
+// 保持 dispatch-agent / useChat 等外部 import 兼容。
 
-/** 构造 llm_error 事件（兼容 exactOptionalPropertyTypes） */
-function makeLlmError(error: string, partialTokens: number): AgentEvent {
-    return partialTokens > 0
-        ? {type: 'llm_error', error, partialOutputTokens: partialTokens}
-        : {type: 'llm_error', error}
-}
-
-/** 构建 ToolContext，兼容 exactOptionalPropertyTypes（不传 undefined 值） */
+/** 构建 ToolContext,兼容 exactOptionalPropertyTypes(不传 undefined 值) */
 function buildToolContext(
     provider: LLMProvider,
     registry: ToolRegistry,
@@ -517,13 +353,4 @@ function buildToolContext(
         ctx.toolCallId = toolCallId
     }
     return ctx
-}
-
-/** djb2 字符串哈希 — 用于 Prompt Cache 破裂检测（不需要密码学安全性） */
-function simpleHash(str: string): string {
-    let hash = 5381
-    for (let i = 0; i < str.length; i++) {
-        hash = ((hash << 5) + hash + str.charCodeAt(i)) | 0
-    }
-    return (hash >>> 0).toString(36)
 }
