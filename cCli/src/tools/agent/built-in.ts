@@ -48,7 +48,7 @@ const generalAgent: BuiltInAgentDefinition = {
   modelHint: 'balanced',
   contextPolicy: { mode: 'trimmed', maxMessages: 20, maxTokenEstimate: 8000 },
   minTurns: 5,
-  /** 10 分钟超时（重任务：代码实现 + 构建 + 验证） */
+  /** 15 分钟超时（重任务：代码实现 + 构建 + 验证） */
   timeoutMs: TIMEOUT_GENERAL_MS,
 
   getSystemPrompt() {

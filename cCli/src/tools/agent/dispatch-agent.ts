@@ -274,7 +274,8 @@ export class DispatchAgentTool implements StreamableTool {
 
     // 🆕 超时自动 stop（definition.timeoutMs 配置时生效）
     let timeoutTimer: ReturnType<typeof setTimeout> | undefined
-    const effectiveTimeoutMs = definition.timeoutMs || (runInBackground ? 10 * 60 * 1000 : 0)
+    // 未配置 timeoutMs 的自定义 Agent 在后台模式下使用 15min 保底（与 general 内置类型对齐）
+    const effectiveTimeoutMs = definition.timeoutMs || (runInBackground ? 15 * 60 * 1000 : 0)
     if (effectiveTimeoutMs > 0) {
       timeoutTimer = setTimeout(() => {
         const s = getSubAgent(agentId)
@@ -721,7 +722,10 @@ function runSubAgentInBackground(opts: BackgroundRunOptions): void {
         name: agentName,
         description,
         success: true,
-        output: finalText,
+        // 后台 done 事件里的 output 兜底到 task_output 指引，与前台 completed/stopped/error
+        // 的 result/partialResult 兜底策略保持一致；store.finalText 不改(避免 task_output
+        // 读到自引用式的"请调用 task_output"文案)
+        output: finalText || emptyTextFallback(agentId),
       })
     } catch (err) {
       const state = getSubAgent(agentId)

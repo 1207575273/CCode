@@ -125,7 +125,8 @@ export interface AgentErrorOutput {
   name: string
   agentType: string
   error: string
-  partialResult?: string
+  /** 兜底保证始终存在：dispatch-agent.ts 在 finalText 为空时填 emptyTextFallback 占位 */
+  partialResult: string
 }
 
 /** 被停止 */
