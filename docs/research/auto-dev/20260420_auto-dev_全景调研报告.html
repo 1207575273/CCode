@@ -1,0 +1,1344 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AutoDev 3.0 Xiuper 全景调研报告</title>
+<meta name="description" content="AutoDev 3.0 Xiuper 架构、技术、产品、工程四视角全景调研" />
+<style>
+:root {
+  --bg: #0b0e14;
+  --bg-1: #11151f;
+  --bg-2: #171c29;
+  --bg-3: #1f2536;
+  --line: #2a3246;
+  --line-strong: #3a4561;
+  --text: #e6ebf5;
+  --text-dim: #9aa5bd;
+  --text-muted: #6b7691;
+  --xiu: #00f3ff;      /* 用户色: 电光青 */
+  --ai: #d946ef;       /* AI 色: 霓虹紫 */
+  --ok: #00e676;
+  --warn: #ffb84d;
+  --err: #ff5370;
+  --amber: #ffa940;
+  --shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 10px 40px rgba(0,0,0,.35);
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); color: var(--text); }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-size: 15px;
+  line-height: 1.72;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding: 48px 28px 120px; }
+
+/* Hero */
+.hero {
+  position: relative;
+  padding: 56px 44px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background:
+    radial-gradient(1000px 400px at 85% -20%, rgba(217,70,239,.18), transparent 60%),
+    radial-gradient(800px 320px at -10% 110%, rgba(0,243,255,.14), transparent 55%),
+    linear-gradient(180deg, var(--bg-1), var(--bg));
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.hero::before {
+  content: "";
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: radial-gradient(600px 400px at 50% 40%, #000 30%, transparent 75%);
+  pointer-events: none;
+}
+.hero > * { position: relative; }
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 12px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255,255,255,.02);
+}
+.eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--xiu); box-shadow: 0 0 10px var(--xiu); }
+h1.title {
+  font-size: clamp(32px, 4.4vw, 52px);
+  line-height: 1.1;
+  margin: 22px 0 14px;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+h1.title .grad {
+  background: linear-gradient(90deg, var(--xiu), var(--ai));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.subtitle {
+  font-size: 18px; color: var(--text-dim);
+  max-width: 720px; margin: 0 0 28px;
+}
+.meta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.chip {
+  font-size: 12px; color: var(--text-dim);
+  padding: 6px 12px; border-radius: 8px;
+  background: rgba(255,255,255,.03); border: 1px solid var(--line);
+}
+.chip strong { color: var(--text); }
+
+/* Section */
+section { margin-top: 56px; }
+h2.sec {
+  font-size: 28px; letter-spacing: -0.01em; margin: 0 0 10px;
+  display: flex; align-items: baseline; gap: 14px;
+}
+h2.sec .num {
+  font-family: "SF Mono", "JetBrains Mono", ui-monospace, monospace;
+  font-size: 13px; color: var(--xiu); letter-spacing: .1em;
+  padding: 3px 8px; border: 1px solid var(--line-strong); border-radius: 6px;
+}
+h3.sub { font-size: 19px; margin: 28px 0 10px; color: var(--text); }
+h4 { font-size: 15px; margin: 18px 0 8px; color: var(--text); letter-spacing: .01em; }
+p.lead { color: var(--text-dim); margin: 6px 0 20px; max-width: 900px; }
+p { color: var(--text-dim); }
+p strong, li strong, td strong { color: var(--text); font-weight: 600; }
+hr { border: 0; border-top: 1px solid var(--line); margin: 40px 0; }
+
+/* Card */
+.card {
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 22px 24px;
+  box-shadow: var(--shadow);
+}
+.grid { display: grid; gap: 18px; }
+.g-2 { grid-template-columns: repeat(2, 1fr); }
+.g-3 { grid-template-columns: repeat(3, 1fr); }
+.g-4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 860px) {
+  .g-2, .g-3, .g-4 { grid-template-columns: 1fr; }
+  .wrap { padding: 28px 16px 80px; }
+  .hero { padding: 36px 22px; }
+}
+
+/* Code / mono */
+code, pre, .mono {
+  font-family: "SF Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+code {
+  background: rgba(0,243,255,.08);
+  color: #b5f4fb;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: .88em;
+}
+pre {
+  background: #0a0d15; border: 1px solid var(--line);
+  border-radius: 10px; padding: 16px 18px; overflow-x: auto;
+  color: #d6e1f5; font-size: 13px; line-height: 1.6;
+}
+pre .k { color: #d946ef; }   /* 关键字 */
+pre .s { color: #00f3ff; }   /* 字符串 */
+pre .c { color: #6b7691; }   /* 注释 */
+pre .n { color: #ffa940; }   /* 数字/强调 */
+
+/* Table */
+table {
+  width: 100%; border-collapse: separate; border-spacing: 0;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 12px; overflow: hidden;
+  font-size: 14px;
+}
+th, td {
+  padding: 12px 14px; text-align: left; vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+thead th {
+  background: var(--bg-2);
+  color: var(--text); font-weight: 600;
+  font-size: 13px; letter-spacing: .02em;
+}
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: rgba(255,255,255,.015); }
+td.center, th.center { text-align: center; }
+
+/* Badges */
+.badge {
+  display: inline-block; font-size: 11px;
+  padding: 2px 8px; border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255,255,255,.03);
+  color: var(--text-dim); letter-spacing: .02em;
+}
+.badge.ok { color: var(--ok); border-color: rgba(0,230,118,.3); background: rgba(0,230,118,.08); }
+.badge.exp { color: var(--amber); border-color: rgba(255,169,64,.3); background: rgba(255,169,64,.08); }
+.badge.ai { color: var(--ai); border-color: rgba(217,70,239,.35); background: rgba(217,70,239,.08); }
+.badge.xiu { color: var(--xiu); border-color: rgba(0,243,255,.35); background: rgba(0,243,255,.08); }
+
+/* TOC */
+.toc { columns: 2; column-gap: 28px; margin: 28px 0 0; padding: 0; list-style: none; }
+.toc li {
+  break-inside: avoid;
+  padding: 8px 0; border-bottom: 1px dashed var(--line);
+}
+.toc a { color: var(--text-dim); text-decoration: none; display: flex; justify-content: space-between; gap: 12px; }
+.toc a:hover { color: var(--xiu); }
+.toc .n { color: var(--text-muted); font-family: "SF Mono", ui-monospace, monospace; font-size: 12px; }
+@media (max-width: 720px) { .toc { columns: 1; } }
+
+/* Decisions block */
+.decision {
+  background: var(--bg-1);
+  border-left: 3px solid var(--ai);
+  border-radius: 0 12px 12px 0;
+  padding: 18px 22px;
+  margin: 16px 0;
+}
+.decision h4 { margin: 0 0 8px; color: var(--ai); font-size: 16px; }
+.decision .why { color: var(--text-dim); }
+.decision .trade { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 10px; }
+.decision .pro, .decision .con { padding: 10px 14px; border-radius: 8px; font-size: 13.5px; }
+.decision .pro { background: rgba(0,230,118,.06); border: 1px solid rgba(0,230,118,.2); }
+.decision .con { background: rgba(255,83,112,.06); border: 1px solid rgba(255,83,112,.2); }
+.decision .pro strong { color: var(--ok); }
+.decision .con strong { color: var(--err); }
+@media (max-width: 720px) { .decision .trade { grid-template-columns: 1fr; } }
+
+/* Architecture diagram (pure SVG styling helper) */
+.diagram {
+  background:
+    radial-gradient(600px 300px at 50% 0%, rgba(217,70,239,.08), transparent 60%),
+    var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 28px;
+  overflow-x: auto;
+}
+.diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+
+/* Layer card for architecture */
+.layer {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin: 8px 0;
+  position: relative;
+}
+.layer .ltitle { font-size: 13px; color: var(--xiu); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; font-weight: 600; }
+.layer ul { margin: 6px 0 0; padding-left: 18px; }
+.layer li { color: var(--text-dim); }
+
+/* Callout */
+.callout {
+  padding: 14px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(0,243,255,.04);
+  border-left: 3px solid var(--xiu);
+  margin: 18px 0;
+}
+.callout.warn { background: rgba(255,184,77,.05); border-left-color: var(--warn); }
+.callout.ai { background: rgba(217,70,239,.05); border-left-color: var(--ai); }
+.callout strong { color: var(--text); }
+
+/* Pill navigation */
+.perspectives { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 28px; }
+.perspective-pill {
+  padding: 8px 14px; border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255,255,255,.02);
+  font-size: 13px; color: var(--text-dim);
+}
+.perspective-pill.active { color: var(--bg); background: var(--xiu); border-color: var(--xiu); font-weight: 600; }
+
+/* Perspective section color coding */
+.persp {
+  padding: 22px 24px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--bg-1);
+  margin: 18px 0;
+}
+.persp.product { border-top: 3px solid #ffcc00; }
+.persp.user    { border-top: 3px solid var(--xiu); }
+.persp.arch    { border-top: 3px solid var(--ai); }
+.persp.eng     { border-top: 3px solid var(--ok); }
+.persp h3 { margin-top: 0; }
+
+/* File table small */
+.files { font-size: 13px; }
+.files td { padding: 9px 12px; }
+.files td.path { font-family: "SF Mono", ui-monospace, monospace; color: #b5f4fb; }
+
+/* KPI */
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.kpi {
+  padding: 18px 20px; background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px;
+}
+.kpi .v { font-size: 28px; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
+.kpi .v.grad { background: linear-gradient(90deg, var(--xiu), var(--ai)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.kpi .k { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .1em; margin-top: 4px; }
+@media (max-width: 860px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* Footnote */
+footer.page {
+  margin-top: 80px; padding-top: 24px; border-top: 1px solid var(--line);
+  color: var(--text-muted); font-size: 13px;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ============ HERO ============ -->
+<header class="hero">
+  <span class="eyebrow"><span class="dot"></span>Research Report · 2026-04-20</span>
+  <h1 class="title">AutoDev 3.0 Xiuper <span class="grad">全景调研</span></h1>
+  <p class="subtitle">
+    一个用 Kotlin Multiplatform 把同一套 AI Agent 引擎跑到 8 种宿主的
+    <strong>AI-native 开发平台</strong>——产品、架构、技术、工程四视角拆解。
+  </p>
+  <div class="meta">
+    <span class="chip">项目 · <strong>AutoDev 3.0 Xiuper (Alpha)</strong></span>
+    <span class="chip">调研路径 · <strong>a_res/auto-dev/</strong></span>
+    <span class="chip">调研方式 · <strong>3 路并行子 Agent</strong></span>
+    <span class="chip">License · <strong>MPL 2.0</strong></span>
+  </div>
+</header>
+
+<!-- ============ KPI ============ -->
+<section>
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="v grad">9</div>
+      <div class="k">Gradle 子模块</div>
+    </div>
+    <div class="kpi">
+      <div class="v grad">8</div>
+      <div class="k">目标宿主形态</div>
+    </div>
+    <div class="kpi">
+      <div class="v">6 + 9</div>
+      <div class="k">主 Agent / SubAgent</div>
+    </div>
+    <div class="kpi">
+      <div class="v">9</div>
+      <div class="k">Renderer 实现 (5 Kotlin + 4 TS)</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TOC ============ -->
+<section>
+  <h2 class="sec"><span class="num">00</span>目录</h2>
+  <ul class="toc">
+    <li><a href="#s1"><span>一句话定位与核心价值</span><span class="n">§1</span></a></li>
+    <li><a href="#s2"><span>产品场景与能力矩阵</span><span class="n">§2</span></a></li>
+    <li><a href="#s3"><span>技术栈与模块拓扑</span><span class="n">§3</span></a></li>
+    <li><a href="#s4"><span>引擎骨架与分层架构</span><span class="n">§4</span></a></li>
+    <li><a href="#s5"><span>KMP 跨端一致性的五层手法</span><span class="n">§5</span></a></li>
+    <li><a href="#s6"><span>典型数据流追踪</span><span class="n">§6</span></a></li>
+    <li><a href="#s7"><span>关键设计决策拆解</span><span class="n">§7</span></a></li>
+    <li><a href="#s8"><span>生态战略:不做围墙的平台</span><span class="n">§8</span></a></li>
+    <li><a href="#s9"><span>四视角洞察汇总</span><span class="n">§9</span></a></li>
+    <li><a href="#s10"><span>可高度提炼的核心思想</span><span class="n">§10</span></a></li>
+    <li><a href="#s11"><span>风险与挑战</span><span class="n">§11</span></a></li>
+    <li><a href="#s12"><span>关键文件索引</span><span class="n">§12</span></a></li>
+    <li><a href="#s13"><span>对 zCli 的启示</span><span class="n">§13</span></a></li>
+  </ul>
+</section>
+
+<!-- ============ 1 定位 ============ -->
+<section id="s1">
+  <h2 class="sec"><span class="num">01</span>一句话定位与核心价值</h2>
+  <p class="lead">
+    AutoDev 3.0 Xiuper 不是 Cursor 的开源替代,也不是 Claude Code 的加强版;
+    它的本质是 <strong>"AI 工具联邦的客户端与宿主"</strong>——
+    用统一的 Agent 引擎 + 开放生态协议(MCP / AGENTS.md / Claude Skill / SpecKit / A2A),
+    把需求、编码、审查、数据、原型、Web 交互这 6 个开发阶段串进一条工作流,
+    再通过 Kotlin Multiplatform 把这条工作流投送到开发者所在的任何一个屏幕上。
+  </p>
+
+  <div class="callout ai">
+    <strong>口号</strong>: <em>One Platform. All Phases. Every Device.</em> —
+    统一平台 · 全开发阶段 · 跨全设备。
+  </div>
+
+  <h3 class="sub">对标谁?差在哪?</h3>
+  <table>
+    <thead>
+      <tr><th>维度</th><th>Cursor</th><th>Copilot</th><th>Claude Code</th><th>AutoDev Xiuper</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>覆盖宿主</td><td>自研 IDE</td><td>IDE 插件</td><td>CLI</td><td><strong>IDEA / VSCode / CLI / Desktop / Android / iOS / Web / Server</strong></td></tr>
+      <tr><td>Agent 形态</td><td>单 Agent</td><td>补全优先</td><td>单 Agent + 子 Agent</td><td><strong>6 主 Agent + 9 SubAgent</strong></td></tr>
+      <tr><td>MCP 协议</td><td class="center">—</td><td class="center">—</td><td class="center"><span class="badge ok">是</span></td><td class="center"><span class="badge ok">是</span></td></tr>
+      <tr><td>Claude Skill</td><td class="center">—</td><td class="center">—</td><td class="center"><span class="badge ok">是</span></td><td class="center"><span class="badge ok">是 + Git 版本化</span></td></tr>
+      <tr><td>项目规则注入</td><td>部分</td><td class="center">—</td><td>CLAUDE.md</td><td><strong>AGENTS.md 自动发现 + 层级合并</strong></td></tr>
+      <tr><td>开放生态</td><td>封闭</td><td>封闭</td><td>半开放</td><td><strong>MCP + A2A + Skill + SpecKit 全接入</strong></td></tr>
+      <tr><td>多 LLM</td><td>有限</td><td>—</td><td>Anthropic 主</td><td><strong>OpenAI/Anthropic/Google/DeepSeek/GLM/Qwen/Ollama 等</strong></td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    关键差异不在单点能力,而在 <strong>"工作流编排 + 开放生态 + 全端投送"</strong> 这三点的交集。
+    Cursor 赢在 IDE 打磨,Copilot 赢在补全模型,Claude Code 赢在纯文本 Agent 范式,
+    AutoDev 想赢在 <em>"把各家 Agent 工具组合起来,统一跑在任何地方"</em> 这个新的品类。
+  </div>
+</section>
+
+<!-- ============ 2 场景 & 能力矩阵 ============ -->
+<section id="s2">
+  <h2 class="sec"><span class="num">02</span>产品场景与能力矩阵</h2>
+
+  <h3 class="sub">6 大工作流 = 6 个主 Agent</h3>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:18%">阶段 / Agent</th>
+        <th>用户 Job-to-be-done</th>
+        <th>输入 / 输出</th>
+        <th style="width:14%">状态</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>DocumentAgent</strong><br><span class="badge">需求 · 研究</span></td>
+        <td>把一堆需求文档/PRD/论文变成可查询的知识图谱和特性树</td>
+        <td>docs / URL → 摘要 · DocQL · FeatureTree</td>
+        <td><span class="badge ok">Code-backed</span></td>
+      </tr>
+      <tr>
+        <td><strong>CodingAgent</strong><br><span class="badge">开发 · 实现</span></td>
+        <td>AI-native 编码:读、写、跑、改,带工作区感知</td>
+        <td>prompt + repo → 文件变更 · Shell 执行 · 工具链</td>
+        <td><span class="badge ok">Code-backed</span></td>
+      </tr>
+      <tr>
+        <td><strong>CodeReviewAgent</strong><br><span class="badge">质量 · 审查</span></td>
+        <td>PR/pre-push 审查 + Lint 摘要 + 自动修复建议</td>
+        <td>diff → 意见列表 · Fix 补丁</td>
+        <td><span class="badge ok">Code-backed</span></td>
+      </tr>
+      <tr>
+        <td><strong>ChatDBAgent</strong><br><span class="badge">数据 · 查询</span></td>
+        <td>自然语言查数据库,自动 schema 绑定 + SQL 修复闭环</td>
+        <td>问题 + schema → SQL · 可视化结果</td>
+        <td><span class="badge ok">Code-backed</span></td>
+      </tr>
+      <tr>
+        <td><strong>ArtifactAgent</strong><br><span class="badge">原型 · 交付</span></td>
+        <td>一句话产出可运行 artifact:HTML / React / Node / Python / SVG / Mermaid</td>
+        <td>需求 → 自包含可运行代码</td>
+        <td><span class="badge ok">Code-backed</span></td>
+      </tr>
+      <tr>
+        <td><strong>WebAgent / WebEdit</strong><br><span class="badge">Web 交互</span></td>
+        <td>对网页做检查/改动/自动化操作,多模态感知 DOM</td>
+        <td>URL + 指令 → 页面交互 · 截图 · DOM 摘要</td>
+        <td><span class="badge exp">Experimental</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3 class="sub">场景自然编排示意</h3>
+  <div class="diagram">
+    <svg viewBox="0 0 1100 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="场景编排">
+      <defs>
+        <linearGradient id="arrow" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#00f3ff"/>
+          <stop offset="100%" stop-color="#d946ef"/>
+        </linearGradient>
+        <marker id="mk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="url(#arrow)"/>
+        </marker>
+      </defs>
+      <g font-family="-apple-system, Segoe UI, sans-serif" font-size="13" fill="#e6ebf5">
+        <!-- boxes -->
+        <g>
+          <rect x="10"  y="80" width="160" height="60" rx="10" fill="#171c29" stroke="#2a3246"/>
+          <text x="90"  y="105" text-anchor="middle" font-weight="700">Document</text>
+          <text x="90"  y="124" text-anchor="middle" fill="#9aa5bd" font-size="11">需求研究</text>
+        </g>
+        <g>
+          <rect x="190" y="80" width="160" height="60" rx="10" fill="#171c29" stroke="#2a3246"/>
+          <text x="270" y="105" text-anchor="middle" font-weight="700">Coding</text>
+          <text x="270" y="124" text-anchor="middle" fill="#9aa5bd" font-size="11">实现</text>
+        </g>
+        <g>
+          <rect x="370" y="80" width="160" height="60" rx="10" fill="#171c29" stroke="#2a3246"/>
+          <text x="450" y="105" text-anchor="middle" font-weight="700">CodeReview</text>
+          <text x="450" y="124" text-anchor="middle" fill="#9aa5bd" font-size="11">审查</text>
+        </g>
+        <g>
+          <rect x="550" y="80" width="160" height="60" rx="10" fill="#171c29" stroke="#2a3246"/>
+          <text x="630" y="105" text-anchor="middle" font-weight="700">Coding (fix)</text>
+          <text x="630" y="124" text-anchor="middle" fill="#9aa5bd" font-size="11">修复反馈</text>
+        </g>
+        <g>
+          <rect x="730" y="80" width="160" height="60" rx="10" fill="#171c29" stroke="#2a3246"/>
+          <text x="810" y="105" text-anchor="middle" font-weight="700">ChatDB</text>
+          <text x="810" y="124" text-anchor="middle" fill="#9aa5bd" font-size="11">数据验证</text>
+        </g>
+        <g>
+          <rect x="910" y="80" width="170" height="60" rx="10" fill="#171c29" stroke="#2a3246"/>
+          <text x="995" y="105" text-anchor="middle" font-weight="700">Artifact</text>
+          <text x="995" y="124" text-anchor="middle" fill="#9aa5bd" font-size="11">原型交付</text>
+        </g>
+        <!-- arrows -->
+        <line x1="170" y1="110" x2="190" y2="110" stroke="url(#arrow)" stroke-width="2" marker-end="url(#mk)"/>
+        <line x1="350" y1="110" x2="370" y2="110" stroke="url(#arrow)" stroke-width="2" marker-end="url(#mk)"/>
+        <line x1="530" y1="110" x2="550" y2="110" stroke="url(#arrow)" stroke-width="2" marker-end="url(#mk)"/>
+        <line x1="710" y1="110" x2="730" y2="110" stroke="url(#arrow)" stroke-width="2" marker-end="url(#mk)"/>
+        <line x1="890" y1="110" x2="910" y2="110" stroke="url(#arrow)" stroke-width="2" marker-end="url(#mk)"/>
+        <!-- title -->
+        <text x="550" y="30" text-anchor="middle" font-size="15" fill="#9aa5bd">同一上下文 / 同一会话 / 同一套工具——跨阶段自然传递</text>
+        <text x="550" y="50" text-anchor="middle" font-size="12" fill="#6b7691">AutoDev 的产品价值不在单点强度,而在阶段之间的零切换成本</text>
+      </g>
+    </svg>
+  </div>
+
+  <h3 class="sub">9 个 SubAgent:专职微服务</h3>
+  <p class="lead">SubAgent 不是函数、不是工具,而是<strong>独立持有 LLM 上下文的专家 Agent</strong>。主 Agent 可以把它们当作工具调用,SubAgent 本身也是一次独立的 Agent loop。</p>
+  <table>
+    <thead>
+      <tr><th>SubAgent</th><th>定位</th><th>典型用途</th><th>跨端</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>NanoDSL Agent</strong></td><td>AI-native UI 代码生成 DSL</td><td>自然语言 → 组件 + 状态 + HTTP</td><td>全端</td></tr>
+      <tr><td><strong>PlotDSL Agent</strong></td><td>ggplot2 风格图表 DSL</td><td>数据 → 统计图</td><td>JVM / Android</td></tr>
+      <tr><td><strong>Chart Agent</strong></td><td>ComposeCharts 配置生成</td><td>饼 / 线 / 柱图 / 数据分析</td><td>全端</td></tr>
+      <tr><td><strong>Analysis Agent</strong></td><td>长内容智能分析</td><td>日志 / 错误 / JSON / 代码分类总结</td><td>全端</td></tr>
+      <tr><td><strong>Codebase Investigator</strong></td><td>代码库结构 / 依赖 / 模式分析</td><td>架构审计 · 热点识别</td><td>全端</td></tr>
+      <tr><td><strong>Domain Dict Agent</strong></td><td>领域词典生成</td><td>抽取类/方法 → 术语表</td><td>全端</td></tr>
+      <tr><td><strong>Error Recovery Agent</strong></td><td>错误分析 + 自愈</td><td>工具失败后自动诊断 · 建议修复</td><td>全端</td></tr>
+      <tr><td><strong>SQL Revise Agent</strong></td><td>SQL 修订优化</td><td>schema 感知改写 · 优化</td><td>全端</td></tr>
+      <tr><td><strong>E2E Testing Agent</strong></td><td>端到端测试 + 自愈定位器</td><td>多模态感知 · 用例生成</td><td>全端</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ 3 技术栈 ============ -->
+<section id="s3">
+  <h2 class="sec"><span class="num">03</span>技术栈与模块拓扑</h2>
+  <p class="lead">9 个 Gradle 模块,围绕 <code>mpp-core</code> 这颗共享核心构建,前端分 Compose Multiplatform 和 TypeScript 两大阵营,IDEA 插件用 composite build 独立构建。</p>
+
+  <h3 class="sub">技术栈一览</h3>
+  <div class="grid g-3">
+    <div class="card">
+      <h4 style="color:var(--ai)">共享核心</h4>
+      <ul>
+        <li>Kotlin Multiplatform (K2)</li>
+        <li>Kotlin Coroutines / Flow</li>
+        <li>kotlinx.serialization</li>
+        <li>Ktor Client</li>
+        <li>expect/actual + @JsExport</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--xiu)">UI 层</h4>
+      <ul>
+        <li>Compose Multiplatform(Desktop/Android/iOS/Web)</li>
+        <li>JetBrains Jewel(IDEA 插件内嵌 Compose)</li>
+        <li>TypeScript + React(VSCode webview)</li>
+        <li>CLI: Node.js + Pastel/Chalk TUI</li>
+        <li>i18n4k + 手写 TS locale 双轨</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--ok)">后端 / 基础设施</h4>
+      <ul>
+        <li>Ktor Server(SSE 流式)</li>
+        <li>Tree-sitter(Java/Kotlin/Python/JS/TS/Go/Rust/C#)</li>
+        <li>SQLDelight(多端本地存储)</li>
+        <li>MCP / A2A / Claude Skill 协议适配</li>
+        <li>多 LLM Provider 抽象</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3 class="sub">模块拓扑图</h3>
+  <div class="diagram">
+    <svg viewBox="0 0 1080 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="模块拓扑">
+      <defs>
+        <linearGradient id="core" x1="0" x2="1"><stop offset="0" stop-color="#1a2236"/><stop offset="1" stop-color="#241a36"/></linearGradient>
+        <linearGradient id="ui"   x1="0" x2="1"><stop offset="0" stop-color="#0f2228"/><stop offset="1" stop-color="#12323a"/></linearGradient>
+        <linearGradient id="host" x1="0" x2="1"><stop offset="0" stop-color="#1e1728"/><stop offset="1" stop-color="#231a1f"/></linearGradient>
+      </defs>
+      <g font-family="-apple-system, Segoe UI, sans-serif" fill="#e6ebf5">
+        <!-- core -->
+        <rect x="330" y="30" width="420" height="100" rx="14" fill="url(#core)" stroke="#d946ef" stroke-width="1.5"/>
+        <text x="540" y="62" text-anchor="middle" font-size="18" font-weight="700">mpp-core</text>
+        <text x="540" y="84" text-anchor="middle" font-size="12" fill="#9aa5bd">共享 Agent 引擎 · 工具系统 · MCP · DevIns DSL · Renderer 接口</text>
+        <text x="540" y="104" text-anchor="middle" font-size="11" fill="#d946ef">JVM · Android · iOS · JS · WASM</text>
+
+        <!-- support layer -->
+        <g font-size="12">
+          <rect x="50"  y="170" width="170" height="70" rx="10" fill="#171c29" stroke="#2a3246"/>
+          <text x="135" y="195" text-anchor="middle" font-weight="700">mpp-codegraph</text>
+          <text x="135" y="215" text-anchor="middle" fill="#9aa5bd">Tree-sitter 解析</text>
+
+          <rect x="240" y="170" width="170" height="70" rx="10" fill="#171c29" stroke="#2a3246"/>
+          <text x="325" y="195" text-anchor="middle" font-weight="700">mpp-viewer</text>
+          <text x="325" y="215" text-anchor="middle" fill="#9aa5bd">Diagram 模型</text>
+
+          <rect x="430" y="170" width="220" height="70" rx="10" fill="#171c29" stroke="#2a3246"/>
+          <text x="540" y="195" text-anchor="middle" font-weight="700">mpp-viewer-web</text>
+          <text x="540" y="215" text-anchor="middle" fill="#9aa5bd">Web 图表渲染</text>
+
+          <rect x="670" y="170" width="360" height="70" rx="10" fill="#171c29" stroke="#2a3246"/>
+          <text x="850" y="195" text-anchor="middle" font-weight="700">xiuper-ui · xiuper-fs · xiuper-e2e</text>
+          <text x="850" y="215" text-anchor="middle" fill="#9aa5bd">NanoDSL · 跨平台 FS · E2E 测试基建</text>
+        </g>
+
+        <!-- ui layer -->
+        <rect x="330" y="280" width="420" height="100" rx="14" fill="url(#ui)" stroke="#00f3ff" stroke-width="1.5"/>
+        <text x="540" y="312" text-anchor="middle" font-size="17" font-weight="700">mpp-ui</text>
+        <text x="540" y="334" text-anchor="middle" font-size="12" fill="#9aa5bd">Compose MP(JVM/Android/iOS) + TypeScript CLI/Web renderer</text>
+        <text x="540" y="354" text-anchor="middle" font-size="11" fill="#00f3ff">5 目标 · ComposeRenderer · BaseRenderer/CliRenderer/TuiRenderer</text>
+
+        <!-- hosts -->
+        <g font-size="12">
+          <rect x="50"  y="420" width="200" height="80" rx="10" fill="url(#host)" stroke="#2a3246"/>
+          <text x="150" y="447" text-anchor="middle" font-weight="700">mpp-idea</text>
+          <text x="150" y="466" text-anchor="middle" fill="#9aa5bd">IntelliJ 插件</text>
+          <text x="150" y="484" text-anchor="middle" fill="#6b7691" font-size="11">composite build · JewelRenderer</text>
+
+          <rect x="270" y="420" width="200" height="80" rx="10" fill="url(#host)" stroke="#2a3246"/>
+          <text x="370" y="447" text-anchor="middle" font-weight="700">mpp-vscode</text>
+          <text x="370" y="466" text-anchor="middle" fill="#9aa5bd">VSCode 扩展 (纯 TS)</text>
+          <text x="370" y="484" text-anchor="middle" fill="#6b7691" font-size="11">bridge/mpp-core.ts → @xiuper/mpp-core</text>
+
+          <rect x="490" y="420" width="200" height="80" rx="10" fill="url(#host)" stroke="#2a3246"/>
+          <text x="590" y="447" text-anchor="middle" font-weight="700">mpp-server</text>
+          <text x="590" y="466" text-anchor="middle" fill="#9aa5bd">Ktor 远程 Agent</text>
+          <text x="590" y="484" text-anchor="middle" fill="#6b7691" font-size="11">SSE 流式 · ServerSideRenderer</text>
+
+          <rect x="710" y="420" width="200" height="80" rx="10" fill="url(#host)" stroke="#2a3246"/>
+          <text x="810" y="447" text-anchor="middle" font-weight="700">Desktop / Android / iOS</text>
+          <text x="810" y="466" text-anchor="middle" fill="#9aa5bd">mpp-ui 多端应用</text>
+          <text x="810" y="484" text-anchor="middle" fill="#6b7691" font-size="11">ComposeRenderer</text>
+
+          <rect x="930" y="420" width="110" height="80" rx="10" fill="url(#host)" stroke="#2a3246"/>
+          <text x="985" y="447" text-anchor="middle" font-weight="700">Web</text>
+          <text x="985" y="466" text-anchor="middle" fill="#9aa5bd">JS / WASM</text>
+          <text x="985" y="484" text-anchor="middle" fill="#6b7691" font-size="11">mpp-web (experimental)</text>
+        </g>
+
+        <!-- arrows core -> support -->
+        <g stroke="#2a3246" stroke-width="1.2" fill="none">
+          <line x1="420" y1="130" x2="180" y2="170"/>
+          <line x1="480" y1="130" x2="340" y2="170"/>
+          <line x1="560" y1="130" x2="540" y2="170"/>
+          <line x1="620" y1="130" x2="820" y2="170"/>
+        </g>
+        <!-- arrows core -> ui -->
+        <line x1="540" y1="130" x2="540" y2="280" stroke="#00f3ff" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <!-- arrows ui -> hosts -->
+        <g stroke="#2a3246" stroke-width="1.2" fill="none">
+          <line x1="380" y1="380" x2="150" y2="420"/>
+          <line x1="430" y1="380" x2="370" y2="420"/>
+          <line x1="540" y1="380" x2="590" y2="420"/>
+          <line x1="650" y1="380" x2="810" y2="420"/>
+          <line x1="700" y1="380" x2="985" y2="420"/>
+        </g>
+
+        <text x="540" y="540" text-anchor="middle" font-size="11" fill="#6b7691">箭头方向 = 依赖方向;紫色 = 核心 · 青色 = UI 层 · 灰色 = 宿主层</text>
+      </g>
+    </svg>
+  </div>
+
+  <h3 class="sub">KMP Target 矩阵</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>模块</th>
+        <th class="center">JVM</th>
+        <th class="center">Android</th>
+        <th class="center">iOS</th>
+        <th class="center">JS</th>
+        <th class="center">WASM</th>
+        <th>说明</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>mpp-core</strong></td><td class="center">✅</td><td class="center">✅</td><td class="center">✅</td><td class="center">✅</td><td class="center">✅</td><td>共享引擎全平台</td></tr>
+      <tr><td><strong>mpp-ui</strong></td><td class="center">✅</td><td class="center">✅</td><td class="center">✅</td><td class="center">✅</td><td class="center">✅</td><td>Compose + TS 双轨</td></tr>
+      <tr><td><strong>mpp-codegraph</strong></td><td class="center">✅</td><td class="center">✅</td><td class="center">✅</td><td class="center">✅</td><td class="center">✅</td><td>Tree-sitter 平台特化</td></tr>
+      <tr><td><strong>mpp-viewer</strong></td><td class="center">✅</td><td class="center">—</td><td class="center">✅</td><td class="center">✅</td><td class="center">✅</td><td>Diagram 模型</td></tr>
+      <tr><td><strong>xiuper-ui/fs</strong></td><td class="center">✅</td><td class="center">✅</td><td class="center">✅</td><td class="center">✅</td><td class="center">✅</td><td>基础设施共享</td></tr>
+      <tr><td><strong>xiuper-e2e</strong></td><td class="center">✅</td><td class="center">—</td><td class="center">—</td><td class="center">✅</td><td class="center">—</td><td>E2E 测试(JS 优先)</td></tr>
+      <tr><td><strong>mpp-server</strong></td><td class="center">✅</td><td class="center">—</td><td class="center">—</td><td class="center">—</td><td class="center">—</td><td>Ktor JVM only</td></tr>
+      <tr><td><strong>mpp-idea</strong></td><td class="center">✅</td><td class="center">—</td><td class="center">—</td><td class="center">—</td><td class="center">—</td><td>Composite build</td></tr>
+      <tr><td><strong>mpp-vscode</strong></td><td class="center">—</td><td class="center">—</td><td class="center">—</td><td class="center">✅(TS)</td><td class="center">—</td><td>纯 TypeScript</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ 4 引擎骨架 ============ -->
+<section id="s4">
+  <h2 class="sec"><span class="num">04</span>引擎骨架与分层架构</h2>
+  <p class="lead">引擎核心是 <code>CodingAgentExecutor</code>(714 行)维持 <em>LLM → 解析 → 执行工具 → 回环</em> 的多轮循环。一切外部事件都通过 <code>CodingAgentRenderer</code> 接口作为<strong>"事件回调"</strong>流出,一切外部能力都通过 <code>ExecutableTool</code> 作为<strong>"统一工具"</strong>流入。</p>
+
+  <h3 class="sub">四层抽象</h3>
+  <div class="layer">
+    <div class="ltitle">① Renderer Layer · 事件汇聚</div>
+    <ul>
+      <li><code>CodingAgentRenderer</code>(接口) → 5 个 Kotlin 实现 + 4 个 TypeScript 实现</li>
+      <li>Default / Compose / Jewel / ServerSide / JsRendererAdapter(Kotlin) · Base / Cli / Tui / Server(TS)</li>
+      <li>方法级回调:<code>renderIterationHeader</code> · <code>renderLLMResponseChunk</code> · <code>renderToolCall</code> · <code>renderToolResult</code> · <code>renderThinkingChunk</code> · <code>renderFinalResult</code></li>
+    </ul>
+  </div>
+  <div class="layer">
+    <div class="ltitle">② Executor Layer · Agent 主循环</div>
+    <ul>
+      <li><code>CodingAgentExecutor.execute()</code> 多轮 loop + Token 计量 + 终止条件</li>
+      <li><code>ConversationManager</code> 维持完整 message 历史,支持 continue / new / 自动压缩</li>
+      <li><code>ToolCallParser</code> 解析 LLM 响应里的工具调用片段</li>
+      <li>重复检测 + 卡死检测 → 自动派发 ErrorRecoveryAgent</li>
+    </ul>
+  </div>
+  <div class="layer">
+    <div class="ltitle">③ Orchestrator Layer · 策略与协调</div>
+    <ul>
+      <li><code>ToolOrchestrator.executeToolCall()</code> 统一入口</li>
+      <li>执行前调用 <code>PolicyEngine.decide()</code>:ALLOW / DENY / ASK_USER</li>
+      <li>LiveShellExecutor 支持 PTY 流式输出</li>
+      <li>McpToolAdapter 把 MCP Server 暴露的工具伪装成本地 tool</li>
+    </ul>
+  </div>
+  <div class="layer">
+    <div class="ltitle">④ Tool Layer · 所有能力的统一接口</div>
+    <ul>
+      <li>所有能力(内置工具 / MCP 工具 / SubAgent)都实现 <code>ExecutableTool&lt;TParams, TResult&gt;</code></li>
+      <li>Schema 采用<strong>手写 + 声明式</strong>(<code>DeclarativeToolSchema</code> + <code>SchemaPropertyBuilder</code>),不用反射/KSP——KMP 兼容考虑</li>
+      <li>工具 metadata 带 displayName / emoji / icon / schema,供 Renderer 直接使用</li>
+    </ul>
+  </div>
+
+  <h3 class="sub">引擎分层架构图</h3>
+  <div class="diagram">
+    <svg viewBox="0 0 1080 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="引擎分层架构">
+      <defs>
+        <linearGradient id="l1" x1="0" x2="1"><stop offset="0" stop-color="#0f2228"/><stop offset="1" stop-color="#12323a"/></linearGradient>
+        <linearGradient id="l2" x1="0" x2="1"><stop offset="0" stop-color="#1a2236"/><stop offset="1" stop-color="#241a36"/></linearGradient>
+        <linearGradient id="l3" x1="0" x2="1"><stop offset="0" stop-color="#22261a"/><stop offset="1" stop-color="#1f2620"/></linearGradient>
+        <linearGradient id="l4" x1="0" x2="1"><stop offset="0" stop-color="#2a2020"/><stop offset="1" stop-color="#1f2020"/></linearGradient>
+      </defs>
+      <g font-family="-apple-system, Segoe UI, sans-serif" fill="#e6ebf5" font-size="13">
+        <!-- L1 Renderer -->
+        <rect x="60" y="30" width="960" height="100" rx="14" fill="url(#l1)" stroke="#00f3ff" stroke-width="1.5"/>
+        <text x="80" y="58" font-weight="700" font-size="15" fill="#00f3ff">① Renderer · 事件汇聚层</text>
+        <text x="80" y="82" fill="#9aa5bd">CodingAgentRenderer (interface)</text>
+        <g font-size="11" fill="#cfe1ff">
+          <rect x="80"  y="94" width="128" height="26" rx="6" fill="#0a0d15" stroke="#2a3246"/>
+          <text x="144" y="111" text-anchor="middle">DefaultRenderer</text>
+          <rect x="216" y="94" width="128" height="26" rx="6" fill="#0a0d15" stroke="#2a3246"/>
+          <text x="280" y="111" text-anchor="middle">ComposeRenderer</text>
+          <rect x="352" y="94" width="128" height="26" rx="6" fill="#0a0d15" stroke="#2a3246"/>
+          <text x="416" y="111" text-anchor="middle">JewelRenderer</text>
+          <rect x="488" y="94" width="128" height="26" rx="6" fill="#0a0d15" stroke="#2a3246"/>
+          <text x="552" y="111" text-anchor="middle">ServerSide</text>
+          <rect x="624" y="94" width="128" height="26" rx="6" fill="#0a0d15" stroke="#2a3246"/>
+          <text x="688" y="111" text-anchor="middle">JsAdapter</text>
+          <rect x="760" y="94" width="248" height="26" rx="6" fill="#0a0d15" stroke="#2a3246"/>
+          <text x="884" y="111" text-anchor="middle">TS × 4(Base/Cli/Tui/Server)</text>
+        </g>
+
+        <!-- L2 Executor -->
+        <rect x="60" y="150" width="960" height="120" rx="14" fill="url(#l2)" stroke="#d946ef" stroke-width="1.5"/>
+        <text x="80" y="178" font-weight="700" font-size="15" fill="#d946ef">② Executor · Agent 主循环</text>
+        <text x="80" y="202" fill="#9aa5bd">CodingAgentExecutor.execute() — 多轮 LLM ↔ Tool 循环</text>
+        <g font-size="11" fill="#cfe1ff">
+          <rect x="80"  y="216" width="200" height="42" rx="8" fill="#0a0d15" stroke="#2a3246"/>
+          <text x="180" y="232" text-anchor="middle" font-weight="700">ConversationManager</text>
+          <text x="180" y="250" text-anchor="middle" fill="#9aa5bd">历史 · Token · 压缩</text>
+
+          <rect x="296" y="216" width="200" height="42" rx="8" fill="#0a0d15" stroke="#2a3246"/>
+          <text x="396" y="232" text-anchor="middle" font-weight="700">ToolCallParser</text>
+          <text x="396" y="250" text-anchor="middle" fill="#9aa5bd">响应 → 工具调用</text>
+
+          <rect x="512" y="216" width="200" height="42" rx="8" fill="#0a0d15" stroke="#2a3246"/>
+          <text x="612" y="232" text-anchor="middle" font-weight="700">Loop Controller</text>
+          <text x="612" y="250" text-anchor="middle" fill="#9aa5bd">终止 · 迭代上限</text>
+
+          <rect x="728" y="216" width="280" height="42" rx="8" fill="#0a0d15" stroke="#2a3246"/>
+          <text x="868" y="232" text-anchor="middle" font-weight="700">ErrorRecovery / Loop-Guard</text>
+          <text x="868" y="250" text-anchor="middle" fill="#9aa5bd">重复检测 → SubAgent 自愈</text>
+        </g>
+
+        <!-- L3 Orchestrator -->
+        <rect x="60" y="290" width="960" height="110" rx="14" fill="url(#l3)" stroke="#ffb84d" stroke-width="1.5"/>
+        <text x="80" y="318" font-weight="700" font-size="15" fill="#ffb84d">③ Orchestrator · 策略与协调</text>
+        <text x="80" y="342" fill="#9aa5bd">ToolOrchestrator.executeToolCall()</text>
+        <g font-size="11" fill="#cfe1ff">
+          <rect x="80"  y="354" width="220" height="38" rx="8" fill="#0a0d15" stroke="#2a3246"/>
+          <text x="190" y="370" text-anchor="middle" font-weight="700">PolicyEngine</text>
+          <text x="190" y="386" text-anchor="middle" fill="#9aa5bd">ALLOW · DENY · ASK_USER</text>
+
+          <rect x="316" y="354" width="220" height="38" rx="8" fill="#0a0d15" stroke="#2a3246"/>
+          <text x="426" y="370" text-anchor="middle" font-weight="700">LiveShellExecutor</text>
+          <text x="426" y="386" text-anchor="middle" fill="#9aa5bd">PTY · 流式 · 超时</text>
+
+          <rect x="552" y="354" width="220" height="38" rx="8" fill="#0a0d15" stroke="#2a3246"/>
+          <text x="662" y="370" text-anchor="middle" font-weight="700">McpToolAdapter</text>
+          <text x="662" y="386" text-anchor="middle" fill="#9aa5bd">MCP Server → 本地 Tool</text>
+
+          <rect x="788" y="354" width="220" height="38" rx="8" fill="#0a0d15" stroke="#2a3246"/>
+          <text x="898" y="370" text-anchor="middle" font-weight="700">Plan / Tracker</text>
+          <text x="898" y="386" text-anchor="middle" fill="#9aa5bd">进度 · 可观测</text>
+        </g>
+
+        <!-- L4 Tool -->
+        <rect x="60" y="420" width="960" height="150" rx="14" fill="url(#l4)" stroke="#00e676" stroke-width="1.5"/>
+        <text x="80" y="448" font-weight="700" font-size="15" fill="#00e676">④ Tool · 所有能力的统一接口 ExecutableTool&lt;P, R&gt;</text>
+        <g font-size="11" fill="#cfe1ff">
+          <rect x="80"  y="464" width="220" height="96" rx="8" fill="#0a0d15" stroke="#2a3246"/>
+          <text x="190" y="484" text-anchor="middle" font-weight="700">内置工具</text>
+          <text x="190" y="504" text-anchor="middle" fill="#9aa5bd">ReadFile · WriteFile</text>
+          <text x="190" y="522" text-anchor="middle" fill="#9aa5bd">Shell · Glob · Grep</text>
+          <text x="190" y="540" text-anchor="middle" fill="#9aa5bd">Http · DocQL</text>
+
+          <rect x="316" y="464" width="220" height="96" rx="8" fill="#0a0d15" stroke="#2a3246"/>
+          <text x="426" y="484" text-anchor="middle" font-weight="700">MCP 工具</text>
+          <text x="426" y="504" text-anchor="middle" fill="#9aa5bd">McpToolsInitializer</text>
+          <text x="426" y="522" text-anchor="middle" fill="#9aa5bd">运行时动态发现</text>
+          <text x="426" y="540" text-anchor="middle" fill="#9aa5bd">任意 MCP Server</text>
+
+          <rect x="552" y="464" width="220" height="96" rx="8" fill="#0a0d15" stroke="#2a3246"/>
+          <text x="662" y="484" text-anchor="middle" font-weight="700">SubAgent(也是 Tool)</text>
+          <text x="662" y="504" text-anchor="middle" fill="#9aa5bd">NanoDSL · Plot · Chart</text>
+          <text x="662" y="522" text-anchor="middle" fill="#9aa5bd">Analysis · Investigator</text>
+          <text x="662" y="540" text-anchor="middle" fill="#9aa5bd">ErrorRecovery · SQLRevise</text>
+
+          <rect x="788" y="464" width="220" height="96" rx="8" fill="#0a0d15" stroke="#2a3246"/>
+          <text x="898" y="484" text-anchor="middle" font-weight="700">DevIns DSL</text>
+          <text x="898" y="504" text-anchor="middle" fill="#9aa5bd">Lexer → Parser</text>
+          <text x="898" y="522" text-anchor="middle" fill="#9aa5bd">AST → Processor链</text>
+          <text x="898" y="540" text-anchor="middle" fill="#9aa5bd">Template + Velocity</text>
+        </g>
+      </g>
+    </svg>
+  </div>
+
+  <h3 class="sub">DevIns DSL:被很多人忽略的关键一环</h3>
+  <p>
+    <code>devins/</code> 是一个完整的 DSL 编译器栈 — Lexer → Parser → AST → 多 Processor → 输出。
+    它把"自然语言 + 代码 + 工具调用"混写成一种 Markdown-like 格式,举例:
+  </p>
+<pre><span class="c">---</span>
+<span class="k">title:</span> <span class="s">Create REST API</span>
+<span class="c">---</span>
+
+The API should have three endpoints: /list, /detail, /create.
+
+<span class="k">/shell</span> <span class="n">command</span>=<span class="s">"mkdir -p src"</span>
+<span class="k">/read-file</span> <span class="n">path</span>=<span class="s">"src/api.ts"</span>
+
+Now analyze what needs changing.</pre>
+  <p>它解决纯工具调用的三个短板:<strong>(1) 条件/循环难表达</strong>;<strong>(2) 自然语言和参数易混淆</strong>;<strong>(3) 批量操作繁琐</strong>。并且有专用的 IntelliJ 语言插件和 TS LSP 提供自动补全。</p>
+</section>
+
+<!-- ============ 5 跨端一致性 ============ -->
+<section id="s5">
+  <h2 class="sec"><span class="num">05</span>KMP 跨端一致性的五层手法</h2>
+  <p class="lead">要让同一套 Agent 引擎跑到 8 种宿主并保持一致体验,必须有一套分层适配方案。AutoDev 给出的答案是"五层递进式的分离与适配"。</p>
+
+  <div class="grid g-2">
+    <div class="card">
+      <h4><span class="badge ai">Layer 1</span> 代码层:expect/actual</h4>
+      <p>平台差异封到类型系统内。<code>Platform.kt</code> 在 commonMain 用 <code>expect object Platform</code> 定义接口,在 <code>jvmMain / jsMain / iosMain / wasmJsMain / androidMain</code> 各给 <code>actual</code> 实现。</p>
+      <p class="mono" style="color:var(--text-dim);font-size:12px;">检测 / Shell / FileSystem / Log / reduce-motion · 全部走 expect/actual</p>
+    </div>
+    <div class="card">
+      <h4><span class="badge xiu">Layer 2</span> 导出层:@JsExport</h4>
+      <p>把 Kotlin 类型规范化到 TS 可消费的形式。<strong>三个硬约束</strong>:只导出 concrete class(不导 interface);异步用 <code>Promise</code>(不用 Flow);集合用 <code>Array</code>(不用 List)。</p>
+      <p class="mono" style="color:var(--text-dim);font-size:12px;">JsCodingAgent · JsCodingAgentRenderer · JsStepSummary · JsTaskSummary</p>
+    </div>
+    <div class="card">
+      <h4><span class="badge ok">Layer 3</span> 渲染层:9 个 Renderer</h4>
+      <p>同一个 <code>CodingAgentRenderer</code> 接口 → 5 Kotlin + 4 TS 实现。AGENTS.md 规定"修改接口必须同步 9 处",这是<strong>显式规范</strong>而不是工具检测。</p>
+      <p class="mono" style="color:var(--text-dim);font-size:12px;">Default · Compose · Jewel · ServerSide · JsAdapter · Base · Cli · Tui · Server</p>
+    </div>
+    <div class="card">
+      <h4><span class="badge">Layer 4</span> 设计层:Token 双写同步</h4>
+      <p>Compose 色板(<code>AutoDevColors.kt</code>)和 TS 色板(<code>colors.ts</code>)用同一份文档(design-system-*.md)双写——用户色 <span style="color:#00f3ff">#00F3FF</span> · AI 色 <span style="color:#d946ef">#D946EF</span> 完全一致。没用共享常量库,<em>靠纪律而不是工具</em>。</p>
+    </div>
+    <div class="card">
+      <h4><span class="badge">Layer 5</span> 组装层:Composite Build + 全局排除</h4>
+      <p>IDEA 插件走 <code>includeBuild("mpp-idea")</code> 独立 Gradle,可用不同插件版本不污染主项目。主项目用 <code>exclude(group = ...)</code> 把 Tika / AWS / PlantUML 等重依赖剔除,让不同宿主按需瘦身。</p>
+    </div>
+    <div class="card">
+      <h4><span class="badge">Layer +1</span> 构建层:TS 定义自动生成 + WASM 字体下载</h4>
+      <p>Kotlin/JS 开 <code>generateTypeScriptDefinitions()</code> 自动产 <code>.d.ts</code>,TS 侧获得完整类型。WASM Canvas 中文渲染通过 build-time 下载 Noto Sans CJK(不提交字体到 Git)。</p>
+    </div>
+  </div>
+
+  <h3 class="sub">@JsExport 使用范式(典型代码)</h3>
+<pre><span class="c">// mpp-core/src/jsMain/kotlin/.../RendererExports.kt</span>
+<span class="k">@JsExport</span>
+<span class="k">data class</span> <span class="n">JsStepSummary</span>(
+    <span class="k">val</span> id: String,
+    <span class="k">val</span> description: String,
+    <span class="k">val</span> status: String       <span class="c">// Enum.name() 转字符串</span>
+)
+
+<span class="k">@JsExport</span>
+<span class="k">interface</span> <span class="n">JsCodingAgentRenderer</span> {
+    <span class="k">fun</span> renderIterationHeader(current: Int, max: Int)
+    <span class="k">fun</span> renderLLMResponseChunk(chunk: String)
+    <span class="k">fun</span> renderToolCall(toolName: String, args: String)
+    <span class="k">fun</span> renderToolResult(toolName: String, success: Boolean, output: String)
+    <span class="k">fun</span> renderFinalResult(success: Boolean, message: String, iterations: Int)
+}</pre>
+</section>
+
+<!-- ============ 6 数据流 ============ -->
+<section id="s6">
+  <h2 class="sec"><span class="num">06</span>典型数据流追踪:VSCode 一次 Prompt 请求的完整链路</h2>
+  <div class="diagram">
+    <svg viewBox="0 0 1080 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="数据流追踪">
+      <defs>
+        <linearGradient id="arr2" x1="0" x2="1"><stop offset="0" stop-color="#00f3ff"/><stop offset="1" stop-color="#d946ef"/></linearGradient>
+        <marker id="m2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="url(#arr2)"/>
+        </marker>
+      </defs>
+      <g font-family="-apple-system, Segoe UI, sans-serif" fill="#e6ebf5" font-size="12">
+        <!-- lanes -->
+        <line x1="140" y1="40"  x2="140" y2="440" stroke="#2a3246" stroke-dasharray="2 4"/>
+        <line x1="360" y1="40"  x2="360" y2="440" stroke="#2a3246" stroke-dasharray="2 4"/>
+        <line x1="600" y1="40"  x2="600" y2="440" stroke="#2a3246" stroke-dasharray="2 4"/>
+        <line x1="840" y1="40"  x2="840" y2="440" stroke="#2a3246" stroke-dasharray="2 4"/>
+        <!-- headers -->
+        <g font-weight="700" fill="#9aa5bd" font-size="12">
+          <text x="80"  y="30">VSCode 前端</text>
+          <text x="240" y="30">Extension(TS)</text>
+          <text x="470" y="30">mpp-core(JS runtime)</text>
+          <text x="710" y="30">LLM + Tools</text>
+          <text x="920" y="30">Webview 渲染</text>
+        </g>
+        <!-- steps -->
+        <g>
+          <rect x="20"  y="60" width="120" height="44" rx="8" fill="#171c29" stroke="#2a3246"/>
+          <text x="80"  y="80" text-anchor="middle">① 用户输入</text>
+          <text x="80"  y="96" text-anchor="middle" fill="#9aa5bd" font-size="11">ChatView.vue</text>
+        </g>
+        <g>
+          <rect x="160" y="120" width="200" height="44" rx="8" fill="#171c29" stroke="#2a3246"/>
+          <text x="260" y="140" text-anchor="middle">② bridge/mpp-core.ts</text>
+          <text x="260" y="156" text-anchor="middle" fill="#9aa5bd" font-size="11">new JsCodingAgent(...)</text>
+        </g>
+        <g>
+          <rect x="380" y="180" width="220" height="44" rx="8" fill="#171c29" stroke="#2a3246"/>
+          <text x="490" y="200" text-anchor="middle">③ Executor.execute()</text>
+          <text x="490" y="216" text-anchor="middle" fill="#9aa5bd" font-size="11">多轮 Agent loop</text>
+        </g>
+        <g>
+          <rect x="620" y="240" width="220" height="44" rx="8" fill="#171c29" stroke="#2a3246"/>
+          <text x="730" y="260" text-anchor="middle">④ LLM.prompt + Tool.exec</text>
+          <text x="730" y="276" text-anchor="middle" fill="#9aa5bd" font-size="11">流式响应</text>
+        </g>
+        <g>
+          <rect x="380" y="300" width="220" height="44" rx="8" fill="#171c29" stroke="#2a3246"/>
+          <text x="490" y="320" text-anchor="middle">⑤ Renderer.renderChunk</text>
+          <text x="490" y="336" text-anchor="middle" fill="#9aa5bd" font-size="11">JsRendererAdapter</text>
+        </g>
+        <g>
+          <rect x="160" y="360" width="200" height="44" rx="8" fill="#171c29" stroke="#2a3246"/>
+          <text x="260" y="380" text-anchor="middle">⑥ CliRenderer (TS)</text>
+          <text x="260" y="396" text-anchor="middle" fill="#9aa5bd" font-size="11">postMessage('timeline')</text>
+        </g>
+        <g>
+          <rect x="860" y="360" width="200" height="44" rx="8" fill="#171c29" stroke="#2a3246"/>
+          <text x="960" y="380" text-anchor="middle">⑦ Webview</text>
+          <text x="960" y="396" text-anchor="middle" fill="#9aa5bd" font-size="11">Timeline 渲染</text>
+        </g>
+        <!-- arrows -->
+        <g stroke="url(#arr2)" stroke-width="2" fill="none">
+          <line x1="80"  y1="104" x2="260" y2="120" marker-end="url(#m2)"/>
+          <line x1="260" y1="164" x2="490" y2="180" marker-end="url(#m2)"/>
+          <line x1="490" y1="224" x2="730" y2="240" marker-end="url(#m2)"/>
+          <line x1="730" y1="284" x2="490" y2="300" marker-end="url(#m2)"/>
+          <line x1="490" y1="344" x2="260" y2="360" marker-end="url(#m2)"/>
+          <line x1="360" y1="382" x2="860" y2="382" marker-end="url(#m2)"/>
+        </g>
+      </g>
+    </svg>
+  </div>
+  <p class="lead">整条链路的关键是:<strong>① Kotlin 接口通过 @JsExport 进入 TS · ② TS 再把事件回推到 Webview</strong> ——中间不存在额外的 RPC/桥接层,全部靠 Kotlin/JS IR 编译产物直接被 TS <code>import</code>。</p>
+</section>
+
+<!-- ============ 7 关键设计决策 ============ -->
+<section id="s7">
+  <h2 class="sec"><span class="num">07</span>关键设计决策拆解</h2>
+  <p class="lead">挑 7 个"如果不看代码很难看出"的关键决策,每个都是架构层面的取舍。</p>
+
+  <div class="decision">
+    <h4>D1 · 为什么不是纯 JVM,而是 Kotlin Multiplatform?</h4>
+    <p class="why">同一套 Agent 引擎要同时上 IDEA / VSCode / CLI / Desktop / 移动 / Web / Server。纯 JVM 在浏览器和移动端打不赢;Electron/Tauri 又失去原生体验和轻量性。</p>
+    <div class="trade">
+      <div class="pro"><strong>赢在</strong>:~70% 核心代码共享;原生 bundle 轻量(无 Chromium);同一份 Agent/Tool/MCP 集成到任意端。</div>
+      <div class="con"><strong>付出</strong>:expect/actual 心智;Kotlin/JS 导出 TS 有硬约束;iOS 构建最易崩;团队门槛高。</div>
+    </div>
+  </div>
+
+  <div class="decision">
+    <h4>D2 · 为什么 Renderer 有 9 个实现,而不是一个通用 renderer?</h4>
+    <p class="why">每个宿主的 UI 原语不同:IDEA 用 Jewel Compose;VSCode 用 Webview;CLI 用 ANSI;Server 用 SSE。一个抽象统一不了这些底层差异。</p>
+    <div class="trade">
+      <div class="pro"><strong>赢在</strong>:UI 完全脱耦、可选择性实现(CLI 可以跳过 <code>renderThinkingChunk</code>);接口定义"事件"而非"命令",更灵活。</div>
+      <div class="con"><strong>付出</strong>:加新回调要改 9 处;全靠 AGENTS.md 文档规范,没有编译时检查;可能做少了某些端的方法。</div>
+    </div>
+  </div>
+
+  <div class="decision">
+    <h4>D3 · 为什么 SubAgent 是"一类 Agent"而不是普通函数?</h4>
+    <p class="why">SubAgent 需要独立的 LLM 上下文、独立的工具白名单、独立的状态持有;普通函数给不了这些。把它设计成 <code>ExecutableTool</code> 的一种变体,意味着主 Agent 调子 Agent 和调工具的接口完全统一。</p>
+    <div class="trade">
+      <div class="pro"><strong>赢在</strong>:组合性强 · 权限隔离 · 状态保持 · 运行时可注册/注销 · 天然支持递归分派。</div>
+      <div class="con"><strong>付出</strong>:一次 SubAgent 调用 = 一次新 LLM 会话成本,慎用;SubAgent 之间的互调目前未启用。</div>
+    </div>
+  </div>
+
+  <div class="decision">
+    <h4>D4 · 为什么工具 Schema 全是手写,不用反射/KSP?</h4>
+    <p class="why">KMP 环境下反射在 JS/WASM 开销太大,KSP 无法跨平台运行。宁可牺牲代码重复,也要换来跨平台一致和运行时零反射。</p>
+    <div class="trade">
+      <div class="pro"><strong>赢在</strong>:编译期完成 Schema;JS/WASM 零反射;枚举/必填/验证规则显式可见。</div>
+      <div class="con"><strong>付出</strong>:参数定义要写两遍(Kotlin 类 + Schema);修改工具容易忘同步。</div>
+    </div>
+  </div>
+
+  <div class="decision">
+    <h4>D5 · 为什么错误恢复分"工具层"和"Agent 层"两处?</h4>
+    <p class="why">技术错误(权限失败、超时、异常)应该在 ToolOrchestrator 层直接处理;智能错误(命令本身跑错了、测试不过、思路错了)则需要 LLM 再次参与。强行合并会让"是否该上升到 LLM"的判断丢失。</p>
+    <div class="trade">
+      <div class="pro"><strong>赢在</strong>:ErrorRecoveryAgent 只在真正需要的时候被触发(重复 3 次同工具失败);工具层的异常不浪费 LLM token。</div>
+      <div class="con"><strong>付出</strong>:两层判断逻辑需要维护;"什么算重复失败"的阈值是魔法数字。</div>
+    </div>
+  </div>
+
+  <div class="decision">
+    <h4>D6 · 为什么 VSCode 扩展是"纯 TS + bridge",不共用 Compose?</h4>
+    <p class="why">VSCode API 强绑定 JS/TS 生态,Webview 只能跑 HTML/JS。用 Compose for Web 虽然可以,但 bundle 体积和调试复杂度不可接受。</p>
+    <div class="trade">
+      <div class="pro"><strong>赢在</strong>:VSCode 发布流程独立、快;TS 开发者直接上手;扩展包体积可控。</div>
+      <div class="con"><strong>付出</strong>:Webview 组件要用 TS 再写一遍,UI 和 Compose 端不完全一致。</div>
+    </div>
+  </div>
+
+  <div class="decision">
+    <h4>D7 · 为什么 DevIns DSL 存在,但不强制所有用户用?</h4>
+    <p class="why">大多数场景下纯工具调用够用;只有在"命令 + 参数 + 逻辑 + 自然语言"混杂时,DSL 才有表达力优势。强推反而增加学习成本。</p>
+    <div class="trade">
+      <div class="pro"><strong>赢在</strong>:复杂工作流可以 DSL 一键编排;IDE/LSP 提供补全;Velocity 表达式支持动态插值。</div>
+      <div class="con"><strong>付出</strong>:DSL 采用率低,投入产出不明显;只在首轮编译,LLM 响应里的 DSL 块无法再次编译。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 8 生态战略 ============ -->
+<section id="s8">
+  <h2 class="sec"><span class="num">08</span>生态战略:不做围墙的平台</h2>
+  <p class="lead">AutoDev 在生态层的 5 个选择,本质上都在表达同一件事:<strong>"我们不做孤岛,我们做其他 AI 工具的宿主"</strong>。</p>
+
+  <div class="grid g-2">
+    <div class="card">
+      <h4 style="color:var(--xiu)">① MCP(Model Context Protocol)</h4>
+      <p>任何符合 MCP 的 Server(Brave Search / Linear / GitHub / Notion…)都能通过 <code>McpToolsInitializer</code> 自动加载成本地 Tool。AutoDev <strong>不需要为每个外部服务写适配</strong>,社区工具生态即所得。</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--ai)">② AGENTS.md</h4>
+      <p>项目级规则以 Markdown 形式躺在 repo 根目录,Agent 启动时沿目录树自动发现、层级合并并注入系统 prompt。<strong>规则随代码版本管理</strong>,不是中央平台配置猜测。</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--ok)">③ Claude Skill</h4>
+      <p>直接支持加载 Anthropic Claude Skill 格式,团队可以把工作流写成 Skill 包共享。AutoDev 把 Skill 当成<strong>"可移植的工作流单元"</strong>,借 Anthropic 的生态势能。</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--warn)">④ SpecKit 命令集成</h4>
+      <p>把 SpecKit(规格驱动的命令系统)接入 Agent,让"先写 spec 再执行"这种工程实践成为一等公民。</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--xiu)">⑤ A2A(Agent-to-Agent)协议</h4>
+      <p>允许用户编排"Agent A 产出 → Agent B 审 → Agent C 修"这种跨 Agent 的自动化流水线,AutoDev 做编排宿主。</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--ai)">⑥ 多 LLM Provider</h4>
+      <p>OpenAI / Anthropic / Google / DeepSeek / Ollama / GLM / Qwen / Kimi 统一抽象。国产模型完整支持 + 中英双语 i18n = 中国市场第一梯队布局。</p>
+    </div>
+  </div>
+
+  <div class="callout ai" style="margin-top: 20px;">
+    <strong>产品洞察</strong>:当市场认为 AI 编码工具的胜负在"模型 + IDE 打磨"时,AutoDev 押注的是<em>"工具联邦的宿主"</em>这个更上位的品类。
+    这个选择的赔率很高:赢的话它是 AI 开发工具的 VS Code(宿主);输的话它会被单点工具用户体验压死。
+  </div>
+</section>
+
+<!-- ============ 9 四视角 ============ -->
+<section id="s9">
+  <h2 class="sec"><span class="num">09</span>四视角洞察汇总</h2>
+  <div class="perspectives">
+    <span class="perspective-pill active" style="background:#ffcc00;color:#000">产品</span>
+    <span class="perspective-pill" style="color:var(--xiu);border-color:var(--xiu)">用户</span>
+    <span class="perspective-pill" style="color:var(--ai);border-color:var(--ai)">架构</span>
+    <span class="perspective-pill" style="color:var(--ok);border-color:var(--ok)">工程</span>
+  </div>
+
+  <div class="persp product">
+    <h3>【产品视角】</h3>
+    <ul>
+      <li><strong>品类定位新而陡</strong>:定义"工作流编排 + 全端投送"这个新品类 — 独到,但需要教育市场。</li>
+      <li><strong>6 大阶段自然衔接</strong>是最大卖点:同一个会话里跨 Document → Coding → Review → ChatDB → Artifact,其他工具靠人肉复制粘贴。</li>
+      <li><strong>开放生态赌未来</strong>:MCP + AGENTS.md + Claude Skill + SpecKit + A2A——每一个都不是 AutoDev 独创,但"全都支持"本身就是护城河。</li>
+      <li><strong>国际化是战略</strong>:中英 i18n + 国产 LLM 全接入 = 明确针对中国开发者 + 保留全球可能性。</li>
+      <li><strong>当前处于 Alpha</strong>:README 自标 Alpha,模块层面也能看到部分能力(Web / Test Agent)仍是 experimental,定位还在收敛。</li>
+    </ul>
+  </div>
+
+  <div class="persp user">
+    <h3>【用户视角】</h3>
+    <ul>
+      <li><strong>"我在哪里工作,它就在哪里"</strong>:IDE 党用 IDEA 插件,前端党用 VSCode 扩展,CLI 党用 npm 包,产品党用 Desktop App。</li>
+      <li><strong>阶段切换零成本</strong>:写完代码直接让同一个会话 review,review 出问题直接修——不切工具、不丢上下文。</li>
+      <li><strong>团队规则自动继承</strong>:AGENTS.md 让新人拉到 repo 就有"老手的心智模型",不需要口头传承。</li>
+      <li><strong>潜在体验风险</strong>:多端体验并非完全对齐(Webview 版 vs Compose 版 UI 细节有差),学习曲线比 Cursor 陡。</li>
+      <li><strong>对"写代码"用户</strong>直接收益;对"做原型"用户(ArtifactAgent)是惊喜;对"查数据"用户(ChatDBAgent)是刚需。</li>
+    </ul>
+  </div>
+
+  <div class="persp arch">
+    <h3>【架构师视角】</h3>
+    <ul>
+      <li><strong>四层抽象清晰</strong>:Renderer / Executor / Orchestrator / Tool 四层完全解耦,每层都能单测。</li>
+      <li><strong>"工具即接口"的彻底贯彻</strong>:SubAgent 也是工具,MCP 工具也是工具,DevIns 编译后还是工具调用——一个接口治所有外部能力。</li>
+      <li><strong>事件驱动的 Renderer 模式</strong>比"命令驱动"更符合 AI loop 的本质:LLM 的输出本就是流式事件,UI 订阅感兴趣的事件即可。</li>
+      <li><strong>错误恢复两层分离</strong>(Tool 层技术错误 / Agent 层智能错误)是值得对标的做法,避免什么错都扔给 LLM。</li>
+      <li><strong>Plan / Tracker 可观测</strong>:任务状态变化有事件回调,UI 能实时显示进度——这在长 Agent 任务里是用户耐心的关键。</li>
+    </ul>
+  </div>
+
+  <div class="persp eng">
+    <h3>【工程师视角】</h3>
+    <ul>
+      <li><strong>Composite Build 的聪明用法</strong>:IDEA 插件独立 Gradle 版本,不污染主项目,又能共享 mpp-core(用 mavenLocal 中转)。</li>
+      <li><strong>全局 exclude 瘦身</strong>:Tika / AWS SDK / PlantUML 等重依赖在根 build 里 exclude,每个宿主按需保留——否则 bundle 会炸。</li>
+      <li><strong>@JsExport 的硬约束</strong>(只导 class / Promise / Array)需要团队纪律,没有 lint 能保证。</li>
+      <li><strong>i18n 双轨手写</strong>(i18n4k + TS locale):宁可多人工也要保证一致,反映了团队对跨端复杂度的务实取舍。</li>
+      <li><strong>设计 Token 双写</strong>:Compose 色板和 TS 色板完全对齐,但用的是"抄文档"而不是"共享库",避免 KMP 资源管道复杂度。</li>
+      <li><strong>WASM 中文字体 build-time 下载</strong>是个精妙的工程解法:代码库不肿胀,运行时体验不掉。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ 10 核心思想 ============ -->
+<section id="s10">
+  <h2 class="sec"><span class="num">10</span>可高度提炼的核心思想</h2>
+  <p class="lead">脱离具体代码,这些是可以抽象到<strong>任何语言、任何形态</strong>的 AI Agent 系统的架构方向。</p>
+
+  <div class="grid g-2">
+    <div class="card">
+      <h4 style="color:var(--ai)">① 工具是 Agent 的唯一一等公民</h4>
+      <p>不要设计"超级 Agent",要设计"可组合的 Tool"。SubAgent 是 Tool,MCP 调用是 Tool,DSL 编译产物也是 Tool——一个接口把所有外部能力、所有 Agent、所有执行都统一。这样热插拔、权限、监控才可能统一实现。</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--xiu)">② Renderer 是事件的汇聚,不是命令的分发</h4>
+      <p>执行引擎不直接调用 UI,而是在关键节点触发 renderer 的<em>回调</em>。UI 可以只订阅感兴趣的事件(IDE 不关心 thinking chunk,CLI 不关心 chart block)。这比"发指令给 UI"灵活一个维度。</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--ok)">③ 对话必须有状态,错误必须分层</h4>
+      <p>ConversationManager 维持完整历史支持中断/恢复,才有可能做长任务。错误分"技术错误(Tool 层)"和"智能错误(Agent 层)",前者不浪费 LLM token,后者才让 SubAgent 介入。</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--warn)">④ 权限在编排层集中,不在工具里散落</h4>
+      <p><code>PolicyEngine.decide()</code> 在 Orchestrator 一处决定 ALLOW/DENY/ASK_USER,而不是每个工具自己判断。这样"审批流"才有可能加得上。</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--ai)">⑤ 项目规则是代码,不是配置</h4>
+      <p>AGENTS.md 放在 repo,随代码版本管理,Agent 自动发现、层级合并。不是让平台猜,不是让用户设,而是让<strong>项目自己说</strong>——这对团队协作意义重大。</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--xiu)">⑥ 生态适配比功能自建更重要</h4>
+      <p>MCP / Claude Skill / SpecKit / A2A——不要自造协议,要成为已有协议的最佳客户端。这是 AI 工具联邦时代的生存策略。</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--ok)">⑦ DSL 是选项不是必须</h4>
+      <p>DevIns DSL 证明:当"命令 + 参数 + 逻辑 + 自然语言"混杂时 DSL 有价值,但不强推;给进阶用户一个可选的表达力升级,而不是给所有用户强制学习成本。</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--ai)">⑧ 跨端一致靠纪律 + 契约,不靠魔法</h4>
+      <p>AutoDev 用 9 个 Renderer 显式实现、设计 Token 双写、i18n 双轨手写——没有一个用魔法自动同步。这告诉我们:<strong>跨端一致性在工程上是人力问题,不是技术问题</strong>。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 11 风险 ============ -->
+<section id="s11">
+  <h2 class="sec"><span class="num">11</span>风险与挑战</h2>
+  <div class="grid g-2">
+    <div class="card">
+      <h4 style="color:var(--err)">R1 · 摊子铺得太大</h4>
+      <p>6 主 Agent × 9 SubAgent × 8 宿主 × 多 LLM = 组合爆炸。每一个组合都要测试、维护、支持,单点能力无法与垂直工具(Cursor / Sqrutiny / v0)正面竞争。</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--err)">R2 · 用户认知混乱</h4>
+      <p>IDE 插件?独立 App?CLI?Web SaaS?一个用户第一次听说 AutoDev,很难一句话说清"它是什么、给我用哪个"。市场教育成本高。</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--err)">R3 · KMP 稳定性税</h4>
+      <p>iOS 构建、WASM 字体、Kotlin/JS TS 定义生成限制、expect/actual 调试难度——每一项都是真实工程成本。团队一旦走人,后人接手极痛。</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--err)">R4 · 9 个 Renderer 的一致性靠纪律</h4>
+      <p>AGENTS.md 规定修改接口要同步 9 处,但没有编译时检查。接口增长一次,就有漏改的风险。</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--err)">R5 · DSL 采用率风险</h4>
+      <p>DevIns DSL 投入了完整的编译器栈 + IDEA 语言插件,但实际用户是否会用仍不明朗。如果采用率低,这部分投入回报率会被质疑。</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--err)">R6 · 与 Claude Code 范式的张力</h4>
+      <p>Claude Code 代表"纯 Agent + Tool"的简洁路线,并且在用户体验上迭代很快。AutoDev 的"大而全"如果不能在某个阶段明显胜过 Claude Code 的对应场景,会被蚕食。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 12 关键文件清单 ============ -->
+<section id="s12">
+  <h2 class="sec"><span class="num">12</span>关键文件索引</h2>
+  <p class="lead">调研中认定的必读文件清单,方便复核和深入研究。路径相对 <code>a_res/auto-dev/</code>。</p>
+
+  <h3 class="sub">引擎核心(10)</h3>
+  <table class="files">
+    <thead><tr><th>#</th><th>路径</th><th>作用</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td class="path">mpp-core/src/commonMain/.../agent/core/Agent.kt</td><td>Agent 基类 + ExecutableTool 契约</td></tr>
+      <tr><td>2</td><td class="path">.../agent/CodingAgent.kt</td><td>主 Agent 实现(~443 行),SubAgent 初始化</td></tr>
+      <tr><td>3</td><td class="path">.../agent/executor/CodingAgentExecutor.kt</td><td>Agent 主循环(~714 行)</td></tr>
+      <tr><td>4</td><td class="path">.../agent/core/SubAgent.kt</td><td>SubAgent 抽象基类</td></tr>
+      <tr><td>5</td><td class="path">.../agent/core/SubAgentManager.kt</td><td>SubAgent 生命周期管理</td></tr>
+      <tr><td>6</td><td class="path">.../agent/conversation/ConversationManager.kt</td><td>对话历史 + 自动压缩</td></tr>
+      <tr><td>7</td><td class="path">.../agent/orchestrator/ToolOrchestrator.kt</td><td>工具编排 + 权限 + PTY</td></tr>
+      <tr><td>8</td><td class="path">.../agent/policy/PolicyEngine.kt</td><td>ALLOW/DENY/ASK_USER</td></tr>
+      <tr><td>9</td><td class="path">.../agent/plan/AgentPlan.kt</td><td>计划数据结构 + 状态机</td></tr>
+      <tr><td>10</td><td class="path">.../agent/tool/Tool.kt</td><td>ExecutableTool 接口体系</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="sub">Renderer 9 实现</h3>
+  <table class="files">
+    <thead><tr><th>#</th><th>路径</th><th>类型</th></tr></thead>
+    <tbody>
+      <tr><td>11</td><td class="path">mpp-core/.../agent/render/CodingAgentRenderer.kt</td><td>接口定义</td></tr>
+      <tr><td>12</td><td class="path">mpp-core/.../agent/render/DefaultCodingAgentRenderer.kt</td><td>Kotlin · Console</td></tr>
+      <tr><td>13</td><td class="path">mpp-ui/.../compose/agent/ComposeRenderer.kt</td><td>Kotlin · Compose</td></tr>
+      <tr><td>14</td><td class="path">mpp-idea/.../idea/renderer/JewelRenderer.kt</td><td>Kotlin · Jewel</td></tr>
+      <tr><td>15</td><td class="path">mpp-server/.../renderer/ServerSideRenderer.kt</td><td>Kotlin · SSE</td></tr>
+      <tr><td>16</td><td class="path">mpp-core/src/jsMain/.../agent/RendererExports.kt</td><td>@JsExport 桥接</td></tr>
+      <tr><td>17</td><td class="path">mpp-ui/src/jsMain/typescript/agents/render/BaseRenderer.ts</td><td>TS · 基类</td></tr>
+      <tr><td>18</td><td class="path">mpp-ui/src/jsMain/typescript/agents/render/CliRenderer.ts</td><td>TS · CLI</td></tr>
+      <tr><td>19</td><td class="path">mpp-ui/src/jsMain/typescript/agents/render/TuiRenderer.ts</td><td>TS · TUI</td></tr>
+      <tr><td>20</td><td class="path">mpp-ui/src/jsMain/typescript/agents/render/ServerRenderer.ts</td><td>TS · Server</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="sub">KMP / 跨端工程(10)</h3>
+  <table class="files">
+    <thead><tr><th>#</th><th>路径</th><th>作用</th></tr></thead>
+    <tbody>
+      <tr><td>21</td><td class="path">settings.gradle.kts</td><td>9 模块聚合 + composite build</td></tr>
+      <tr><td>22</td><td class="path">mpp-core/build.gradle.kts</td><td>6-target KMP 配置 · @JsExport · TS 定义生成</td></tr>
+      <tr><td>23</td><td class="path">mpp-ui/build.gradle.kts</td><td>Compose + i18n4k + SQLDelight + CLI tasks</td></tr>
+      <tr><td>24</td><td class="path">mpp-idea/build.gradle.kts</td><td>IntelliJ 插件 · Jewel · 大量 exclusion</td></tr>
+      <tr><td>25</td><td class="path">mpp-core/src/commonMain/.../agent/Platform.kt</td><td>expect object 平台抽象</td></tr>
+      <tr><td>26</td><td class="path">mpp-core/src/jvmMain/.../Platform.jvm.kt</td><td>JVM actual 实现</td></tr>
+      <tr><td>27</td><td class="path">mpp-core/src/jsMain/.../Platform.js.kt</td><td>JS actual · Node/浏览器双模</td></tr>
+      <tr><td>28</td><td class="path">mpp-core/src/wasmJsMain/.../Platform.wasmJs.kt</td><td>WASM actual</td></tr>
+      <tr><td>29</td><td class="path">mpp-vscode/src/bridge/mpp-core.ts</td><td>VSCode ↔ Kotlin/JS 桥</td></tr>
+      <tr><td>30</td><td class="path">mpp-ui/.../theme/AutoDevColors.kt · design-system/colors.ts</td><td>设计 Token 双写</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="sub">SubAgent & DSL(8)</h3>
+  <table class="files">
+    <thead><tr><th>#</th><th>路径</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>31</td><td class="path">.../agent/subagent/ErrorRecoveryAgent.kt</td><td>自愈</td></tr>
+      <tr><td>32</td><td class="path">.../agent/subagent/CodebaseInvestigatorAgent.kt</td><td>代码库调查</td></tr>
+      <tr><td>33</td><td class="path">.../agent/subagent/AnalysisAgent.kt</td><td>长内容分析</td></tr>
+      <tr><td>34</td><td class="path">.../agent/subagent/NanoDSLAgent.kt</td><td>UI 代码生成</td></tr>
+      <tr><td>35</td><td class="path">.../agent/subagent/SqlReviseAgent.kt</td><td>SQL 修订</td></tr>
+      <tr><td>36</td><td class="path">.../devins/compiler/DevInsCompiler.kt</td><td>DSL 编译器主入口</td></tr>
+      <tr><td>37</td><td class="path">.../devins/parser/DevInsParser.kt</td><td>文本 → AST</td></tr>
+      <tr><td>38</td><td class="path">.../devins/compiler/processor/*</td><td>各种 AST 节点处理器</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="sub">生态 & 规范</h3>
+  <table class="files">
+    <tbody>
+      <tr><td>39</td><td class="path">AGENTS.md</td><td>跨端开发规范(9 Renderer 同步规则等)</td></tr>
+      <tr><td>40</td><td class="path">README.md</td><td>产品定位 + 模块矩阵</td></tr>
+      <tr><td>41</td><td class="path">.../agent/mcp/McpToolsInitializer.kt</td><td>MCP 工具动态发现</td></tr>
+      <tr><td>42</td><td class="path">.../agent/model/ModelConfig.kt</td><td>多 LLM Provider 抽象</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ 13 对 zCli 的启示 ============ -->
+<section id="s13">
+  <h2 class="sec"><span class="num">13</span>对 zCli 的启示</h2>
+  <p class="lead">zCli 是 TypeScript + React/Ink 的类 Claude Code CLI,形态比 AutoDev 聚焦很多。但 AutoDev 的几个架构抉择对 zCli 有直接启发价值。</p>
+
+  <div class="grid g-2">
+    <div class="card">
+      <h4 style="color:var(--xiu)">✅ 直接可以借鉴的</h4>
+      <ul>
+        <li><strong>Renderer 事件汇聚模式</strong>:zCli 的 useChat hook 已经类似,但可以进一步抽象 "Renderer" 接口,让未来 Web/IDE 宿主复用同一套引擎。</li>
+        <li><strong>SubAgent = Tool 的统一模型</strong>:zCli F13 已实现 SubAgent;可以评估是否进一步"把 SubAgent 纯粹当作 Tool 注册到 ToolRegistry",简化调度链。</li>
+        <li><strong>错误恢复两层分离</strong>:tool 层只处理技术错误,智能恢复交给一个独立的"Recovery SubAgent";zCli 当前是否明确分层值得检视。</li>
+        <li><strong>权限集中在 Orchestrator</strong>:把 policy 决策集中,不要散落在每个工具里。</li>
+        <li><strong>AGENTS.md 层级注入</strong>:zCli 应检查自己的 CLAUDE.md 发现策略是否支持多层合并。</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--warn)">⚠ 需要审慎评估的</h4>
+      <ul>
+        <li><strong>DevIns DSL</strong>:为 zCli 量级可能偏重;如果要做,先做"最小表达力"的轻量版。</li>
+        <li><strong>9 个 Renderer</strong>:zCli 现在只做 CLI/TUI,不需要这么多实现,但"接口为事件,不为命令"的原则要提前定下。</li>
+        <li><strong>全端 KMP</strong>:zCli 是 TS 为主,不需要 KMP;但可以学"核心逻辑/UI 分离"的思路,让 core 可被其他前端复用。</li>
+        <li><strong>大而全的 Agent 家族</strong>:不要学,zCli 应该聚焦 Coding Agent + 精选 SubAgent,先打透一个场景。</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>一句话结论</strong>:AutoDev 的"抱负"zCli 不必学,但它的<em>"四层抽象 · 工具即接口 · 事件驱动的 Renderer · 错误分层"</em>这 4 条工程原则,是任何一个认真做 Agent 引擎的项目都值得参考的。
+  </div>
+</section>
+
+<!-- ============ Footer ============ -->
+<footer class="page">
+  <p>
+    报告版本 <strong>v1.0</strong> · 调研日期 <strong>2026-04-20</strong> · 作者 <strong>codeYang</strong>(via 3 路并行子 Agent)<br>
+    调研目标:<code>a_res/auto-dev/</code> · AutoDev 3.0 Xiuper Alpha · 约 400+ Kotlin 源文件 + TypeScript<br>
+    方法:Explore subagent × 3(架构师 / 工程师 / 产品用户视角)并行勘探,汇总后结构化输出。
+  </p>
+  <p style="margin-top:12px; color:var(--text-muted)">
+    所有结论基于可追溯的源代码路径;文件路径附于 §12。如发现偏差欢迎沿路径复核订正。
+  </p>
+</footer>
+
+</div>
+</body>
+</html>
