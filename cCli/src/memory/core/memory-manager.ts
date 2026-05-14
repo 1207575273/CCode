@@ -33,9 +33,6 @@ import { Retriever } from '@memory/rag/retriever.js'
 import { getTokenizer } from '@memory/rag/tokenizer.js'
 import { toProjectSlug } from '@persistence/session-utils.js'
 
-/** 冷启动 System Prompt 记忆上下文的 token 预算（字符数，约 1500 tokens） */
-const MEMORY_CONTEXT_BUDGET_CHARS = 3000
-
 /** MemoryManager 构造参数 */
 export interface MemoryManagerOptions {
   /** 项目工作目录（用于定位项目级记忆） */
@@ -244,23 +241,13 @@ export class MemoryManager implements IMemoryManager {
    * 获取冷启动记忆上下文（System Prompt 注入用）。
    *
    * 不走向量检索（启动时没有用户查询），按 updated 降序取最近条目。
-   * token 预算 3000 字符（约 1500 tokens）。
+   * 注入策略：取最近 10 条，每条 content 摘要 100 字符；无总字符预算上限。
    */
   async getRelevantContext(_cwd: string): Promise<string> {
     const entries = await this.list('all')
     if (entries.length === 0) return ''
 
-    const top = entries.slice(0, 10)
-    let totalChars = 0
-    const budgeted: MemoryEntry[] = []
-
-    for (const e of top) {
-      const line = `- **${e.title}** (${e.scope}, ${e.type}) — ${e.content.slice(0, 100)}`
-      if (totalChars + line.length > MEMORY_CONTEXT_BUDGET_CHARS) break
-      budgeted.push(e)
-      totalChars += line.length
-    }
-
+    const budgeted = entries.slice(0, 10)
     if (budgeted.length === 0) return ''
 
     return `<memory-context>
