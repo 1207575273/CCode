@@ -26,6 +26,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { sessionStore } from '@persistence/index.js'
 import { createApiRoutes } from '../dashboard/api.js'
+import { createA2ARoutes, type A2ARoutesDeps } from '../a2a-routes.js'
 import { dbg } from '../../debug.js'
 
 const DEFAULT_PORT = 9800
@@ -45,6 +46,11 @@ interface BridgeServerOptions {
   dev?: boolean
   /** dev 模式下 Vite dev server 的实际端口（由 ccli.ts 动态分配） */
   vitePort?: number
+  /**
+   * A2A Server 依赖。提供时挂载 /.well-known/agent-card.json + /a2a/rpc，
+   * 让本会话作为 A2A 节点被其他 CCode 会话 / 外部 Agent 调用。
+   */
+  a2a?: A2ARoutesDeps
 }
 
 /** WebSocket 客户端上下文 */
@@ -135,6 +141,12 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
   // Dashboard REST API（总览/对话/设置/计价）
   app.route('/api', createApiRoutes())
 
+  // A2A Server 端点（本会话作为 A2A 节点被其他会话/Agent 调用）
+  // 必须在静态资源 SPA fallback(app.get('*')) 之前注册，否则会被 fallback 拦截
+  if (options.a2a) {
+    app.route('/', createA2ARoutes(options.a2a))
+  }
+
   // 关闭 Bridge Server 的 API（Web 端关闭按钮 / CLI /bridge stop 指令）
   app.post('/api/bridge/stop', (c) => {
     setTimeout(closeBridge, 100)
@@ -159,7 +171,7 @@ export function startBridgeServer(options: BridgeServerOptions = {}): { port: nu
     // Vite 反代：排除 /ws 和 /api（由 Bridge 自己处理）
     app.all('*', async (c, next) => {
       const path = new URL(c.req.url).pathname
-      if (path === '/ws' || path.startsWith('/api/')) return next()
+      if (path === '/ws' || path.startsWith('/api/') || path.startsWith('/a2a') || path === '/.well-known/agent-card.json') return next()
 
       const url = new URL(c.req.url)
       const viteUrl = `http://localhost:${options.vitePort}${url.pathname}${url.search}`

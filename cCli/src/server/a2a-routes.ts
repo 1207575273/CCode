@@ -1,0 +1,132 @@
+// src/server/a2a-routes.ts
+//
+// A2A HTTP 路由 — Hono sub-app
+//
+// 协议依据（由 @a2a-js/sdk JsonRpcTransport 实现确认）：
+//   sendMessage      -> POST /a2a/rpc  { jsonrpc:'2.0', method:'message/send',   params, id }
+//   sendMessageStream -> POST /a2a/rpc { jsonrpc:'2.0', method:'message/stream', params, id }
+// SSE 每行格式：data: { jsonrpc:'2.0', id, result: <A2AStreamEvent> }
+// 客户端校验：response.id === requestId（ID 不一致抛错），所以响应必须回传相同 id。
+//
+// 端点：
+//   GET  /.well-known/agent-card.json  -> AgentCard JSON
+//   POST /a2a/rpc                      -> JSON-RPC 请求分发
+
+import { Hono } from 'hono'
+import { streamSSE } from 'hono/streaming'
+import { collectA2ATask } from '../a2a/server-executor.js'
+import type { AgentCard, A2AStreamEvent } from '../a2a/types.js'
+
+// ──────────────────────────────────────────
+// 依赖注入接口
+// ──────────────────────────────────────────
+
+export interface A2ARoutesDeps {
+  /** 返回本 Agent 的 AgentCard */
+  getAgentCard: () => AgentCard
+  /**
+   * 执行一个 A2A 任务，产出流式事件序列。
+   * 内部接 server-executor.executeA2ATask。
+   */
+  runTask: (params: { message: string; taskId: string; contextId: string }) => AsyncGenerator<A2AStreamEvent>
+  /** 生成唯一 ID（注入便于测试） */
+  genId?: () => string
+}
+
+// ──────────────────────────────────────────
+// JSON-RPC 工具函数
+// ──────────────────────────────────────────
+
+/** 构造 JSON-RPC 成功响应 */
+function rpcOk(id: number | string, result: unknown): Record<string, unknown> {
+  return { jsonrpc: '2.0', id, result }
+}
+
+/** 构造 JSON-RPC 错误响应 */
+function rpcError(id: number | string | null, code: number, message: string): Record<string, unknown> {
+  return { jsonrpc: '2.0', id, error: { code, message } }
+}
+
+// ──────────────────────────────────────────
+// 路由工厂
+// ──────────────────────────────────────────
+
+export function createA2ARoutes(deps: A2ARoutesDeps): Hono {
+  const { getAgentCard, runTask } = deps
+  // 默认用 crypto.randomUUID，注入 genId 便于测试中固定 ID
+  const genId = deps.genId ?? (() => crypto.randomUUID())
+
+  const app = new Hono()
+
+  // ── 1. AgentCard 发现端点 ──────────────────
+  app.get('/.well-known/agent-card.json', (c) => {
+    return c.json(getAgentCard())
+  })
+
+  // ── 2. JSON-RPC 端点 ──────────────────────
+  app.post('/a2a/rpc', async (c) => {
+    // 解析请求体
+    let body: Record<string, unknown>
+    try {
+      body = await c.req.json() as Record<string, unknown>
+    } catch {
+      return c.json(rpcError(null, -32700, 'Parse error'))
+    }
+
+    const id = body['id'] as number | string | undefined
+    const method = body['method'] as string | undefined
+    const params = body['params'] as Record<string, unknown> | undefined
+
+    // 校验：必须是 JSON-RPC 2.0，且有 method 和 id
+    if (body['jsonrpc'] !== '2.0' || !method || id === undefined) {
+      return c.json(rpcError(id ?? null, -32600, 'Invalid Request'))
+    }
+
+    // 从 params.message.parts 提取第一个 text part 作为 message
+    const msgParts = (params?.['message'] as Record<string, unknown> | undefined)?.['parts'] as
+      | Array<Record<string, unknown>>
+      | undefined
+    const messageText = msgParts?.find((p) => p['kind'] === 'text')?.['text'] as string | undefined
+    const message = messageText ?? ''
+
+    // contextId：优先取 params，无则生成
+    const contextId = (params?.['contextId'] as string | undefined) ?? genId()
+    const taskId = genId()
+
+    // ── method/send：收集流事件，同步返回最终 Task ──
+    if (method === 'message/send') {
+      try {
+        const stream = runTask({ message, taskId, contextId })
+        const task = await collectA2ATask(stream)
+        return c.json(rpcOk(id, task))
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return c.json(rpcError(id, -32603, `Internal error: ${msg}`))
+      }
+    }
+
+    // ── message/stream：SSE 流式推送每个事件 ──
+    if (method === 'message/stream') {
+      return streamSSE(c, async (stream) => {
+        try {
+          for await (const evt of runTask({ message, taskId, contextId })) {
+            await stream.writeSSE({
+              data: JSON.stringify(rpcOk(id, evt)),
+            })
+          }
+        } catch (err) {
+          // 流出错时推一条错误事件（客户端会解析）
+          const msg = err instanceof Error ? err.message : String(err)
+          await stream.writeSSE({
+            data: JSON.stringify(rpcError(id, -32603, `Internal error: ${msg}`)),
+          })
+        }
+      })
+    }
+
+    // ── 未知 method ──
+    return c.json(rpcError(id, -32601, `Method not found: ${method}`))
+  })
+
+  return app
+}

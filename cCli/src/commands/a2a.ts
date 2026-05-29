@@ -22,15 +22,26 @@ import { randomUUID } from 'node:crypto'
 import type { Command, CommandResult } from './types.js'
 import { DEFAULT_FILE_PATH, maskToken } from '@config/a2a-config.js'
 import type { TrustedAgent } from '../a2a/types.js'
+import { InstanceRegistry } from '../a2a/instance-registry.js'
+import type { InstanceCard } from '../a2a/instance-registry.js'
 
 export class A2aCommand implements Command {
   readonly name = 'a2a'
   readonly description = '管理受信任的远端 A2A Agent（list/add/remove）'
 
   readonly #filePath: string
+  readonly #discoverLocal: () => InstanceCard[]
 
-  constructor(filePath: string = DEFAULT_FILE_PATH) {
+  constructor(filePath: string = DEFAULT_FILE_PATH, discoverLocal?: () => InstanceCard[]) {
     this.#filePath = filePath
+    // 默认用真实 InstanceRegistry 发现本机活跃会话；传 '' 不排除任何 sessionId（显示全部本机会话）
+    this.#discoverLocal = discoverLocal ?? (() => {
+      try {
+        return new InstanceRegistry().discover('')
+      } catch {
+        return []
+      }
+    })
   }
 
   execute(args: string[]): CommandResult {
@@ -55,29 +66,35 @@ export class A2aCommand implements Command {
   // ───────────────────────────────────────────────
 
   private handleList(): CommandResult {
-    const list = this.readList()
-    if (list.length === 0) {
-      return {
-        handled: true,
-        action: {
-          type: 'show_help',
-          content: '[INFO] 暂无已信任的远端 A2A Agent。\n用 /a2a add <url> [别名] 信任一个。',
-        },
-      }
+    const sections: string[] = []
+
+    // 本机活跃会话 Agent（lockfile 自动发现，端口动态从名片读）
+    const local = this.#discoverLocal()
+    if (local.length > 0) {
+      const lines = local.map(
+        (c, i) =>
+          `${i + 1}. ${c.projectName} #${c.sessionId.slice(0, 6)}\n` +
+          `   url: http://127.0.0.1:${c.port}  |  ${c.cwd}`,
+      )
+      sections.push(
+        `[INFO] 本机活跃会话 Agent（${local.length}）—— 可直接按项目名或会话 id 调用：\n\n${lines.join('\n')}`,
+      )
     }
 
-    const lines = list.map((a, i) => {
-      const aliasPart = a.alias ? ` (${a.alias})` : ''
-      const auth = a.securityScheme === 'bearer' ? `bearer ${maskToken(a.authToken)}` : 'none'
-      return `${i + 1}. ${a.name}${aliasPart}\n   url: ${a.url}\n   鉴权: ${auth}  |  id: ${a.id}`
-    })
-    return {
-      handled: true,
-      action: {
-        type: 'show_help',
-        content: `[INFO] 已信任的远端 A2A Agent（${list.length}）：\n\n${lines.join('\n\n')}`,
-      },
+    // 远程已信任白名单
+    const remote = this.readList()
+    if (remote.length > 0) {
+      const lines = remote.map((a, i) => {
+        const aliasPart = a.alias ? ` (${a.alias})` : ''
+        const auth = a.securityScheme === 'bearer' ? `bearer ${maskToken(a.authToken)}` : 'none'
+        return `${i + 1}. ${a.name}${aliasPart}\n   url: ${a.url}\n   鉴权: ${auth}  |  id: ${a.id}`
+      })
+      sections.push(`[INFO] 已信任的远程 Agent（${remote.length}）：\n\n${lines.join('\n\n')}`)
+    } else {
+      sections.push('[INFO] 暂无已信任的远程 A2A Agent。\n用 /a2a add <url> [别名] 信任一个。')
     }
+
+    return { handled: true, action: { type: 'show_help', content: sections.join('\n\n') } }
   }
 
   private handleAdd(rest: string[]): CommandResult {

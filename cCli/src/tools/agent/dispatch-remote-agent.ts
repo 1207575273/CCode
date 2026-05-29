@@ -23,6 +23,8 @@ import { mapToA2AEvent, a2aEventToSubagentEvent } from '../../a2a/event-mapper.j
 import { A2ATrustStore } from '@config/a2a-config.js'
 import type { TrustedAgent, A2AStreamEvent, A2ADispatchResult, TaskState } from '../../a2a/types.js'
 import { INTERRUPT_TASK_STATES } from '../../a2a/types.js'
+import { InstanceRegistry } from '../../a2a/instance-registry.js'
+import type { InstanceCard } from '../../a2a/instance-registry.js'
 
 // ═══════════════════════════════════════════════
 // 可注入依赖（便于测试）
@@ -45,6 +47,8 @@ interface DispatchRemoteAgentDeps {
   trustStore?: TrustLookup
   /** 客户端工厂（默认 A2AClientWrapper.create） */
   createClient?: (agent: TrustedAgent) => Promise<RemoteAgentClient>
+  /** 本地会话发现（默认真实 InstanceRegistry.discover），返回本机其他活跃会话名片 */
+  discoverLocal?: (selfSessionId: string) => InstanceCard[]
 }
 
 // ═══════════════════════════════════════════════
@@ -71,10 +75,12 @@ export class DispatchRemoteAgentTool implements StreamableTool {
 
   private readonly trustStore: TrustLookup
   private readonly createClient: (agent: TrustedAgent) => Promise<RemoteAgentClient>
+  private readonly discoverLocal: (selfSessionId: string) => InstanceCard[]
 
   constructor(deps?: DispatchRemoteAgentDeps) {
     this.trustStore = deps?.trustStore ?? new A2ATrustStore()
     this.createClient = deps?.createClient ?? ((agent) => A2AClientWrapper.create(agent))
+    this.discoverLocal = deps?.discoverLocal ?? ((self) => new InstanceRegistry().discover(self))
   }
 
   get description(): string {
@@ -140,8 +146,8 @@ export class DispatchRemoteAgentTool implements StreamableTool {
       return { success: false, output: '', error: 'message 不能为空' }
     }
 
-    // 白名单解析：先按 URL 精确匹配，再按 alias / name / id 匹配
-    const trusted = await this.resolveTrustedAgent(agentRef)
+    // 解析目标 Agent：本地活跃会话(lockfile) -> 远程白名单
+    const trusted = await this.resolveTrustedAgent(agentRef, ctx.sessionId ?? '')
     if (!trusted) {
       return {
         success: false,
@@ -251,12 +257,41 @@ export class DispatchRemoteAgentTool implements StreamableTool {
     return { success: status === 'completed', output: JSON.stringify(result) }
   }
 
-  /** 白名单解析：URL 精确 -> alias/name/id 匹配 */
-  private async resolveTrustedAgent(ref: string): Promise<TrustedAgent | undefined> {
+  /** 目标解析：本地活跃会话(lockfile) -> 远程白名单(URL/alias/name/id) */
+  private async resolveTrustedAgent(ref: string, selfSessionId: string): Promise<TrustedAgent | undefined> {
+    const local = this.resolveLocalInstance(ref, selfSessionId)
+    if (local) return local
+
     const byUrl = await this.trustStore.findByUrl(ref)
     if (byUrl) return byUrl
     const all = await this.trustStore.list()
     return all.find((a) => a.alias === ref || a.name === ref || a.id === ref)
+  }
+
+  /**
+   * 把匹配到的本机活跃会话名片构造成临时 TrustedAgent。
+   * 端口从名片动态读取（不依赖固定端口）；localhost 受信，MVP 不做鉴权。
+   * 匹配优先级：sessionId 全等 -> sessionId 前缀 -> projectName。
+   */
+  private resolveLocalInstance(ref: string, selfSessionId: string): TrustedAgent | undefined {
+    let cards: InstanceCard[]
+    try {
+      cards = this.discoverLocal(selfSessionId)
+    } catch {
+      return undefined
+    }
+    const card =
+      cards.find((c) => c.sessionId === ref) ??
+      cards.find((c) => c.sessionId.startsWith(ref)) ??
+      cards.find((c) => c.projectName === ref)
+    if (!card) return undefined
+    return {
+      id: `local:${card.sessionId}`,
+      url: `http://127.0.0.1:${card.port}`,
+      name: card.projectName,
+      securityScheme: 'none',
+      addedAt: card.startedAt,
+    }
   }
 }
 

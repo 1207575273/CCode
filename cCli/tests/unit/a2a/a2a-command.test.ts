@@ -113,4 +113,32 @@ describe('A2aCommand', () => {
     const res = cmd.execute(['remove', 'nonexistent'])
     expect(res.action?.type).toBe('error')
   })
+
+  it('should_list_local_active_sessions_when_discovered', () => {
+    const card = {
+      sessionId: 'sess-abcdef12',
+      pid: 1,
+      port: 9803,
+      agentCardUrl: 'http://127.0.0.1:9803/.well-known/agent-card.json',
+      projectName: 'my-proj',
+      cwd: '/work/my-proj',
+      hostname: 'h',
+      osUser: 'u',
+      startedAt: '2026-01-01T00:00:00Z',
+      lastHeartbeat: '2026-01-01T00:00:00Z',
+    }
+    const cmd = new A2aCommand(track(tmpFile()), () => [card])
+    const res = cmd.execute(['list'])
+    const content = (res.action as { content: string }).content
+    expect(content).toContain('本机活跃会话')
+    expect(content).toContain('my-proj')
+    expect(content).toContain('9803')
+  })
+
+  it('should_pass_empty_local_when_not_injected_and_show_remote_hint', () => {
+    // 注入空本地发现，验证远程空提示仍在（现有断言兼容）
+    const cmd = new A2aCommand(track(tmpFile()), () => [])
+    const res = cmd.execute(['list'])
+    expect((res.action as { content: string }).content).toContain('暂无已信任')
+  })
 })

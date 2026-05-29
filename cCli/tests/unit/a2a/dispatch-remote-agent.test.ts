@@ -1,6 +1,15 @@
 // tests/unit/a2a/dispatch-remote-agent.test.ts
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
+
+// 默认让本地会话发现返回空，现有用例不触碰真实 ~/.ccode/instances 目录
+vi.mock('../../../src/a2a/instance-registry.js', () => ({
+  InstanceRegistry: class {
+    discover(): unknown[] {
+      return []
+    }
+  },
+}))
 import {
   DispatchRemoteAgentTool,
   type RemoteAgentClient,
@@ -168,5 +177,52 @@ describe('DispatchRemoteAgentTool', () => {
     })
     const { result } = await collect(tool, { agent: 'https://remote.example.com', message: 'x' })
     expect(result.success).toBe(true)
+  })
+
+  it('should_resolve_local_instance_by_projectName_with_dynamic_port', async () => {
+    const card = {
+      sessionId: 'sess-abc',
+      pid: 1,
+      port: 9801,
+      agentCardUrl: 'http://127.0.0.1:9801/.well-known/agent-card.json',
+      projectName: 'data-pipeline',
+      cwd: '/work/data-pipeline',
+      hostname: 'host',
+      osUser: 'user',
+      startedAt: '2026-01-01T00:00:00Z',
+      lastHeartbeat: '2026-01-01T00:00:00Z',
+    }
+    let calledUrl = ''
+    const tool = new DispatchRemoteAgentTool({
+      trustStore: fakeTrustStore([]), // 远程白名单为空，必须命中本地
+      discoverLocal: () => [card],
+      createClient: async (agent) => {
+        calledUrl = agent.url
+        return fakeClient([statusUpdate('completed', 'ok', true)])
+      },
+    })
+    const { result } = await collect(tool, { agent: 'data-pipeline', message: 'x' })
+    expect(result.success).toBe(true)
+    expect(calledUrl).toBe('http://127.0.0.1:9801') // 端口从名片动态读取
+  })
+
+  it('should_prefer_local_instance_over_remote_when_both_match', async () => {
+    const card = {
+      sessionId: 'sess-xyz', pid: 1, port: 9802,
+      agentCardUrl: 'http://127.0.0.1:9802/.well-known/agent-card.json',
+      projectName: 'sales', cwd: '/x', hostname: 'h', osUser: 'u',
+      startedAt: '2026-01-01T00:00:00Z', lastHeartbeat: '2026-01-01T00:00:00Z',
+    }
+    let calledUrl = ''
+    const tool = new DispatchRemoteAgentTool({
+      trustStore: fakeTrustStore(), // 远程也有 alias='sales'
+      discoverLocal: () => [card],
+      createClient: async (agent) => {
+        calledUrl = agent.url
+        return fakeClient([statusUpdate('completed', 'ok', true)])
+      },
+    })
+    await collect(tool, { agent: 'sales', message: 'x' })
+    expect(calledUrl).toBe('http://127.0.0.1:9802') // 本地优先
   })
 })
