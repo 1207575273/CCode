@@ -43,7 +43,7 @@ import { eventBus } from '@core/event-bus.js'
 // ═══════════════════════════════════════════════
 
 /** 硬编码排除 — 所有子 Agent 类型必须遵守，不可通过 toolPolicy 覆盖 */
-const ALWAYS_EXCLUDE = ['dispatch_agent', 'ask_user_question', 'control_agent']
+const ALWAYS_EXCLUDE = ['dispatch_agent', 'dispatch_remote_agent', 'ask_user_question', 'control_agent']
 
 /** SubAgent 默认 maxTurns（未匹配到定义时的兜底） */
 const DEFAULT_MAX_TURNS = 50

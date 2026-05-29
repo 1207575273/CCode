@@ -23,6 +23,7 @@ import { TaskOutputTool } from '@tools/core/task-output.js'
 import { TodoWriteTool } from '@tools/ext/todo-write.js'
 import { DispatchAgentTool } from '@tools/agent/dispatch-agent.js'
 import { ControlAgentTool } from '@tools/agent/control-agent.js'
+import { DispatchRemoteAgentTool } from '@tools/agent/dispatch-remote-agent.js'
 import { registerBuiltInAgents } from '@tools/agent/built-in.js'
 import { AskUserQuestionTool } from '@tools/ext/ask-user-question.js'
 import { VerifyCodeTool } from '@tools/ext/verify-code.js'
@@ -95,6 +96,7 @@ function buildRegistry(): ToolRegistry {
   reg.register(new TaskOutputTool())
   reg.register(new TodoWriteTool())
   reg.register(new DispatchAgentTool())
+  reg.register(new DispatchRemoteAgentTool())
   reg.register(new ControlAgentTool())
   reg.register(new AskUserQuestionTool())
   reg.register(new VerifyCodeTool())

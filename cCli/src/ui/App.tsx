@@ -29,6 +29,7 @@ import { contextManager } from '@core/context-manager.js'
 import { contextTracker } from '@core/context-tracker.js'
 import { PluginsCommand } from '@commands/plugins.js'
 import { RememberCommand } from '@commands/remember.js'
+import { A2aCommand } from '@commands/a2a.js'
 import { ExitCommand } from '@commands/exit.js'
 import { pluginRegistry } from '@core/bootstrap.js'
 import { getCleanupStats, executeCleanup } from '@core/cleanup-service.js'
@@ -254,6 +255,7 @@ export function App({
     reg.register(new ContextCommand())
     reg.register(new PluginsCommand())
     reg.register(new RememberCommand())
+    reg.register(new A2aCommand())
     reg.register(new ExitCommand())
     return reg
   }, [currentProvider, currentModel])
