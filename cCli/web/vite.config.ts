@@ -3,6 +3,11 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    // 让 .tsx/.ts 优先于 .js 解析：src 下可能残留本地编译的同名 .js(被 .gitignore 忽略),
+    // Vite 默认 .js 优先会导致无后缀 import 误用旧 .js 而非最新 .tsx 源码。
+    extensions: ['.tsx', '.ts', '.jsx', '.mjs', '.js', '.json'],
+  },
   server: {
     port: 5173,
     // HMR 通过 Vite 直连（Bridge Server 不代理 HMR WebSocket）
