@@ -1,0 +1,132 @@
+// src/a2a/node-server.ts
+
+/**
+ * A2A 节点启动器 — 把当前会话变成一个可被寻址的 A2A Agent 节点。
+ *
+ * 方案 Y（每进程独立 A2A server）：
+ * - 每个会话起一个独立的轻量 A2A HTTP server（动态端口，不与共享 Bridge 抢端口）
+ * - 写 lockfile 名片（按 sessionId），供本机其他会话发现（端口动态，靠名片不靠猜）
+ * - 被调用时在本进程起 AgentLoop 干活（本进程有完整 provider/registry/上下文）
+ *
+ * 整合：a2a-routes(HTTP) + server-executor(AgentLoop->A2A事件) + agent-card-builder(身份) + instance-registry(发现)
+ */
+
+import { serve } from '@hono/node-server'
+import type { ServerType } from '@hono/node-server'
+import { randomUUID } from 'node:crypto'
+import type { AddressInfo } from 'node:net'
+import { createA2ARoutes } from '../server/a2a-routes.js'
+import { executeA2ATask, type RunLoopFn } from './server-executor.js'
+import { buildLocalAgentCard } from './agent-card-builder.js'
+import { InstanceRegistry } from './instance-registry.js'
+
+/** 心跳间隔（与 instance-registry 的 30s 过期判定配套，留足余量） */
+const HEARTBEAT_INTERVAL_MS = 10_000
+/** 孤儿清理扫描间隔 */
+const REAP_INTERVAL_MS = 30_000
+
+export interface A2ANodeDeps {
+  sessionId: string
+  cwd: string
+  projectName: string
+  gitBranch?: string
+  version: string
+  /** 取当前会话工具名列表（生成 AgentCard.skills） */
+  getToolNames: () => string[]
+  /** 在本进程起 AgentLoop 跑一轮（被 A2A 调用时执行） */
+  runLoop: RunLoopFn
+  /** 注入便于测试：默认 @hono/node-server 的 serve */
+  serveImpl?: typeof serve
+  /** 注入便于测试：默认真实 InstanceRegistry */
+  registry?: InstanceRegistry
+}
+
+export interface A2ANodeHandle {
+  port: number
+  stop: () => void
+}
+
+/**
+ * 启动当前会话的 A2A 节点。返回实际端口和停止函数。
+ * 幂等性由调用方保证（一个会话只调一次）。
+ */
+export function startA2ANode(deps: A2ANodeDeps): A2ANodeHandle {
+  const serveImpl = deps.serveImpl ?? serve
+  const registry = deps.registry ?? new InstanceRegistry()
+
+  // port 在 serve 之后才确定；getAgentCard 是延迟调用（HTTP 请求时），闭包读最新 port
+  let port = 0
+
+  const routes = createA2ARoutes({
+    getAgentCard: () =>
+      buildLocalAgentCard({
+        sessionId: deps.sessionId,
+        port,
+        cwd: deps.cwd,
+        projectName: deps.projectName,
+        ...(deps.gitBranch ? { gitBranch: deps.gitBranch } : {}),
+        toolNames: deps.getToolNames(),
+        version: deps.version,
+      }),
+    runTask: ({ message, taskId, contextId }) =>
+      executeA2ATask({
+        message,
+        taskId,
+        contextId,
+        runLoop: deps.runLoop,
+        signal: new AbortController().signal,
+      }),
+    genId: () => randomUUID(),
+  })
+
+  // 动态端口（port 0 由系统分配）
+  const server: ServerType = serveImpl({ fetch: routes.fetch, port: 0 })
+  const addr = server.address()
+  port = typeof addr === 'object' && addr ? (addr as AddressInfo).port : 0
+
+  // 写名片 + 起心跳 + 起孤儿清理
+  registry.writeSelf({
+    sessionId: deps.sessionId,
+    pid: process.pid,
+    port,
+    agentCardUrl: `http://127.0.0.1:${port}/.well-known/agent-card.json`,
+    projectName: deps.projectName,
+    cwd: deps.cwd,
+    ...(deps.gitBranch ? { gitBranch: deps.gitBranch } : {}),
+  })
+
+  const heartbeatTimer = setInterval(() => {
+    try {
+      registry.heartbeat(deps.sessionId)
+    } catch {
+      // 心跳失败不致命，下一轮重试
+    }
+  }, HEARTBEAT_INTERVAL_MS)
+  heartbeatTimer.unref?.()
+
+  const reapTimer = setInterval(() => {
+    try {
+      registry.reapOrphans()
+    } catch {
+      // 清理失败不致命
+    }
+  }, REAP_INTERVAL_MS)
+  reapTimer.unref?.()
+
+  const stop = (): void => {
+    clearInterval(heartbeatTimer)
+    clearInterval(reapTimer)
+    try {
+      registry.removeSelf(deps.sessionId)
+    } catch {
+      // 删除失败由其他实例的 scanner 兜底清理
+    }
+    try {
+      server.close()
+    } catch {
+      // 关闭失败忽略
+    }
+  }
+
+  return { port, stop }
+}

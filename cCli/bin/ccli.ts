@@ -335,6 +335,50 @@ if (args.prompt != null) {
       isBridgeOwner = true
     }
 
+    // A2A 节点：让本会话成为可被其他会话/Agent 调用的 A2A 节点（方案 Y：每进程独立 server）
+    let a2aNode: { stop: () => void } | null = null
+    const startLocalA2ANode = async (sid: string): Promise<void> => {
+      try {
+        const [{ startA2ANode }, { AgentLoop }, { getOrCreateProvider }, { configManager }, bootstrap, { basename }] =
+          await Promise.all([
+            import('../src/a2a/node-server.js'),
+            import('../src/core/agent-loop.js'),
+            import('../src/providers/registry.js'),
+            import('../src/config/config-manager.js'),
+            import('../src/core/bootstrap.js'),
+            import('node:path'),
+          ])
+        const cwd = process.cwd()
+        a2aNode = startA2ANode({
+          sessionId: sid,
+          cwd,
+          projectName: basename(cwd),
+          version: APP_VERSION,
+          getToolNames: () => bootstrap.getRegistry().getAll().map((t) => t.name),
+          // 被 A2A 调用时在本进程起一个 sidechain AgentLoop 干活
+          runLoop: async function* (message, signal) {
+            const config = configManager.load()
+            const providerName = config.defaultProvider ?? ''
+            const modelName = config.defaultModel ?? ''
+            const gp = getOrCreateProvider(providerName, config)
+            const provider = gp.createSession?.() ?? gp
+            const sysPrompt = bootstrap.getSystemPrompt()
+            const loop = new AgentLoop(provider, bootstrap.getRegistry(), {
+              model: modelName,
+              provider: providerName,
+              signal,
+              isSidechain: true,
+              nonInteractive: true,
+              ...(sysPrompt !== undefined ? { systemPrompt: sysPrompt } : {}),
+            })
+            yield* loop.run([{ role: 'user', content: message }])
+          },
+        })
+      } catch {
+        // A2A 节点启动失败不影响主 CLI（降级为仅客户端能力）
+      }
+    }
+
     // 所有 CLI（包括第一个）都作为 WS 客户端连接 Bridge
     // render 后才有 sessionId（useChat mount 时创建），轮询等待而非固定延迟
     // 生产模式下 bootstrapAll 耗时可能超过 100ms，固定延迟会导致 sid 为 null
@@ -345,6 +389,7 @@ if (args.prompt != null) {
         const sid = getCurrentSessionId()
         if (sid) {
           connectBridge(bridgePort, sid)
+          void startLocalA2ANode(sid)
         } else if (++attempts < maxAttempts) {
           setTimeout(poll, 100)
         }
@@ -355,6 +400,7 @@ if (args.prompt != null) {
 
     process.on('exit', () => {
       disconnectBridge()
+      a2aNode?.stop()
       // 只有 Bridge Server 的启动者才关闭 server，避免影响其他 CLI 实例
       if (isBridgeOwner) closeBridge()
     })
