@@ -27,6 +27,12 @@ export interface StatusBarPayload {
     usedPercentage: number
     level: string
   } | null
+  /** 本会话 A2A 节点状态（已成为可被连接的节点时非 null） */
+  a2a?: {
+    port: number
+    baseUrl: string
+    projectName: string
+  } | null
 }
 
 /** Bridge 层扩展事件 */

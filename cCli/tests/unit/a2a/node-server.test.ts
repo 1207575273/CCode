@@ -54,7 +54,8 @@ describe('startA2ANode', () => {
     expect(res.status).toBe(200)
     const card = (await res.json()) as { name: string; url: string; skills: unknown[] }
     expect(card.name).toContain('proj')
-    expect(card.url).toBe(`http://127.0.0.1:${node.port}`)
+    expect(card.url).toBe(node.baseUrl)
+    expect(node.baseUrl).toContain(`:${node.port}`)
     expect(card.skills).toHaveLength(2)
 
     // lockfile 已写入，能被发现

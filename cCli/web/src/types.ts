@@ -67,6 +67,7 @@ export type ServerEvent =
         proc: { memPercent: number; memUsedBytes: number; cpuPercent: number; elapsedMs: number }
         token: { inputTokens: number; outputTokens: number; costByCurrency: Record<string, number>; callCount: number } | null
         context: { usedPercentage: number; level: string } | null
+        a2a?: { port: number; baseUrl: string; projectName: string } | null
       }
     }
 

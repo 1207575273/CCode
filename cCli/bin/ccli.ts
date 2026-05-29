@@ -339,9 +339,10 @@ if (args.prompt != null) {
     let a2aNode: { stop: () => void } | null = null
     const startLocalA2ANode = async (sid: string): Promise<void> => {
       try {
-        const [{ startA2ANode }, { AgentLoop }, { getOrCreateProvider }, { configManager }, bootstrap, { basename }] =
+        const [{ startA2ANode }, { setLocalA2ANode }, { AgentLoop }, { getOrCreateProvider }, { configManager }, bootstrap, { basename }] =
           await Promise.all([
             import('../src/a2a/node-server.js'),
+            import('../src/a2a/node-status.js'),
             import('../src/core/agent-loop.js'),
             import('../src/providers/registry.js'),
             import('../src/config/config-manager.js'),
@@ -349,7 +350,7 @@ if (args.prompt != null) {
             import('node:path'),
           ])
         const cwd = process.cwd()
-        a2aNode = startA2ANode({
+        const handle = startA2ANode({
           sessionId: sid,
           cwd,
           projectName: basename(cwd),
@@ -374,6 +375,8 @@ if (args.prompt != null) {
             yield* loop.run([{ role: 'user', content: message }])
           },
         })
+        a2aNode = handle
+        setLocalA2ANode({ port: handle.port, baseUrl: handle.baseUrl, projectName: basename(cwd) })
       } catch {
         // A2A 节点启动失败不影响主 CLI（降级为仅客户端能力）
       }

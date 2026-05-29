@@ -14,7 +14,22 @@
 import { serve } from '@hono/node-server'
 import type { ServerType } from '@hono/node-server'
 import { randomUUID } from 'node:crypto'
+import { networkInterfaces } from 'node:os'
 import type { AddressInfo } from 'node:net'
+
+/**
+ * 探测本机局域网 IPv4 地址（供其他机器连接用）。
+ * 取第一个非 internal 的 IPv4；找不到回退 127.0.0.1（仅本机可达）。
+ */
+export function getLanHost(): string {
+  const ifaces = networkInterfaces()
+  for (const name of Object.keys(ifaces)) {
+    for (const ni of ifaces[name] ?? []) {
+      if (ni.family === 'IPv4' && !ni.internal) return ni.address
+    }
+  }
+  return '127.0.0.1'
+}
 import { createA2ARoutes } from '../server/a2a-routes.js'
 import { executeA2ATask, type RunLoopFn } from './server-executor.js'
 import { buildLocalAgentCard } from './agent-card-builder.js'
@@ -43,6 +58,8 @@ export interface A2ANodeDeps {
 
 export interface A2ANodeHandle {
   port: number
+  /** 完整 baseUrl（含局域网 IP），可直接给其他机器/会话连接 */
+  baseUrl: string
   stop: () => void
 }
 
@@ -53,13 +70,14 @@ export interface A2ANodeHandle {
 export function startA2ANode(deps: A2ANodeDeps): A2ANodeHandle {
   const serveImpl = deps.serveImpl ?? serve
   const registry = deps.registry ?? new InstanceRegistry()
+  const host = getLanHost()
 
   // port 在 serve 之后才确定；getAgentCard 是延迟调用（HTTP 请求时），闭包读最新 port
   let port = 0
 
   const routes = createA2ARoutes({
-    getAgentCard: () =>
-      buildLocalAgentCard({
+    getAgentCard: () => ({
+      ...buildLocalAgentCard({
         sessionId: deps.sessionId,
         port,
         cwd: deps.cwd,
@@ -68,6 +86,9 @@ export function startA2ANode(deps: A2ANodeDeps): A2ANodeHandle {
         toolNames: deps.getToolNames(),
         version: deps.version,
       }),
+      // 覆盖为局域网完整地址，供其他机器/会话连接
+      url: `http://${host}:${port}`,
+    }),
     runTask: ({ message, taskId, contextId }) =>
       executeA2ATask({
         message,
@@ -89,7 +110,7 @@ export function startA2ANode(deps: A2ANodeDeps): A2ANodeHandle {
     sessionId: deps.sessionId,
     pid: process.pid,
     port,
-    agentCardUrl: `http://127.0.0.1:${port}/.well-known/agent-card.json`,
+    agentCardUrl: `http://${host}:${port}/.well-known/agent-card.json`,
     projectName: deps.projectName,
     cwd: deps.cwd,
     ...(deps.gitBranch ? { gitBranch: deps.gitBranch } : {}),
@@ -128,5 +149,5 @@ export function startA2ANode(deps: A2ANodeDeps): A2ANodeHandle {
     }
   }
 
-  return { port, stop }
+  return { port, baseUrl: `http://${host}:${port}`, stop }
 }

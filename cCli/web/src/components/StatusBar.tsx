@@ -39,6 +39,11 @@ interface StatusBarData {
     usedPercentage: number
     level: string
   } | null
+  a2a?: {
+    port: number
+    baseUrl: string
+    projectName: string
+  } | null
 }
 
 interface StatusBarProps {
@@ -111,7 +116,7 @@ function Sep() {
 export function StatusBar({ data }: StatusBarProps) {
   if (!data) return null
 
-  const { sys, proc, token, context } = data
+  const { sys, proc, token, context, a2a } = data
 
   return (
     <div className="px-4 py-1.5 text-xs text-txt-secondary font-mono border-t border-border space-y-1">
@@ -184,6 +189,14 @@ export function StatusBar({ data }: StatusBarProps) {
             </>
           )
         })()}
+        {a2a && (
+          <>
+            <Sep />
+            <span className="text-success font-semibold" title={`本会话可被 A2A 连接：${a2a.projectName}（复制此地址给其他会话/机器）`}>
+              A2A {a2a.baseUrl}
+            </span>
+          </>
+        )}
       </div>
     </div>
   )

@@ -251,6 +251,16 @@ function buildInfoSegments(
     }
   }
 
+  // A2A 节点：本会话可被其他会话/Agent 连接时,绿色高亮显示完整可连接地址
+  if (data.a2aNode) {
+    const a2aText = `A2A ${data.a2aNode.baseUrl}`
+    segments.push({
+      key: 'a2a',
+      width: a2aText.length,
+      render: () => <Text color="green" bold>{a2aText}</Text>,
+    })
+  }
+
   return segments
 }
 

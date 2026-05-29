@@ -21,6 +21,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { totalmem, freemem, cpus } from 'node:os'
 import { eventBus } from '@core/event-bus.js'
 import type { StatusBarPayload } from '@core/event-bus.js'
+import { getLocalA2ANode } from '../a2a/node-status.js'
 
 // ═══════════════════════════════════════════════
 // 常量
@@ -62,6 +63,8 @@ export interface StatusBarData {
   cpuCoreCount: number
   /** 累计运行时间 (ms)，含跨 resume 历史 */
   elapsedMs: number
+  /** 本会话 A2A 节点状态（非 null 表示当前可被 A2A 连接） */
+  a2aNode?: { port: number; baseUrl: string; projectName: string } | null
 }
 
 /** Token 统计快照（用于 eventBus 推送） */
@@ -192,6 +195,7 @@ export function useStatusBar(options: UseStatusBarOptions): StatusBarData | null
 
       const elapsed = accumulatedMsRef.current + (Date.now() - sessionStartTimeRef.current)
 
+      const a2aNode = getLocalA2ANode()
       const next: StatusBarData = {
         sysMemPercent: clamp100(sysMemPercent),
         sysMemUsedBytes: sysUsedMem,
@@ -202,6 +206,7 @@ export function useStatusBar(options: UseStatusBarOptions): StatusBarData | null
         procCpuPercent: clamp100(procCpuPercent),
         cpuCoreCount: coreCount,
         elapsedMs: elapsed,
+        a2aNode,
       }
 
       setData(next)
@@ -232,6 +237,7 @@ export function useStatusBar(options: UseStatusBarOptions): StatusBarData | null
           usedPercentage: ctxState.usedPercentage,
           level: ctxState.level,
         } : null,
+        a2a: a2aNode,
       }
       eventBus.emit({ type: 'status_bar', data: payload })
 
