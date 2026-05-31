@@ -70,7 +70,10 @@ export interface A2ANodeHandle {
 export function startA2ANode(deps: A2ANodeDeps): A2ANodeHandle {
   const serveImpl = deps.serveImpl ?? serve
   const registry = deps.registry ?? new InstanceRegistry()
-  const host = getLanHost()
+  // 本机会话互调统一用 127.0.0.1（最可靠）。
+  // getLanHost() 自动探测可能命中代理/VPN 虚拟网卡（如 Clash 的 198.18.0.0/15 段），
+  // 导致 client 连该地址被代理拦截返回 404。跨机器（用真实局域网 IP）需配合鉴权,作为 M3。
+  const host = '127.0.0.1'
 
   // port 在 serve 之后才确定；getAgentCard 是延迟调用（HTTP 请求时），闭包读最新 port
   let port = 0
