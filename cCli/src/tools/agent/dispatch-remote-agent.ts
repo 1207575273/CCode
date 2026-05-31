@@ -282,10 +282,14 @@ export class DispatchRemoteAgentTool implements StreamableTool {
     } catch {
       return undefined
     }
+    // 匹配优先级（精确 -> 模糊），同目录多会话时端口/地址是唯一可区分项：
     const card =
-      cards.find((c) => c.sessionId === ref) ??
-      cards.find((c) => c.sessionId.startsWith(ref)) ??
-      cards.find((c) => c.projectName === ref)
+      cards.find((c) => c.sessionId === ref) ??                                  // 完整 sessionId
+      cards.find((c) => String(c.port) === ref) ??                               // 端口（如 "65071"）
+      cards.find((c) => `http://127.0.0.1:${c.port}` === ref || c.agentCardUrl === ref || c.agentCardUrl.startsWith(`${ref}/`) || ref === `http://127.0.0.1:${c.port}/`) ?? // 完整地址
+      cards.find((c) => ref.includes(`:${c.port}`)) ??                           // 含端口的任意地址形式
+      cards.find((c) => c.sessionId.startsWith(ref)) ??                          // sessionId 前缀
+      cards.find((c) => c.projectName === ref)                                   // 项目名（同名时取排除自己后的第一个）
     if (!card) return undefined
     return {
       id: `local:${card.sessionId}`,
