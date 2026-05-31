@@ -85,14 +85,16 @@ export class DispatchRemoteAgentTool implements StreamableTool {
 
   get description(): string {
     return [
-      '调用远端 A2A Agent 执行任务（通过 Agent2Agent 协议与另一个独立部署的 Agent 协作）。',
+      '调用另一个 A2A Agent 执行任务（通过 Agent2Agent 协议委托给对方）。',
+      '可委托两类目标，都用 /a2a list 查看：',
+      '1. 本机其他 CCode 会话 —— 自动发现，无需信任；agent 参数填该会话的「项目名」或「会话 id（前几位即可）」',
+      '2. 远程已信任 Agent —— 需先 /a2a add <url>；agent 参数填其 URL 或别名',
       '',
-      '使用前提：目标 Agent 必须已被用户信任（通过 /a2a add <url> 加入白名单）。',
-      '用 /a2a list 查看当前可调用的远端 Agent。',
+      '典型场景：当前会话需要另一个会话（它更熟某个项目/目录）帮忙时，把任务委托过去。',
       '',
       '参数：',
-      '• agent   — 已信任 Agent 的 URL 或别名',
-      '• message — 给远端 Agent 的完整指令（远端看不到本地对话历史，需自带上下文）',
+      '• agent   — 本机会话的项目名/会话 id，或远程 Agent 的 URL/别名',
+      '• message — 给对方的完整指令（对方看不到你的对话历史，必须自带充分上下文）',
       '• context_id — 可选，复用同一会话上下文时传入',
       '',
       '返回结构：status（completed/failed/canceled/rejected/input-required/auth-required）+ output（最终文本）+ artifacts（产物摘要）。',
