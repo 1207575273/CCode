@@ -102,3 +102,25 @@ export function IconMonitor({ size = 16, className }: IconProps) {
     </svg>
   )
 }
+
+/** 导航：Agent 网格（节点拓扑） */
+export function IconNetwork({ size = 16, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none"
+         stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
+         strokeLinejoin="round" className={className}>
+      {/* 中心节点 */}
+      <circle cx="8" cy="8" r="2" />
+      {/* 外围四个节点 */}
+      <circle cx="2.5" cy="4" r="1.5" />
+      <circle cx="13.5" cy="4" r="1.5" />
+      <circle cx="2.5" cy="12" r="1.5" />
+      <circle cx="13.5" cy="12" r="1.5" />
+      {/* 连线：中心 -> 四角 */}
+      <line x1="6.2" y1="6.8" x2="3.8" y2="5.2" />
+      <line x1="9.8" y1="6.8" x2="12.2" y2="5.2" />
+      <line x1="6.2" y1="9.2" x2="3.8" y2="10.8" />
+      <line x1="9.8" y1="9.2" x2="12.2" y2="10.8" />
+    </svg>
+  )
+}

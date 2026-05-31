@@ -10,7 +10,7 @@
  */
 
 import { NavLink } from 'react-router-dom'
-import { IconChat, IconChart, IconHistory, IconSettings, IconScroll, IconSun, IconMoon, IconMonitor } from './icons'
+import { IconChat, IconChart, IconHistory, IconSettings, IconScroll, IconNetwork, IconSun, IconMoon, IconMonitor } from './icons'
 import { useTheme } from '../hooks/useTheme'
 import type { Theme } from '../hooks/useTheme'
 import type { ComponentType } from 'react'
@@ -26,6 +26,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/session', icon: IconChat, label: '聊天' },
   { to: '/overview', icon: IconChart, label: '总览' },
   { to: '/conversations', icon: IconHistory, label: '历史' },
+  { to: '/agents', icon: IconNetwork, label: 'Agents' },
   { to: '/settings', icon: IconSettings, label: '设置' },
   { to: '/logs', icon: IconScroll, label: '日志', disabled: true },
 ]

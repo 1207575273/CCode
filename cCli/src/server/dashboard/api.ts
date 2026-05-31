@@ -28,6 +28,7 @@ import { configManager } from '@config/config-manager.js'
 import { TokenMeter } from '@observability/token-meter.js'
 import { createPluginsRoutes } from './plugins-api.js'
 import { createMcpRoutes } from './mcp-api.js'
+import { createA2aDashboardRoutes } from './a2a-dashboard-api.js'
 import { broadcastToClients } from '../bridge/server.js'
 import { getSystemPromptSections } from '@core/bootstrap.js'
 import { FileStore } from '@memory/storage/file-store.js'
@@ -519,6 +520,8 @@ export function createApiRoutes(): Hono {
   // Plugins + MCP 管理
   api.route('/plugins', createPluginsRoutes())
   api.route('/mcp', createMcpRoutes())
+  // A2A Agent 网格视图（本机会话 + 远程已信任）
+  api.route('/a2a', createA2aDashboardRoutes())
 
   // ═══ 图片管理 ═══
 
