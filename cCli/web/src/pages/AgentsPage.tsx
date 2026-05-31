@@ -89,6 +89,7 @@ interface LocalCardProps {
 
 function LocalAgentCard({ agent }: LocalCardProps) {
   const [copied, setCopied] = useState(false)
+  const [copiedSid, setCopiedSid] = useState(false)
   const addr = `http://127.0.0.1:${agent.port}`
 
   const handleCopy = useCallback(async () => {
@@ -101,17 +102,37 @@ function LocalAgentCard({ agent }: LocalCardProps) {
     }
   }, [addr])
 
+  const handleCopySessionId = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(agent.sessionId)
+      setCopiedSid(true)
+      setTimeout(() => setCopiedSid(false), 1500)
+    } catch {
+      // 浏览器权限拒绝时静默处理
+    }
+  }, [agent.sessionId])
+
   return (
     <div className="bg-surface border border-border rounded-lg p-4 flex flex-col gap-2 hover:border-accent transition-colors">
-      {/* 项目名 + sessionId */}
+      {/* 项目名 + 端口（端口唯一，一眼区分同名会话） */}
       <div className="flex items-center justify-between gap-2">
         <span className="text-base font-semibold text-txt-primary truncate">
           {agent.projectName}
         </span>
-        <span className="text-xs font-mono text-txt-muted bg-elevated px-1.5 py-0.5 rounded shrink-0">
-          #{shortId(agent.sessionId)}
+        <span className="text-xs font-mono text-accent bg-elevated px-1.5 py-0.5 rounded shrink-0" title="端口（调用时可直接用）">
+          :{agent.port}
         </span>
       </div>
+
+      {/* 完整 sessionId（UUIDv7 前缀同源，同期会话需完整 id 才能区分；点击全选复制） */}
+      <button
+        onClick={handleCopySessionId}
+        className="font-mono text-[11px] text-txt-secondary bg-elevated px-2 py-1 rounded break-all text-left hover:text-accent transition-colors"
+        title="点击复制会话 id（调用 dispatch_remote_agent 时可用）"
+      >
+        {agent.sessionId}
+        {copiedSid && <span className="text-success ml-1.5">已复制</span>}
+      </button>
 
       {/* 地址（可点击复制） */}
       <button
