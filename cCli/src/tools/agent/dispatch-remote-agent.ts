@@ -289,6 +289,7 @@ export class DispatchRemoteAgentTool implements StreamableTool {
       cards.find((c) => `http://127.0.0.1:${c.port}` === ref || c.agentCardUrl === ref || c.agentCardUrl.startsWith(`${ref}/`) || ref === `http://127.0.0.1:${c.port}/`) ?? // 完整地址
       cards.find((c) => ref.includes(`:${c.port}`)) ??                           // 含端口的任意地址形式
       cards.find((c) => c.sessionId.startsWith(ref)) ??                          // sessionId 前缀
+      cards.find((c) => c.sessionId.endsWith(ref)) ??                            // sessionId 后缀（UUIDv7 后段有区分度）
       cards.find((c) => c.projectName === ref)                                   // 项目名（同名时取排除自己后的第一个）
     if (!card) return undefined
     return {

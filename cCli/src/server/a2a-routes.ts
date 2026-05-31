@@ -3,14 +3,15 @@
 // A2A HTTP 路由 — Hono sub-app
 //
 // 协议依据（由 @a2a-js/sdk JsonRpcTransport 实现确认）：
-//   sendMessage      -> POST /a2a/rpc  { jsonrpc:'2.0', method:'message/send',   params, id }
-//   sendMessageStream -> POST /a2a/rpc { jsonrpc:'2.0', method:'message/stream', params, id }
+//   sendMessage      -> POST / { jsonrpc:'2.0', method:'message/send',   params, id }
+//   sendMessageStream -> POST / { jsonrpc:'2.0', method:'message/stream', params, id }
 // SSE 每行格式：data: { jsonrpc:'2.0', id, result: <A2AStreamEvent> }
 // 客户端校验：response.id === requestId（ID 不一致抛错），所以响应必须回传相同 id。
 //
 // 端点：
 //   GET  /.well-known/agent-card.json  -> AgentCard JSON
-//   POST /a2a/rpc                      -> JSON-RPC 请求分发
+//   POST /                             -> JSON-RPC 请求分发（SDK 默认 POST 到 agentCard.url 根路径）
+//   POST /a2a/rpc                      -> JSON-RPC 请求分发（兼容旧路径）
 
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
@@ -63,8 +64,10 @@ export function createA2ARoutes(deps: A2ARoutesDeps): Hono {
     return c.json(getAgentCard())
   })
 
-  // ── 2. JSON-RPC 端点 ──────────────────────
-  app.post('/a2a/rpc', async (c) => {
+  // ── 2. JSON-RPC 处理器（提取为共享函数，多个路径复用） ──
+  // SDK 的 JsonRpcTransport 默认 POST 到 agentCard.url 根路径（即 /），
+  // 旧版用 /a2a/rpc，两个路径都要支持。
+  const handleRpc = async (c: import('hono').Context) => {
     // 解析请求体
     let body: Record<string, unknown>
     try {
@@ -126,7 +129,12 @@ export function createA2ARoutes(deps: A2ARoutesDeps): Hono {
 
     // ── 未知 method ──
     return c.json(rpcError(id, -32601, `Method not found: ${method}`))
-  })
+  }
+
+  // SDK JsonRpcTransport 默认 POST 到 agentCard.url（即根路径 /）
+  app.post('/', handleRpc)
+  // 兼容旧路径
+  app.post('/a2a/rpc', handleRpc)
 
   return app
 }
