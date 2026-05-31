@@ -44,8 +44,7 @@ export interface LocalAgentCardInput {
  * tsc --noEmit 通过即为类型正确的证明。
  */
 export function buildLocalAgentCard(input: LocalAgentCardInput): AgentCard {
-  // sessionId 保留在接口中（语义上标识会话），但展示名用端口区分（唯一、短、与调用方式一致）
-  const { port, cwd, projectName, gitBranch, toolNames, version } = input
+  const { sessionId, port, cwd, projectName, gitBranch, toolNames, version } = input
 
   // description：含项目名 + cwd，有 gitBranch 时追加分支，无则省略
   const branchPart = gitBranch !== undefined ? ` | 分支: ${gitBranch}` : ''
@@ -61,7 +60,8 @@ export function buildLocalAgentCard(input: LocalAgentCardInput): AgentCard {
   }))
 
   return {
-    name: `${projectName} :${port}`,
+    // 端口 + 完整 sessionId 都放上：两种标识 dispatch 都支持精确匹配,用户用哪个调都行
+    name: `${projectName} :${port} #${sessionId}`,
     description,
     url: `http://127.0.0.1:${port}`,
     version,

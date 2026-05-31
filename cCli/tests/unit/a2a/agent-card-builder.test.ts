@@ -19,12 +19,13 @@ const baseInput: LocalAgentCardInput = {
 // Case 1：name 包含 projectName 和 sessionId 前 6 位
 // ─────────────────────────────────────────────────────────────────────
 describe('buildLocalAgentCard - name', () => {
-  it('should_contain_projectName_and_port_when_built', () => {
+  it('should_contain_projectName_port_and_full_sessionId_when_built', () => {
     const card = buildLocalAgentCard(baseInput)
 
     expect(card.name).toContain(baseInput.projectName)
-    // 展示名用端口区分：唯一、短、与调用方式一致（sessionId 是 UUIDv7,前缀同源无区分度）
+    // 端口 + 完整 sessionId 都展示，两种标识 dispatch 都能用于精确调用
     expect(card.name).toContain(String(baseInput.port))
+    expect(card.name).toContain(baseInput.sessionId)
   })
 })
 
