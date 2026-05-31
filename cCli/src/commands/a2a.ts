@@ -73,8 +73,12 @@ export class A2aCommand implements Command {
     if (local.length > 0) {
       const lines = local.map(
         (c, i) =>
-          `${i + 1}. ${c.projectName} #${c.sessionId.slice(0, 6)}\n` +
-          `   url: http://127.0.0.1:${c.port}  |  ${c.cwd}`,
+          // 显示完整 sessionId(不截取): UUIDv7 前缀是毫秒时间戳,同期会话前缀相同,只有全量才唯一
+          `${i + 1}. ${c.projectName}\n` +
+          `   会话 id: ${c.sessionId}\n` +
+          `   地址:    http://127.0.0.1:${c.port}\n` +
+          `   目录:    ${c.cwd}\n` +
+          `   -> 调用时 agent 填完整会话 id,或填端口 ${c.port}（更短）`,
       )
       sections.push(
         `[INFO] 本机活跃会话 Agent（${local.length}）—— 可直接按项目名或会话 id 调用：\n\n${lines.join('\n')}`,

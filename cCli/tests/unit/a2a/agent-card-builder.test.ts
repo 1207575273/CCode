@@ -19,11 +19,12 @@ const baseInput: LocalAgentCardInput = {
 // Case 1：name 包含 projectName 和 sessionId 前 6 位
 // ─────────────────────────────────────────────────────────────────────
 describe('buildLocalAgentCard - name', () => {
-  it('should_contain_projectName_and_first6_of_sessionId_when_built', () => {
+  it('should_contain_projectName_and_last6_of_sessionId_when_built', () => {
     const card = buildLocalAgentCard(baseInput)
 
     expect(card.name).toContain(baseInput.projectName)
-    expect(card.name).toContain(baseInput.sessionId.slice(0, 6))
+    // 用 sessionId 后 6 位：UUIDv7 前缀是毫秒时间戳,同期会话前缀相同,后段才有区分度
+    expect(card.name).toContain(baseInput.sessionId.slice(-6))
   })
 })
 

@@ -60,7 +60,7 @@ export function buildLocalAgentCard(input: LocalAgentCardInput): AgentCard {
   }))
 
   return {
-    name: `${projectName} #${sessionId.slice(0, 6)}`,
+    name: `${projectName} #${sessionId.slice(-6)}`,
     description,
     url: `http://127.0.0.1:${port}`,
     version,
