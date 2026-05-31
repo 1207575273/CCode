@@ -4,10 +4,15 @@
 //
 // 用法:
 //   node scripts/probe-openrouter.mjs
+//   OPENROUTER_API_KEY=sk-or-... node scripts/probe-openrouter.mjs
 //   MODELS="anthropic/claude-sonnet-4.5,anthropic/claude-sonnet-4.6" node scripts/probe-openrouter.mjs
 
+// 只从环境变量读 key,禁止硬编码(避免泄露到仓库)
 const API_KEY = process.env.OPENROUTER_API_KEY
-  || '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'
+if (!API_KEY) {
+  console.error('[FAIL] 缺少 OPENROUTER_API_KEY 环境变量。用法: OPENROUTER_API_KEY=sk-or-... node scripts/probe-openrouter.mjs')
+  process.exit(1)
+}
 
 const DEFAULT_MODELS = [
   'anthropic/claude-sonnet-4.5',
