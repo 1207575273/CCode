@@ -22,9 +22,9 @@ export function resolveHomeDir(): string {
 
   if (process.platform === 'win32') {
     candidates.push(process.env['USERPROFILE'])
-    const drive = process.env['HOMEDRIVE']
-    const path = process.env['HOMEPATH']
-    if (drive && path) candidates.push(drive + path)
+    const homeDrive = process.env['HOMEDRIVE']
+    const homePath = process.env['HOMEPATH']
+    if (homeDrive && homePath) candidates.push(homeDrive + homePath)
   } else {
     candidates.push(process.env['HOME'])
   }

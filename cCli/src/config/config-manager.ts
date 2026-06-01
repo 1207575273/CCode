@@ -141,8 +141,8 @@ export class ConfigManager {
   #cachedMtime: number = 0
   /** 当前真源文件路径（决定 save 写哪个文件 / 缓存比对哪个 mtime） */
   #activePath: string = ''
-  /** 迁移回读校验失败：本进程后续直接读 JSON，不再重试迁移（避免每次 load 重做） */
-  #migrationFailed: boolean = false
+  /** 上一次 load 的结果，供 ensureInitialized 生成诊断（无需再用文件系统快照反推） */
+  #lastOutcome: 'created' | 'migrated' | 'migration-failed' | 'loaded' | 'recovered' = 'loaded'
 
   constructor(baseDir: string = ccodeHome()) {
     this.#baseDir = baseDir
@@ -159,31 +159,28 @@ export class ConfigManager {
   }
 
   load(): CCodeConfig {
+    // 缓存短路：真源已确定时只比对其 mtime，稳态零额外 existsSync（load 是 UI 每条消息的热路径）
+    if (this.#cached && this.#activePath) {
+      let mtime: number | null = null
+      try { mtime = statSync(this.#activePath).mtimeMs } catch { mtime = null }
+      if (mtime !== null) {
+        if (mtime === this.#cachedMtime) return this.#cached
+        // 真源文件已变：原地重读（不重探后缀、不重试迁移；activePath 指向 JSON 即降级态）
+        return this.#loadFrom(this.#activePath, this.#activePath === this.#jsonPath ? 'json' : 'yaml')
+      }
+      // 真源文件消失 → 落到冷路径重新探测
+    }
+
+    // 冷路径：首次加载 / 真源失效，完整探测真源
     const yml = this.#existingYamlPath()
-    const jsonExists = existsSync(this.#jsonPath)
+    if (yml) return this.#loadFrom(yml, 'yaml')
+    if (existsSync(this.#jsonPath)) return this.#migrate()
 
-    // 1. 都不存在 → 写默认 YAML
-    if (!yml && !jsonExists) {
-      this.#ensureDir()
-      this.#writeYaml(DEFAULT_CONFIG)
-      return this.#setCache({ ...DEFAULT_CONFIG }, this.#ymlPath)
-    }
-
-    // 2. 只有 JSON（旧配置）→ 迁移（带回读校验闸门）；曾失败则降级直接读 JSON
-    if (!yml && jsonExists) {
-      if (this.#migrationFailed) return this.#loadFrom(this.#jsonPath, 'json')
-      return this.#migrate()
-    }
-
-    // 3. YAML 存在即真源，走 mtime 缓存
-    const path = yml as string
-    try {
-      const mtime = statSync(path).mtimeMs
-      if (this.#cached && this.#activePath === path && mtime === this.#cachedMtime) return this.#cached
-    } catch {
-      // statSync 失败（被删/权限），走无缓存路径
-    }
-    return this.#loadFrom(path, 'yaml')
+    // 都不存在 → 写默认 YAML
+    this.#ensureDir()
+    this.#writeYaml(DEFAULT_CONFIG)
+    this.#lastOutcome = 'created'
+    return this.#setCache({ ...DEFAULT_CONFIG }, this.#ymlPath)
   }
 
   /** 检查指定 provider + model 是否支持图片理解 */
@@ -216,18 +213,20 @@ export class ConfigManager {
     const created: string[] = []
     const warnings: string[] = []
 
-    const ymlBefore = this.#existingYamlPath()
-    const jsonBefore = existsSync(this.#jsonPath)
+    const cfg = this.load() // 触发：创建默认 / 迁移 / 损坏恢复，结果记录在 #lastOutcome
 
-    const cfg = this.load() // 触发：创建默认 / 迁移 / 损坏恢复
-
-    const ymlAfter = this.#existingYamlPath()
-    if (!ymlBefore && !jsonBefore && ymlAfter) {
-      created.push(ymlAfter)
-    } else if (!ymlBefore && jsonBefore && ymlAfter && !existsSync(this.#jsonPath)) {
-      warnings.push(`配置已从 config.json 迁移为 ${ymlAfter}（旧文件已备份为 config.json.bak）`)
-    } else if (!ymlBefore && jsonBefore && this.#migrationFailed) {
-      warnings.push('config.json 迁移 YAML 回读校验未通过，已降级继续使用 config.json（数据未丢失）')
+    switch (this.#lastOutcome) {
+      case 'created':
+        created.push(this.#ymlPath)
+        break
+      case 'migrated':
+        warnings.push(`配置已从 config.json 迁移为 ${this.#ymlPath}（旧文件已备份为 config.json.bak）`)
+        break
+      case 'migration-failed':
+        warnings.push('config.json 迁移 YAML 回读校验未通过，已降级继续使用 config.json（数据未丢失）')
+        break
+      default:
+        break
     }
 
     // apiKey 诊断
@@ -251,22 +250,15 @@ export class ConfigManager {
     try {
       const raw = readFileSync(path, 'utf-8')
       const loaded = (format === 'yaml' ? parseYaml(raw) : JSON.parse(raw)) as Partial<CCodeConfig> | null
-      const safe = loaded ?? {}
-      const merged = { ...DEFAULT_CONFIG, ...safe }
-
-      // 旧 JSON 缺新增默认字段时回写补全（帮助旧用户）；YAML 不自动回写，避免覆盖用户注释
-      if (format === 'json') {
-        const defaultKeys = Object.keys(DEFAULT_CONFIG) as (keyof CCodeConfig)[]
-        const hasMissingKeys = defaultKeys.some((k) => !(k in safe))
-        if (hasMissingKeys) this.#writeJson(merged)
-      }
-
+      const merged = { ...DEFAULT_CONFIG, ...(loaded ?? {}) }
+      this.#lastOutcome = 'loaded'
       return this.#setCache(merged, path)
     } catch {
       // 解析失败：备份损坏文件 + 重置为默认 YAML（保留旧 initializer 的容错行为）
       this.#backupCorrupt(path)
       this.#ensureDir()
       this.#writeYaml(DEFAULT_CONFIG)
+      this.#lastOutcome = 'recovered'
       return this.#setCache({ ...DEFAULT_CONFIG }, this.#ymlPath)
     }
   }
@@ -285,13 +277,14 @@ export class ConfigManager {
       this.#backupCorrupt(this.#jsonPath)
       this.#ensureDir()
       this.#writeYaml(DEFAULT_CONFIG)
-      this.#migrationFailed = false
+      this.#lastOutcome = 'recovered'
       return this.#setCache({ ...DEFAULT_CONFIG }, this.#ymlPath)
     }
 
-    // 生成 YAML 并回读校验
+    // 生成 YAML 并回读校验。写入原始 parsed 而非 merged：闸门要确认「序列化无损」，
+    // 写 merged 会引入 DEFAULT_CONFIG 默认字段，使 deepEqual 必然不等。
     this.#ensureDir()
-    writeFileSync(this.#ymlPath, this.#serializeYaml(parsed), 'utf-8')
+    this.#writeYaml(parsed)
 
     let reparsed: unknown
     try {
@@ -300,6 +293,7 @@ export class ConfigManager {
       reparsed = undefined
     }
 
+    const merged = { ...DEFAULT_CONFIG, ...parsed }
     if (reparsed !== undefined && deepEqual(reparsed, parsed)) {
       // 切换成功 → 备份 JSON（原子重命名），此后以 YAML 为真源
       try {
@@ -307,18 +301,17 @@ export class ConfigManager {
       } catch {
         // 重命名失败不阻塞：YAML 已是真源，JSON 残留会被忽略（YAML 优先）
       }
-      const merged = { ...DEFAULT_CONFIG, ...parsed }
+      this.#lastOutcome = 'migrated'
       return this.#setCache(merged, this.#ymlPath)
     }
 
     // 校验失败 → 删除半成品 YAML，降级用 JSON，绝不删 JSON
     try {
-      if (existsSync(this.#ymlPath)) rmSync(this.#ymlPath)
+      rmSync(this.#ymlPath, { force: true })
     } catch {
-      // 删除失败忽略：YAML 优先会读到坏数据? 不会——下次 load 仍走 deepEqual 判定来源以 JSON 为准
+      // 删除失败忽略：activePath 已指向 JSON，残留 YAML 不会被当真源
     }
-    this.#migrationFailed = true
-    const merged = { ...DEFAULT_CONFIG, ...parsed }
+    this.#lastOutcome = 'migration-failed'
     return this.#setCache(merged, this.#jsonPath)
   }
 
@@ -340,7 +333,7 @@ export class ConfigManager {
     mkdirSync(this.#baseDir, { recursive: true })
   }
 
-  #writeYaml(config: CCodeConfig): void {
+  #writeYaml(config: unknown): void {
     writeFileSync(this.#ymlPath, this.#serializeYaml(config), 'utf-8')
   }
 
