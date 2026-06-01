@@ -11,44 +11,14 @@
  * 5. 启动诊断：当前 provider 是否配了 apiKey
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { existsSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { homedir } from 'node:os'
+import { configManager } from '../config/config-manager.js'
+import { ccodeHome } from '../platform/path-utils.js'
 
-/** 初始化基础目录路径 */
-const CCODE_HOME = join(homedir(), '.ccode')
-const CONFIG_PATH = join(CCODE_HOME, 'config.json')
+/** 初始化基础目录路径（经 ccodeHome() 防御式解析，支持 CCODE_HOME 覆盖） */
+const CCODE_HOME = ccodeHome()
 const MCP_CONFIG_PATH = join(CCODE_HOME, '.mcp.json')
-
-/** config.json 默认模板 */
-const DEFAULT_CONFIG = {
-  defaultProvider: 'anthropic',
-  defaultModel: 'claude-sonnet-4-6',
-  providers: {
-    anthropic: {
-      apiKey: '',
-      models: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
-    },
-    glm: {
-      apiKey: '',
-      baseURL: 'https://open.bigmodel.cn/api/coding/paas/v4',
-      models: ['glm-4-flash', 'glm-4-air', 'glm-4'],
-    },
-    openai: {
-      apiKey: '',
-      models: ['gpt-4o', 'gpt-4o-mini'],
-    },
-  },
-  memory: {
-    enabled: false,
-    embedding: {
-      apiKey: 'your-embedding-api-key',
-      baseURL: 'https://your-embedding-api-base-url/v4',
-      model: 'your-embedding-model',
-      dimension: 1024,
-    },
-  },
-}
 
 /** .mcp.json 默认模板 */
 const DEFAULT_MCP_CONFIG = {
@@ -119,45 +89,15 @@ export function initialize(): InitDiagnostic {
     mkdirSync(CCODE_HOME, { recursive: true })
   }
 
-  // 2. 确保 config.json 存在且结构完整
-  if (!existsSync(CONFIG_PATH)) {
-    writeFileSync(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2), 'utf-8')
-    created.push(CONFIG_PATH)
-  } else {
-    // 已存在：校验关键字段，缺失则补全
-    try {
-      const raw = readFileSync(CONFIG_PATH, 'utf-8')
-      const config = JSON.parse(raw) as Record<string, unknown>
-      let patched = false
-
-      if (!config['defaultProvider'] || typeof config['defaultProvider'] !== 'string') {
-        config['defaultProvider'] = DEFAULT_CONFIG.defaultProvider
-        patched = true
-      }
-      if (!config['defaultModel'] || typeof config['defaultModel'] !== 'string') {
-        config['defaultModel'] = DEFAULT_CONFIG.defaultModel
-        patched = true
-      }
-      if (!config['providers'] || typeof config['providers'] !== 'object') {
-        config['providers'] = DEFAULT_CONFIG.providers
-        patched = true
-      }
-
-      if (patched) {
-        writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8')
-        warnings.push('config.json 缺少关键字段，已自动补全')
-      }
-    } catch {
-      // config.json 读取或 JSON 解析失败：备份后重写
-      const backupPath = CONFIG_PATH + '.bak'
-      try {
-        const broken = readFileSync(CONFIG_PATH, 'utf-8')
-        writeFileSync(backupPath, broken, 'utf-8')
-      } catch { /* 备份失败也不阻塞启动，重写默认配置更重要 */ }
-      writeFileSync(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2), 'utf-8')
-      warnings.push(`config.json 格式损坏，已备份到 ${backupPath} 并重置`)
-    }
-  }
+  // 2. 配置文件：委托给 ConfigManager（唯一配置 IO 权威）
+  //    - 不存在 → 写默认 config.yml
+  //    - 存在旧 config.json → 迁移为 config.yml（回读校验通过才切换，否则降级保留 JSON）
+  //    - 损坏 → 备份并重置
+  //    - 顺带做 apiKey 诊断
+  //    取代了此处原先直接读写 config.json 的逻辑，避免与 ConfigManager 双写打架。
+  const configInit = configManager.ensureInitialized()
+  created.push(...configInit.created)
+  warnings.push(...configInit.warnings)
 
   // 3. 确保 .mcp.json 存在
   if (!existsSync(MCP_CONFIG_PATH)) {
@@ -196,25 +136,7 @@ export function initialize(): InitDiagnostic {
     created.push(userHooksPath)
   }
 
-  // 6. 启动诊断：检查当前 provider 的 apiKey
-  try {
-    const raw = readFileSync(CONFIG_PATH, 'utf-8')
-    const config = JSON.parse(raw) as {
-      defaultProvider?: string
-      providers?: Record<string, { apiKey?: string } | undefined>
-    }
-    const providerName = config.defaultProvider
-    if (providerName) {
-      const providerCfg = config.providers?.[providerName]
-      if (!providerCfg) {
-        warnings.push(`当前 provider "${providerName}" 未在 providers 中配置`)
-      } else if (!providerCfg.apiKey) {
-        warnings.push(`当前 provider "${providerName}" 的 apiKey 为空，请在 ~/.ccode/config.json 中配置`)
-      }
-    }
-  } catch {
-    // apiKey 诊断失败不阻塞启动，用户后续使用时会收到 API 错误
-  }
+  // apiKey 诊断已并入步骤 2 的 configManager.ensureInitialized()
 
   return { warnings, created }
 }

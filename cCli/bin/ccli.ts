@@ -103,7 +103,7 @@ function printHelp(): void {
 
   配置 / Configuration:
 
-    ~/.ccode/config.json               主配置（Provider / Model）
+    ~/.ccode/config.yml                主配置（Provider / Model，支持注释；兼容旧 config.json 自动迁移）
     ~/.ccode/mcp.json                  MCP Server 连接配置
     CCODE.md / CLAUDE.md               System Prompt 指令注入
     <cwd>/.ccode/settings.local.json   项目级工具权限白名单
