@@ -16,8 +16,8 @@
 import Database from 'libsql'
 import type { Database as DatabaseType } from 'libsql'
 import { join } from 'node:path'
-import { homedir } from 'node:os'
 import { mkdirSync } from 'node:fs'
+import { ccodePath } from '../platform/path-utils.js'
 
 let _db: DatabaseType | null = null
 
@@ -171,7 +171,7 @@ export function createDb(dbPath: string): DatabaseType {
 /** 获取全局单例（懒加载） */
 export function getDb(): DatabaseType {
   if (_db) return _db
-  const dataDir = join(homedir(), '.ccode', 'data')
+  const dataDir = ccodePath('data')
   mkdirSync(dataDir, { recursive: true })
   _db = createDb(join(dataDir, 'ccode.db'))
   return _db

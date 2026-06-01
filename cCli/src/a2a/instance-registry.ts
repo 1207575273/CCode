@@ -13,7 +13,8 @@
 
 import { mkdirSync, writeFileSync, renameSync, readdirSync, readFileSync, rmSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { homedir, hostname as osHostname, userInfo } from 'node:os'
+import { hostname as osHostname, userInfo } from 'node:os'
+import { ccodePath } from '../platform/path-utils.js'
 
 // ─────────────────────────────────────────────────────────────
 // 数据结构
@@ -95,7 +96,7 @@ export class InstanceRegistry {
   private readonly isAlive: (pid: number) => boolean
 
   constructor(deps: InstanceRegistryDeps = {}) {
-    this.dir = deps.dir ?? join(homedir(), '.ccode', 'instances')
+    this.dir = deps.dir ?? ccodePath('instances')
     this.now = deps.now ?? (() => Date.now())
     this.selfPid = deps.selfPid ?? process.pid
     this.hostname = deps.hostname ?? osHostname()

@@ -10,7 +10,6 @@ export interface PlatformInfo {
   isMac: boolean
   arch: string
   homeDir: string
-  ccodeDir: string
 }
 
 const SUPPORTED_PLATFORMS = new Set<string>(['win32', 'linux', 'darwin'])
@@ -29,7 +28,6 @@ export function detectPlatform(): PlatformInfo {
     isMac: platform === 'darwin',
     arch: os.arch(),
     homeDir: os.homedir(),
-    ccodeDir: `${os.homedir()}/.ccode`,
   }
   return _cached
 }

@@ -14,6 +14,7 @@ import { mkdir, unlink, access } from 'node:fs/promises'
 import { join } from 'node:path'
 import { resolveShell } from './shell-resolver.js'
 import { detectPlatform } from './detector.js'
+import { ccodePath } from './path-utils.js'
 
 /** 快照创建超时（用户 .bashrc 可能有网络请求等副作用） */
 const SNAPSHOT_TIMEOUT_MS = 10_000
@@ -50,9 +51,9 @@ async function createSnapshot(): Promise<string | undefined> {
   // PowerShell 不需要快照（无 login shell 初始化开销）
   if (shell.type === 'powershell') return undefined
 
-  const { isWindows, ccodeDir } = detectPlatform()
+  const { isWindows } = detectPlatform()
 
-  const snapshotsDir = join(ccodeDir, 'shell-snapshots')
+  const snapshotsDir = ccodePath('shell-snapshots')
   try {
     await mkdir(snapshotsDir, { recursive: true })
   } catch {

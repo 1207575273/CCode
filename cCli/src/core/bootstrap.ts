@@ -48,7 +48,7 @@ import { configManager } from '@config/config-manager.js'
 import { startSnapshotCreation, cleanupSnapshot } from '@platform/shell-snapshot.js'
 import { execa } from 'execa'
 import { join } from 'node:path'
-import { homedir } from 'node:os'
+import { ccodePath } from '../platform/path-utils.js'
 
 // ═══ 模块级单例 ═══
 
@@ -165,7 +165,7 @@ export async function ensureHooksDiscovered(): Promise<void> {
   await hookManager.discoverFromFile(join(process.cwd(), '.ccode', 'hooks.json'), 'project')
 
   // 3. 用户级
-  await hookManager.discoverFromFile(join(homedir(), '.ccode', 'hooks.json'), 'user')
+  await hookManager.discoverFromFile(ccodePath('hooks.json'), 'user')
 }
 
 /**

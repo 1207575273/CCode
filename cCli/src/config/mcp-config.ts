@@ -1,7 +1,7 @@
 // src/config/mcp-config.ts
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { homedir } from 'node:os'
+import { ccodePath, resolveHomeDir } from '../platform/path-utils.js'
 
 export interface McpServerConfig {
   command?: string
@@ -26,9 +26,9 @@ export interface McpConfig {
  * 同名 server 出现在多个文件时，高优先级文件覆盖低优先级。
  */
 export const MCP_CONFIG_PATHS = [
-  join(homedir(), '.ccode', '.mcp.json'),
-  join(homedir(), '.claude.json'),
-  join(homedir(), '.mcp.json'),
+  ccodePath('.mcp.json'),
+  join(resolveHomeDir(), '.claude.json'),
+  join(resolveHomeDir(), '.mcp.json'),
 ]
 
 /** 从单个文件读取 MCP 配置，失败返回 null */

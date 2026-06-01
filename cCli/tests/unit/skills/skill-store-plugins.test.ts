@@ -1,8 +1,8 @@
 // tests/unit/skills/skill-store-plugins.test.ts
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { ccodePath } from '@platform/path-utils.js'
 
 // mock fast-glob 和 readFile
 vi.mock('fast-glob', () => ({ default: vi.fn() }))
@@ -39,8 +39,8 @@ function setupFgMock(config: {
 }): void {
   // 精确路径前缀：homedir()/.ccode/... 而非 includes(homedir())
   // 解决 CI 上 cwd=/home/runner/work/... 也包含 homedir=/home/runner 的问题
-  const userPluginsPrefix = join(homedir(), '.ccode', 'plugins').replace(/\\/g, '/')
-  const userSkillsPrefix = join(homedir(), '.ccode', 'skills').replace(/\\/g, '/')
+  const userPluginsPrefix = ccodePath('plugins').replace(/\\/g, '/')
+  const userSkillsPrefix = ccodePath('skills').replace(/\\/g, '/')
 
   mockedFg.mockImplementation(async (pattern: string | string[], options?: Record<string, unknown>) => {
     const p = Array.isArray(pattern) ? pattern[0]! : pattern
@@ -69,13 +69,13 @@ function setupFgMock(config: {
       return []
     }
 
-    // 用户级 skills（精确匹配 homedir/.ccode/skills 前缀）
-    if (p.includes('.ccode/skills') && p.startsWith(userSkillsPrefix)) {
+    // 用户级 skills（按 ccodeHome 下的 skills 目录前缀精确匹配，不依赖字面 .ccode）
+    if (p.startsWith(userSkillsPrefix)) {
       return config.userSkillFiles ?? []
     }
 
-    // 项目级 skills
-    if (p.includes('.ccode/skills')) {
+    // 项目级 skills（剩余命中 skills 目录的）
+    if (p.includes('skills')) {
       return config.projectSkillFiles ?? []
     }
 
@@ -89,7 +89,7 @@ describe('SkillStore 插件扫描', () => {
   })
 
   it('should_discover_plugin_skills_with_namespace', async () => {
-    const pluginDir = join(homedir(), '.ccode', 'plugins', 'superpowers')
+    const pluginDir = ccodePath('plugins', 'superpowers')
     const skillFile = join(pluginDir, 'skills', 'brainstorming', 'SKILL.md')
 
     setupFgMock({
@@ -117,8 +117,8 @@ describe('SkillStore 插件扫描', () => {
   })
 
   it('should_support_multiple_plugins_with_independent_namespaces', async () => {
-    const plugin1Dir = join(homedir(), '.ccode', 'plugins', 'alpha')
-    const plugin2Dir = join(homedir(), '.ccode', 'plugins', 'beta')
+    const plugin1Dir = ccodePath('plugins', 'alpha')
+    const plugin2Dir = ccodePath('plugins', 'beta')
     const skill1File = join(plugin1Dir, 'skills', 'task-a', 'SKILL.md')
     const skill2File = join(plugin2Dir, 'skills', 'task-b', 'SKILL.md')
 
@@ -147,9 +147,9 @@ describe('SkillStore 插件扫描', () => {
   })
 
   it('should_not_conflict_between_plugin_and_user_skills_with_same_base_name', async () => {
-    const pluginDir = join(homedir(), '.ccode', 'plugins', 'myplugin')
+    const pluginDir = ccodePath('plugins', 'myplugin')
     const pluginSkillFile = join(pluginDir, 'skills', 'deploy', 'SKILL.md')
-    const userSkillFile = join(homedir(), '.ccode', 'skills', 'deploy', 'SKILL.md')
+    const userSkillFile = ccodePath('skills', 'deploy', 'SKILL.md')
 
     setupFgMock({
       userPluginDirs: [pluginDir],
@@ -180,7 +180,7 @@ describe('SkillStore 插件扫描', () => {
   })
 
   it('should_handle_empty_plugin_directory_gracefully', async () => {
-    const pluginDir = join(homedir(), '.ccode', 'plugins', 'empty-plugin')
+    const pluginDir = ccodePath('plugins', 'empty-plugin')
 
     setupFgMock({
       userPluginDirs: [pluginDir],
@@ -197,8 +197,8 @@ describe('SkillStore 插件扫描', () => {
   })
 
   it('should_return_correct_plugin_dirs_from_getPluginDirs', async () => {
-    const plugin1 = join(homedir(), '.ccode', 'plugins', 'plugin-a')
-    const plugin2 = join(homedir(), '.ccode', 'plugins', 'plugin-b')
+    const plugin1 = ccodePath('plugins', 'plugin-a')
+    const plugin2 = ccodePath('plugins', 'plugin-b')
 
     setupFgMock({
       userPluginDirs: [plugin1, plugin2],
@@ -218,7 +218,7 @@ describe('SkillStore 插件扫描', () => {
   })
 
   it('should_get_single_skill_by_name', async () => {
-    const pluginDir = join(homedir(), '.ccode', 'plugins', 'test-plugin')
+    const pluginDir = ccodePath('plugins', 'test-plugin')
     const skillFile = join(pluginDir, 'skills', 'my-skill', 'SKILL.md')
 
     setupFgMock({

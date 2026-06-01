@@ -13,14 +13,14 @@
 import { Hono } from 'hono'
 import { existsSync, readFileSync, mkdirSync, rmSync, cpSync, readdirSync, writeFileSync, renameSync } from 'node:fs'
 import { join, basename } from 'node:path'
-import { homedir } from 'node:os'
 import fg from 'fast-glob'
+import { ccodePath, resolveHomeDir } from '../../platform/path-utils.js'
 import { dbg } from '../../debug.js'
 
 /** cCli 插件根目录 */
-const ccodePluginsDir = () => join(homedir(), '.ccode', 'plugins')
+const ccodePluginsDir = () => ccodePath('plugins')
 /** Claude Code 插件注册表 */
-const claudeInstalledPath = () => join(homedir(), '.claude', 'plugins', 'installed_plugins.json')
+const claudeInstalledPath = () => join(resolveHomeDir(), '.claude', 'plugins', 'installed_plugins.json')
 
 interface PluginInfo {
   name: string
@@ -128,7 +128,7 @@ export function createPluginsRoutes(): Hono {
         cwd: tempDir,
         timeout: 120_000,
         reject: false,
-        env: { ...process.env, HOME: homedir(), USERPROFILE: homedir() },
+        env: { ...process.env, HOME: resolveHomeDir(), USERPROFILE: resolveHomeDir() },
       })
 
       // npx skills 即使找不到 skill 也可能 exitCode=0，检查输出

@@ -7,13 +7,13 @@
  * M2 将迁移到 libSQL agent_registry 表。
  */
 import { readFile, writeFile, mkdir, rename } from 'node:fs/promises'
-import { join, dirname } from 'node:path'
-import { homedir } from 'node:os'
+import { dirname } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { ccodePath } from '../platform/path-utils.js'
 import type { TrustedAgent } from '../a2a/types.js'
 
 /** 默认存储路径（导出供 /a2a 命令同步读写时复用同一路径） */
-export const DEFAULT_FILE_PATH = join(homedir(), '.ccode', 'a2a-trusted.json')
+export const DEFAULT_FILE_PATH = ccodePath('a2a-trusted.json')
 
 /**
  * 对鉴权 token 进行脱敏处理。

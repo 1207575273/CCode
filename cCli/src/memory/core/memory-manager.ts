@@ -13,8 +13,8 @@
  */
 
 import { join } from 'node:path'
-import { homedir } from 'node:os'
 import { existsSync, mkdirSync } from 'node:fs'
+import { ccodePath } from '../../platform/path-utils.js'
 import type {
   IMemoryManager,
   MemoryEntry,
@@ -66,7 +66,7 @@ export class MemoryManager implements IMemoryManager {
     this.cwd = options.cwd
     this.embedding = options.embedding
     this.vectorStore = options.vectorStore
-    this.globalMemoryDir = join(homedir(), '.ccode', 'memory')
+    this.globalMemoryDir = ccodePath('memory')
     this.projectMemoryDir = join(options.cwd, '.ccode', 'memory')
     this.projectSlug = toProjectSlug(options.cwd)
 

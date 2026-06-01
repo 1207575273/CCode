@@ -32,7 +32,7 @@ import { createA2aDashboardRoutes } from './a2a-dashboard-api.js'
 import { broadcastToClients } from '../bridge/server.js'
 import { getSystemPromptSections } from '@core/bootstrap.js'
 import { FileStore } from '@memory/storage/file-store.js'
-import { homedir } from 'node:os'
+import { ccodePath } from '../../platform/path-utils.js'
 import { join } from 'node:path'
 import { writeImage, readImageBase64 } from '@core/image-store.js'
 import { eventBus } from '@core/event-bus.js'
@@ -614,7 +614,7 @@ export function createApiRoutes(): Hono {
 
       // 扫描文件系统中的记忆条目（无论是否有向量数据都返回）
       const fileStore = new FileStore()
-      const globalDir = join(homedir(), '.ccode', 'memory')
+      const globalDir = ccodePath('memory')
       const projectDir = join(process.cwd(), '.ccode', 'memory')
       const globalEntries = await fileStore.scan(globalDir, 'global')
       const projectEntries = await fileStore.scan(projectDir, 'project')

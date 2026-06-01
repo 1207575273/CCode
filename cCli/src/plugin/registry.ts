@@ -14,7 +14,7 @@
 
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { homedir } from 'node:os'
+import { ccodePath } from '../platform/path-utils.js'
 import { ToolRegistry } from '@tools/core/registry.js'
 import type { Tool } from '@tools/core/types.js'
 import { eventBus } from '@core/event-bus.js'
@@ -138,7 +138,7 @@ export class PluginRegistry {
     const paths: Array<{ path: string; source: 'npm' | 'user' | 'project' | 'config' }> = []
 
     // 1. 用户级插件目录
-    const userPluginsDir = join(homedir(), '.ccode', 'plugins')
+    const userPluginsDir = ccodePath('plugins')
     if (existsSync(userPluginsDir)) {
       for (const entry of readdirSync(userPluginsDir, { withFileTypes: true })) {
         if (!entry.isDirectory()) continue
@@ -193,7 +193,7 @@ export class PluginRegistry {
       loaded.plugin = plugin
 
       // 构建 PluginContext
-      const pluginDir = join(homedir(), '.ccode', 'plugins', plugin.name)
+      const pluginDir = ccodePath('plugins', plugin.name)
       const storagePath = join(pluginDir, 'storage.json')
 
       const context: PluginContext = {

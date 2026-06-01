@@ -9,8 +9,8 @@
 
 import { readFile } from 'node:fs/promises'
 import { join, dirname, basename, relative } from 'node:path'
-import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { ccodePath } from '../../platform/path-utils.js'
 import fg from 'fast-glob'
 import { parseSkillFile, toSkillMetadata } from './parser.js'
 import type { SkillMetadata } from './types.js'
@@ -25,7 +25,7 @@ function builtinSkillsDir(): string {
 
 /** 用户级 skills 目录 */
 function userSkillsDir(): string {
-  return join(homedir(), '.ccode', 'skills')
+  return ccodePath('skills')
 }
 
 /** 项目级 skills 目录 */
@@ -35,7 +35,7 @@ function projectSkillsDir(): string {
 
 /** 用户级插件目录 */
 export function userPluginsDir(): string {
-  return join(homedir(), '.ccode', 'plugins')
+  return ccodePath('plugins')
 }
 
 /** 项目级插件目录 */

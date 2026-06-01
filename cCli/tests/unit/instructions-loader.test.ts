@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { join, normalize, resolve } from 'node:path'
 import { homedir } from 'node:os'
+import { ccodeHome } from '@platform/path-utils.js'
 
 // 模拟 fs 和 child_process
 vi.mock('node:fs', () => ({
@@ -32,6 +33,8 @@ const mockExecSync = execSync as ReturnType<typeof vi.fn>
 const FAKE_CWD = normalize(resolve('/fake/project'))
 const FAKE_GIT_ROOT = normalize(resolve('/fake/project'))
 const FAKE_HOME = homedir()
+// 全局 .ccode 层经 ccodeHome() 解析（支持 CCODE_HOME 覆盖），与 instructions-loader 用同一路径源
+const FAKE_CCODE_HOME = ccodeHome()
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -53,12 +56,12 @@ describe('discoverInstructionFiles', () => {
   it('发现全局 CCODE.md（优先于 CLAUDE.md）', () => {
     mockExecSync.mockReturnValue(FAKE_GIT_ROOT + '\n')
     mockExistsSync.mockImplementation((p: string) => {
-      return p === join(FAKE_HOME, '.ccode', 'CCODE.md')
+      return p === join(FAKE_CCODE_HOME, 'CCODE.md')
     })
 
     const files = discoverInstructionFiles(FAKE_CWD)
     expect(files).toContainEqual({
-      path: normalize(resolve(join(FAKE_HOME, '.ccode', 'CCODE.md'))),
+      path: normalize(resolve(join(FAKE_CCODE_HOME, 'CCODE.md'))),
       level: 'global',
     })
   })

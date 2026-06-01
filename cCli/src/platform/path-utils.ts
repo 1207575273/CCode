@@ -4,6 +4,9 @@ import { homedir, tmpdir } from 'node:os'
 import { existsSync } from 'node:fs'
 import { detectPlatform } from './detector.js'
 
+/** 进程内 OS home 目录不变，缓存解析结果，避免收口后众多调用点重复同步 existsSync 探测。 */
+let _homeDirCache: string | undefined
+
 /**
  * 防御式解析真实 home 目录 —— 绝不依赖单一来源。
  *
@@ -15,8 +18,17 @@ import { detectPlatform } from './detector.js'
  *   1. os.homedir()
  *   2. Windows: %USERPROFILE% -> %HOMEDRIVE%%HOMEPATH%；类 Unix: $HOME
  *   3. 全部失败：返回 os.homedir() 原值（保持可预期），再兜底 os.tmpdir()
+ *
+ * 结果在进程内缓存（OS home 不随运行时变化）。注意：这里不读 CCODE_HOME，
+ * 因此缓存不影响 CCODE_HOME 覆盖（覆盖逻辑在 ccodeHome() 里，每次实时读取）。
  */
 export function resolveHomeDir(): string {
+  if (_homeDirCache !== undefined) return _homeDirCache
+  _homeDirCache = computeHomeDir()
+  return _homeDirCache
+}
+
+function computeHomeDir(): string {
   const fromOs = homedir()
   const candidates: (string | undefined)[] = [fromOs]
 
@@ -42,11 +54,26 @@ export function resolveHomeDir(): string {
  *
  * 支持 CCODE_HOME 环境变量显式覆盖：用于测试隔离（重定向到临时目录，
  * 避免污染真实 ~/.ccode）或特殊部署。覆盖值直接作为配置根，不再追加 .ccode。
+ *
+ * 注意：不缓存（每次实时读 CCODE_HOME，保留运行时可变）；但 home 部分复用
+ * memoized 的 resolveHomeDir()。又因部分调用点是模块级常量（如 sessionStore、
+ * DEFAULT_FILE_PATH、MCP_CONFIG_PATHS）在 import 期求值，CCODE_HOME 须在进程
+ * 启动前设置才能对它们全部生效。
  */
 export function ccodeHome(): string {
   const override = process.env['CCODE_HOME']
   if (override && override.trim()) return override
   return join(resolveHomeDir(), '.ccode')
+}
+
+/**
+ * 拼接 ccode 配置根下的子路径，是全仓访问 `~/.ccode/*` 的唯一出口。
+ *
+ * 用 `ccodePath('sessions')` 取代散落各处的 `join(homedir(), '.ccode', 'sessions')`，
+ * 使 CCODE_HOME 覆盖与防御式 home 解析对所有 .ccode 子路径统一生效（含测试隔离）。
+ */
+export function ccodePath(...segments: string[]): string {
+  return join(ccodeHome(), ...segments)
 }
 
 /**

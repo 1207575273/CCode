@@ -18,8 +18,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dbg } from '../debug.js'
 import { join, resolve, normalize } from 'node:path'
-import { homedir } from 'node:os'
 import { execSync } from 'node:child_process'
+import { ccodeHome, resolveHomeDir } from '../platform/path-utils.js'
 
 /** 单条已加载指令的元信息 */
 export interface LoadedInstruction {
@@ -85,8 +85,8 @@ export function discoverInstructionFiles(cwd: string): Array<{ path: string; lev
   }
 
   // 层级 1：全局用户级
-  addIfFound(join(homedir(), '.ccode'), 'global')
-  addIfFound(join(homedir(), '.claude'), 'global')
+  addIfFound(ccodeHome(), 'global')
+  addIfFound(join(resolveHomeDir(), '.claude'), 'global')
 
   // 获取 git root
   const gitRoot = findGitRoot(cwd)

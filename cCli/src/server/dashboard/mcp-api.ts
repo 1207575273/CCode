@@ -11,14 +11,14 @@
 import { Hono } from 'hono'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { homedir } from 'node:os'
 import { dbg } from '../../debug.js'
+import { ccodeHome, ccodePath, resolveHomeDir } from '../../platform/path-utils.js'
 
 /** MCP 配置文件搜索路径（按优先级从高到低） */
 const MCP_CONFIG_PATHS = [
-  { path: () => join(homedir(), '.ccode', '.mcp.json'), label: '~/.ccode/.mcp.json', writable: true },
-  { path: () => join(homedir(), '.claude.json'), label: '~/.claude.json', writable: false },
-  { path: () => join(homedir(), '.mcp.json'), label: '~/.mcp.json', writable: false },
+  { path: () => ccodePath('.mcp.json'), label: '~/.ccode/.mcp.json', writable: true },
+  { path: () => join(resolveHomeDir(), '.claude.json'), label: '~/.claude.json', writable: false },
+  { path: () => join(resolveHomeDir(), '.mcp.json'), label: '~/.mcp.json', writable: false },
 ]
 
 interface McpServerConfig {
@@ -67,7 +67,7 @@ export function createMcpRoutes(): Hono {
       }
 
       data.mcpServers[body.name] = body.config
-      mkdirSync(join(homedir(), '.ccode'), { recursive: true })
+      mkdirSync(ccodeHome(), { recursive: true })
       writeFileSync(ccodeMcpPath, JSON.stringify(data, null, 2), 'utf-8')
 
       return c.json({ success: true })
