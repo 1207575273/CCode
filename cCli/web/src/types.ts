@@ -67,7 +67,15 @@ export type ServerEvent =
         proc: { memPercent: number; memUsedBytes: number; cpuPercent: number; elapsedMs: number }
         token: { inputTokens: number; outputTokens: number; costByCurrency: Record<string, number>; callCount: number } | null
         context: { usedPercentage: number; level: string } | null
-        a2a?: { port: number; baseUrl: string; projectName: string } | null
+        a2a?: {
+          port: number
+          baseUrl: string
+          projectName: string
+          inbound?: {
+            active: number
+            recent: Array<{ taskId: string; messagePreview: string; caller?: { port?: number; projectName?: string }; startedAt: string; state: 'running' | 'completed' | 'failed'; endedAt?: string; durationMs?: number }>
+          }
+        } | null
       }
     }
 

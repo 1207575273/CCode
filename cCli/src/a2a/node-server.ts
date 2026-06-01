@@ -32,8 +32,18 @@ export function getLanHost(): string {
 }
 import { createA2ARoutes } from '../server/a2a-routes.js'
 import { executeA2ATask, type RunLoopFn } from './server-executor.js'
+import { recordInbound, previewMessage } from './inbound-recorder.js'
+import { mirrorInboundToUI } from './inbound-ui-mirror.js'
+import { getInboundActivity, type InboundCaller } from './node-status.js'
 import { buildLocalAgentCard } from './agent-card-builder.js'
 import { InstanceRegistry } from './instance-registry.js'
+
+/** 把发起方标识格式化成卡片来源简写（项目名 > 端口 > "远程"） */
+function formatCallerName(caller: InboundCaller | undefined): string {
+  if (caller?.projectName) return caller.projectName
+  if (caller?.port !== undefined) return `:${caller.port}`
+  return '远程'
+}
 
 /** 心跳间隔（与 instance-registry 的 30s 过期判定配套，留足余量） */
 const HEARTBEAT_INTERVAL_MS = 10_000
@@ -92,15 +102,31 @@ export function startA2ANode(deps: A2ANodeDeps): A2ANodeHandle {
       // 覆盖为局域网完整地址，供其他机器/会话连接
       url: `http://${host}:${port}`,
     }),
-    runTask: ({ message, taskId, contextId }) =>
-      executeA2ATask({
-        message,
-        taskId,
-        contextId,
-        runLoop: deps.runLoop,
-        signal: new AbortController().signal,
-      }),
+    // 两层包装（都不打断本会话主对话，inbound 任务仍在后台 sidechain 执行）：
+    //   recordInbound      —— 记录"被调用"这件事，供 StatusBar / Agent 网格页展示
+    //   mirrorInboundToUI  —— 把 sidechain 的 AgentEvent 镜像成 subagent 卡片，
+    //                         让被调方像发起方一样看到执行过程（CLI 状态卡 + Web 时间轴）
+    runTask: ({ message, taskId, contextId, caller }) => {
+      const agentId = `a2a-in-${taskId.slice(0, 8)}`
+      const name = `来自 ${formatCallerName(caller)} 的委托`
+      const description = previewMessage(message)
+      const mirroredRunLoop: RunLoopFn = (msg, signal) =>
+        mirrorInboundToUI({ agentId, name, description }, deps.runLoop(msg, signal))
+
+      return recordInbound(
+        { taskId, message, ...(caller ? { caller } : {}) },
+        executeA2ATask({
+          message,
+          taskId,
+          contextId,
+          runLoop: mirroredRunLoop,
+          signal: new AbortController().signal,
+        }),
+      )
+    },
     genId: () => randomUUID(),
+    // 暴露本进程 inbound 活动，供 Dashboard 跨进程聚合本机网格全景
+    getInboundActivity: () => getInboundActivity(),
   })
 
   // 动态端口（port 0 由系统分配）

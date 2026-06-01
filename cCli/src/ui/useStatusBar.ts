@@ -21,7 +21,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { totalmem, freemem, cpus } from 'node:os'
 import { eventBus } from '@core/event-bus.js'
 import type { StatusBarPayload } from '@core/event-bus.js'
-import { getLocalA2ANode } from '../a2a/node-status.js'
+import { getLocalA2ANode, getInboundActivity } from '../a2a/node-status.js'
+import type { InboundActivity } from '../a2a/node-status.js'
 
 // ═══════════════════════════════════════════════
 // 常量
@@ -65,6 +66,8 @@ export interface StatusBarData {
   elapsedMs: number
   /** 本会话 A2A 节点状态（非 null 表示当前可被 A2A 连接） */
   a2aNode?: { port: number; baseUrl: string; projectName: string } | null
+  /** 本会话 inbound 被调活动（被调方可见反馈），非节点时为 null */
+  a2aInbound?: InboundActivity | null
 }
 
 /** Token 统计快照（用于 eventBus 推送） */
@@ -196,6 +199,8 @@ export function useStatusBar(options: UseStatusBarOptions): StatusBarData | null
       const elapsed = accumulatedMsRef.current + (Date.now() - sessionStartTimeRef.current)
 
       const a2aNode = getLocalA2ANode()
+      // inbound 活动仅对 A2A 节点有意义（非节点不接收 inbound）
+      const a2aInbound = a2aNode ? getInboundActivity() : null
       const next: StatusBarData = {
         sysMemPercent: clamp100(sysMemPercent),
         sysMemUsedBytes: sysUsedMem,
@@ -207,6 +212,7 @@ export function useStatusBar(options: UseStatusBarOptions): StatusBarData | null
         cpuCoreCount: coreCount,
         elapsedMs: elapsed,
         a2aNode,
+        a2aInbound,
       }
 
       setData(next)
@@ -237,7 +243,8 @@ export function useStatusBar(options: UseStatusBarOptions): StatusBarData | null
           usedPercentage: ctxState.usedPercentage,
           level: ctxState.level,
         } : null,
-        a2a: a2aNode,
+        // 节点信息 + inbound 被调活动一并推给 Web 端
+        a2a: a2aNode ? { ...a2aNode, ...(a2aInbound ? { inbound: a2aInbound } : {}) } : null,
       }
       eventBus.emit({ type: 'status_bar', data: payload })
 

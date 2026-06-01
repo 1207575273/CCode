@@ -1,6 +1,7 @@
 // tests/unit/StatusBar.test.ts
 import { describe, it, expect } from 'vitest'
-import { renderBar, barColor, formatBytes, formatElapsed, formatTokenCount } from '../../src/ui/StatusBar.js'
+import { renderBar, barColor, formatBytes, formatElapsed, formatTokenCount, formatInboundCaller, formatInboundLabel } from '../../src/ui/StatusBar.js'
+import type { InboundActivity } from '../../src/a2a/node-status.js'
 
 describe('renderBar', () => {
   it('0% 全空', () => {
@@ -68,5 +69,82 @@ describe('formatTokenCount', () => {
 
   it('M 缩写', () => {
     expect(formatTokenCount(2_500_000)).toBe('2.5M')
+  })
+})
+
+describe('formatInboundCaller', () => {
+  it('有项目名时显示项目名', () => {
+    expect(formatInboundCaller({ projectName: 'web', port: 54751 })).toBe('web')
+  })
+
+  it('仅端口时显示端口', () => {
+    expect(formatInboundCaller({ port: 54751 })).toBe(':54751')
+  })
+
+  it('无 caller 时显示远程', () => {
+    expect(formatInboundCaller(undefined)).toBe('远程')
+  })
+})
+
+describe('formatInboundLabel', () => {
+  const NOW = 1000_000
+
+  it('无活动返回 null', () => {
+    const activity: InboundActivity = { active: 0, recent: [] }
+    expect(formatInboundLabel(activity, NOW)).toBeNull()
+  })
+
+  it('单个执行中显示来源 + 执行中（cyan）', () => {
+    const activity: InboundActivity = {
+      active: 1,
+      recent: [{ taskId: 't1', messagePreview: 'hi', state: 'running', startedAt: '', caller: { projectName: 'web' } }],
+    }
+    const label = formatInboundLabel(activity, NOW)
+    expect(label?.text).toContain('被调')
+    expect(label?.text).toContain('web')
+    expect(label?.text).toContain('执行中')
+    expect(label?.color).toBe('cyan')
+  })
+
+  it('多个执行中显示计数', () => {
+    const activity: InboundActivity = {
+      active: 2,
+      recent: [
+        { taskId: 't2', messagePreview: 'b', state: 'running', startedAt: '' },
+        { taskId: 't1', messagePreview: 'a', state: 'running', startedAt: '' },
+      ],
+    }
+    expect(formatInboundLabel(activity, NOW)?.text).toContain('2')
+  })
+
+  it('最近完成（60s 内）显示完成 + 相对时间（green）', () => {
+    const endedAt = new Date(NOW - 3000).toISOString()
+    const activity: InboundActivity = {
+      active: 0,
+      recent: [{ taskId: 't1', messagePreview: 'hi', state: 'completed', startedAt: '', endedAt, durationMs: 1000, caller: { projectName: 'web' } }],
+    }
+    const label = formatInboundLabel(activity, NOW)
+    expect(label?.text).toContain('完成')
+    expect(label?.color).toBe('green')
+  })
+
+  it('最近失败显示失败（red）', () => {
+    const endedAt = new Date(NOW - 1000).toISOString()
+    const activity: InboundActivity = {
+      active: 0,
+      recent: [{ taskId: 't1', messagePreview: 'hi', state: 'failed', startedAt: '', endedAt, durationMs: 1000 }],
+    }
+    const label = formatInboundLabel(activity, NOW)
+    expect(label?.text).toContain('失败')
+    expect(label?.color).toBe('red')
+  })
+
+  it('超过 60s 的完成记录不再显示', () => {
+    const endedAt = new Date(NOW - 61_000).toISOString()
+    const activity: InboundActivity = {
+      active: 0,
+      recent: [{ taskId: 't1', messagePreview: 'hi', state: 'completed', startedAt: '', endedAt, durationMs: 1000 }],
+    }
+    expect(formatInboundLabel(activity, NOW)).toBeNull()
   })
 })

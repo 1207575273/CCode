@@ -17,6 +17,24 @@ import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { collectA2ATask } from '../a2a/server-executor.js'
 import type { AgentCard, A2AStreamEvent } from '../a2a/types.js'
+import { CALLER_METADATA_KEY, type InboundCaller, type InboundActivity } from '../a2a/node-status.js'
+
+/**
+ * 从 message.metadata 提取发起方身份（块 2 透传）。
+ * 容错：字段缺失/类型不符时返回 undefined，不构造空对象（exactOptionalPropertyTypes）。
+ */
+function extractCaller(message: Record<string, unknown> | undefined): InboundCaller | undefined {
+  const metadata = message?.['metadata'] as Record<string, unknown> | undefined
+  const raw = metadata?.[CALLER_METADATA_KEY] as Record<string, unknown> | undefined
+  if (!raw || typeof raw !== 'object') return undefined
+  const port = typeof raw['port'] === 'number' ? (raw['port'] as number) : undefined
+  const projectName = typeof raw['projectName'] === 'string' ? (raw['projectName'] as string) : undefined
+  if (port === undefined && projectName === undefined) return undefined
+  return {
+    ...(port !== undefined ? { port } : {}),
+    ...(projectName !== undefined ? { projectName } : {}),
+  }
+}
 
 // ──────────────────────────────────────────
 // 依赖注入接口
@@ -29,9 +47,14 @@ export interface A2ARoutesDeps {
    * 执行一个 A2A 任务，产出流式事件序列。
    * 内部接 server-executor.executeA2ATask。
    */
-  runTask: (params: { message: string; taskId: string; contextId: string }) => AsyncGenerator<A2AStreamEvent>
+  runTask: (params: { message: string; taskId: string; contextId: string; caller?: InboundCaller }) => AsyncGenerator<A2AStreamEvent>
   /** 生成唯一 ID（注入便于测试） */
   genId?: () => string
+  /**
+   * 返回本节点 inbound 被调活动（被调方可见反馈）。
+   * 供 Dashboard 跨进程聚合：dashboard 拉取每个本机节点的该端点拼出全景。
+   */
+  getInboundActivity?: () => InboundActivity
 }
 
 // ──────────────────────────────────────────
@@ -64,6 +87,12 @@ export function createA2ARoutes(deps: A2ARoutesDeps): Hono {
     return c.json(getAgentCard())
   })
 
+  // ── inbound 被调活动端点（供 Dashboard 跨进程聚合本机网格全景） ──
+  app.get('/a2a/inbound-activity', (c) => {
+    const activity = deps.getInboundActivity?.() ?? { active: 0, recent: [] }
+    return c.json(activity)
+  })
+
   // ── 2. JSON-RPC 处理器（提取为共享函数，多个路径复用） ──
   // SDK 的 JsonRpcTransport 默认 POST 到 agentCard.url 根路径（即 /），
   // 旧版用 /a2a/rpc，两个路径都要支持。
@@ -86,11 +115,13 @@ export function createA2ARoutes(deps: A2ARoutesDeps): Hono {
     }
 
     // 从 params.message.parts 提取第一个 text part 作为 message
-    const msgParts = (params?.['message'] as Record<string, unknown> | undefined)?.['parts'] as
-      | Array<Record<string, unknown>>
-      | undefined
+    const messageObj = params?.['message'] as Record<string, unknown> | undefined
+    const msgParts = messageObj?.['parts'] as Array<Record<string, unknown>> | undefined
     const messageText = msgParts?.find((p) => p['kind'] === 'text')?.['text'] as string | undefined
     const message = messageText ?? ''
+
+    // 发起方身份（块 2 透传，缺省时为 undefined）
+    const caller = extractCaller(messageObj)
 
     // contextId：优先取 params，无则生成
     const contextId = (params?.['contextId'] as string | undefined) ?? genId()
@@ -99,7 +130,7 @@ export function createA2ARoutes(deps: A2ARoutesDeps): Hono {
     // ── method/send：收集流事件，同步返回最终 Task ──
     if (method === 'message/send') {
       try {
-        const stream = runTask({ message, taskId, contextId })
+        const stream = runTask({ message, taskId, contextId, ...(caller ? { caller } : {}) })
         const task = await collectA2ATask(stream)
         return c.json(rpcOk(id, task))
       } catch (err) {
@@ -112,7 +143,7 @@ export function createA2ARoutes(deps: A2ARoutesDeps): Hono {
     if (method === 'message/stream') {
       return streamSSE(c, async (stream) => {
         try {
-          for await (const evt of runTask({ message, taskId, contextId })) {
+          for await (const evt of runTask({ message, taskId, contextId, ...(caller ? { caller } : {}) })) {
             await stream.writeSSE({
               data: JSON.stringify(rpcOk(id, evt)),
             })

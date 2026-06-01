@@ -27,7 +27,7 @@ function fakeAgentCard(): AgentCard {
 }
 
 /** fake runTask：依次 yield task -> status(working) -> artifact-update -> status(completed, final) */
-async function* fakeRunTask(_params: { message: string; taskId: string; contextId: string }): AsyncGenerator<A2AStreamEvent> {
+async function* fakeRunTask(_params: { message: string; taskId: string; contextId: string; caller?: { port?: number; projectName?: string } }): AsyncGenerator<A2AStreamEvent> {
   yield {
     kind: 'task',
     id: _params.taskId,
@@ -230,5 +230,46 @@ describe('createA2ARoutes', () => {
     expect(runTask).toHaveBeenCalledOnce()
     const callArg = runTask.mock.calls[0]?.[0]
     expect(callArg?.message).toBe('执行任务A')
+  })
+
+  // 7. 从 message.metadata['ccode:caller'] 提取发起方身份透传给 runTask
+  it('should_extract_caller_from_message_metadata', async () => {
+    const runTask = vi.fn(fakeRunTask)
+    const app = createA2ARoutes({ getAgentCard: fakeAgentCard, runTask, genId: () => 'id-c' })
+
+    await app.request('/a2a/rpc', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'message/send',
+        id: 1,
+        params: {
+          message: {
+            kind: 'message',
+            messageId: 'm1',
+            role: 'user',
+            parts: [{ kind: 'text', text: 'hi' }],
+            metadata: { 'ccode:caller': { port: 54751, projectName: 'web' } },
+          },
+        },
+      }),
+    })
+
+    expect(runTask.mock.calls[0]?.[0]?.caller).toEqual({ port: 54751, projectName: 'web' })
+  })
+
+  // 8. 无 metadata 时 caller 为 undefined（不构造空对象）
+  it('should_pass_undefined_caller_when_no_metadata', async () => {
+    const runTask = vi.fn(fakeRunTask)
+    const app = createA2ARoutes({ getAgentCard: fakeAgentCard, runTask, genId: () => 'id-n' })
+
+    await app.request('/a2a/rpc', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: buildRpcBody('message/send', 1, '无来源'),
+    })
+
+    expect(runTask.mock.calls[0]?.[0]?.caller).toBeUndefined()
   })
 })

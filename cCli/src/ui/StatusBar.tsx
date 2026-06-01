@@ -21,6 +21,10 @@ import type { StatusBarData } from './useStatusBar.js'
 import { BAR_WIDTH, THRESHOLD_WARNING, THRESHOLD_CRITICAL } from './useStatusBar.js'
 import type { SessionCostStats } from '@observability/token-meter.js'
 import type { ContextWindowState } from '@core/context-tracker.js'
+import type { InboundActivity, InboundCaller } from '../a2a/node-status.js'
+
+/** "最近被调用"提示的存活窗口：终态后超过此时长不再显示 */
+const INBOUND_RECENT_WINDOW_MS = 60_000
 
 // ═══════════════════════════════════════════════
 // 类型
@@ -100,6 +104,48 @@ function formatTokenCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1000) return `${(n / 1000).toFixed(1)}K`
   return String(n)
+}
+
+/** 把发起方标识格式化成简短来源（项目名 > 端口 > "远程"） */
+function formatInboundCaller(caller: InboundCaller | undefined): string {
+  if (caller?.projectName) return caller.projectName
+  if (caller?.port !== undefined) return `:${caller.port}`
+  return '远程'
+}
+
+/** 相对时间简写：60s 内显示秒，否则显示分 */
+function relativeShort(ms: number): string {
+  const secs = Math.max(0, Math.floor(ms / 1000))
+  if (secs < 60) return `${secs}秒前`
+  return `${Math.floor(secs / 60)}分前`
+}
+
+/**
+ * 把 inbound 活动格式化成状态栏标签（被调方可见反馈）。
+ * - 有进行中任务：显示来源 + "执行中"（cyan）
+ * - 否则最近 60s 内有终态记录：显示来源 + 相对时间 + 完成/失败（green/red）
+ * - 再否则：返回 null（不显示）
+ */
+function formatInboundLabel(
+  activity: InboundActivity,
+  now: number,
+): { text: string; color: 'cyan' | 'green' | 'red' } | null {
+  if (activity.active > 0) {
+    if (activity.active === 1) {
+      const running = activity.recent.find((t) => t.state === 'running')
+      return { text: `被调 ${formatInboundCaller(running?.caller)} 执行中`, color: 'cyan' }
+    }
+    return { text: `被调 ${activity.active} 个执行中`, color: 'cyan' }
+  }
+
+  const last = activity.recent[0]
+  if (!last || !last.endedAt) return null
+  const ageMs = now - new Date(last.endedAt).getTime()
+  if (ageMs > INBOUND_RECENT_WINDOW_MS) return null
+
+  const verb = last.state === 'completed' ? '完成' : '失败'
+  const color = last.state === 'completed' ? 'green' : 'red'
+  return { text: `被调 ${formatInboundCaller(last.caller)} ${relativeShort(ageMs)} ${verb}`, color }
 }
 
 // ═══════════════════════════════════════════════
@@ -261,6 +307,18 @@ function buildInfoSegments(
     })
   }
 
+  // A2A inbound：本会话被远程调用时（被调方可见反馈），显示来源 + 状态
+  if (data.a2aInbound) {
+    const label = formatInboundLabel(data.a2aInbound, Date.now())
+    if (label) {
+      segments.push({
+        key: 'a2a-inbound',
+        width: label.text.length,
+        render: () => <Text color={label.color}>{label.text}</Text>,
+      })
+    }
+  }
+
   return segments
 }
 
@@ -333,4 +391,4 @@ export function StatusBar({ data, tokenStats, contextState, terminalWidth }: Sta
 }
 
 // 导出供测试使用
-export { renderBar, barColor, formatBytes, formatElapsed, formatTokenCount }
+export { renderBar, barColor, formatBytes, formatElapsed, formatTokenCount, formatInboundCaller, formatInboundLabel }

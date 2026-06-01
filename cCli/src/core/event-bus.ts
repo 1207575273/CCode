@@ -1,6 +1,7 @@
 // src/core/event-bus.ts
 
 import type { AgentEvent } from './agent-events.js'
+import type { InboundActivity } from '../a2a/node-status.js'
 import { dbg } from '../debug.js'
 
 /** 状态栏推送数据 */
@@ -32,6 +33,8 @@ export interface StatusBarPayload {
     port: number
     baseUrl: string
     projectName: string
+    /** inbound 被调活动（被调方可见反馈），无活动时缺省 */
+    inbound?: InboundActivity
   } | null
 }
 

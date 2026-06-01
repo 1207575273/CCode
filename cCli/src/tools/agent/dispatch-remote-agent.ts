@@ -25,6 +25,7 @@ import type { TrustedAgent, A2AStreamEvent, A2ADispatchResult, TaskState } from 
 import { INTERRUPT_TASK_STATES } from '../../a2a/types.js'
 import { InstanceRegistry } from '../../a2a/instance-registry.js'
 import type { InstanceCard } from '../../a2a/instance-registry.js'
+import { getLocalA2ANode, CALLER_METADATA_KEY } from '../../a2a/node-status.js'
 
 // ═══════════════════════════════════════════════
 // 可注入依赖（便于测试）
@@ -32,7 +33,7 @@ import type { InstanceCard } from '../../a2a/instance-registry.js'
 
 /** 远端客户端最小接口 — 生产用 A2AClientWrapper，测试可注入 fake */
 export interface RemoteAgentClient {
-  sendMessageStream(text: string, contextId?: string): AsyncGenerator<A2AStreamEvent>
+  sendMessageStream(text: string, contextId?: string, metadata?: Record<string, unknown>): AsyncGenerator<A2AStreamEvent>
   cancelTask(taskId: string): Promise<void>
 }
 
@@ -192,7 +193,8 @@ export class DispatchRemoteAgentTool implements StreamableTool {
 
     try {
       const client = await this.createClient(trusted)
-      const stream = client.sendMessageStream(message, contextIdArg)
+      // 透传本会话身份，让被调方知道"谁调用了我"（块 2 被调方可见反馈）
+      const stream = client.sendMessageStream(message, contextIdArg, buildCallerMetadata())
 
       for await (const raw of stream) {
         const evt = mapToA2AEvent(raw, Date.now())
@@ -305,6 +307,17 @@ export class DispatchRemoteAgentTool implements StreamableTool {
 // ═══════════════════════════════════════════════
 // 辅助
 // ═══════════════════════════════════════════════
+
+/**
+ * 构造发起方身份 metadata（块 2：被调方可见反馈）。
+ * 读本会话 A2A 节点状态（端口 + 项目名）放进 message.metadata，
+ * 被调方据此显示"收到来自 <谁> 的任务"。本会话不是 A2A 节点时返回 undefined。
+ */
+function buildCallerMetadata(): Record<string, unknown> | undefined {
+  const node = getLocalA2ANode()
+  if (!node) return undefined
+  return { [CALLER_METADATA_KEY]: { port: node.port, projectName: node.projectName } }
+}
 
 /** 从 artifact.parts 提取并拼接 text */
 function extractArtifactText(artifact: { parts: Array<{ kind: string; text?: string }> }): string {

@@ -21,6 +21,21 @@ import { apiGet } from '../hooks/useApi'
 
 // ═══ 类型定义 ═══
 
+/** inbound 被调活动（与 CLI 端 node-status.InboundActivity 对齐） */
+export interface InboundTask {
+  taskId: string
+  messagePreview: string
+  caller?: { port?: number; projectName?: string }
+  startedAt: string
+  state: 'running' | 'completed' | 'failed'
+  endedAt?: string
+  durationMs?: number
+}
+export interface InboundActivity {
+  active: number
+  recent: InboundTask[]
+}
+
 /** 本机活跃会话（lockfile 发现） */
 export interface LocalAgent {
   sessionId: string
@@ -34,6 +49,8 @@ export interface LocalAgent {
   osUser: string
   startedAt: string      // ISO
   lastHeartbeat: string  // ISO
+  /** inbound 被调活动（dashboard 跨进程聚合，无活动时缺省） */
+  inbound?: InboundActivity
 }
 
 /** 远程已信任 Agent */
@@ -79,6 +96,20 @@ function shortCwd(cwd: string): string {
   // 兼容 / 和 \ 分隔符
   const parts = cwd.replace(/\\/g, '/').split('/')
   return parts[parts.length - 1] ?? cwd
+}
+
+/** 发起方来源简写（项目名 > 端口 > "远程"，与 CLI 端一致） */
+function formatInboundCaller(caller: InboundTask['caller']): string {
+  if (caller?.projectName) return caller.projectName
+  if (caller?.port !== undefined) return `:${caller.port}`
+  return '远程'
+}
+
+/** inbound 单条状态的中文 + 配色 */
+function inboundStateMeta(state: InboundTask['state']): { label: string; cls: string } {
+  if (state === 'running') return { label: '执行中', cls: 'text-accent' }
+  if (state === 'completed') return { label: '完成', cls: 'text-success' }
+  return { label: '失败', cls: 'text-error' }
 }
 
 // ═══ 子组件：本机会话卡片 ═══
@@ -161,6 +192,43 @@ function LocalAgentCard({ agent }: LocalCardProps) {
         <span>心跳：{relativeTime(agent.lastHeartbeat)}</span>
         <span>PID {agent.pid}</span>
       </div>
+
+      {/* inbound 被调活动（被调方可见反馈） */}
+      <InboundActivityBlock inbound={agent.inbound} />
+    </div>
+  )
+}
+
+// ═══ 子组件：inbound 被调活动 ═══
+
+interface InboundActivityBlockProps {
+  inbound?: InboundActivity
+}
+
+/** 展示该会话最近被其他会话/Agent 调用的记录（最多 5 条） */
+function InboundActivityBlock({ inbound }: InboundActivityBlockProps) {
+  if (!inbound || inbound.recent.length === 0) return null
+
+  return (
+    <div className="mt-1 pt-2 border-t border-border-subtle space-y-1">
+      <div className="flex items-center gap-2 text-xs">
+        <span className="text-txt-secondary">被调用</span>
+        {inbound.active > 0 && (
+          <span className="px-1.5 py-0.5 rounded bg-accent/10 text-accent">{inbound.active} 个执行中</span>
+        )}
+      </div>
+      <ul className="space-y-0.5">
+        {inbound.recent.slice(0, 5).map((t) => {
+          const meta = inboundStateMeta(t.state)
+          return (
+            <li key={t.taskId} className="flex items-center gap-2 text-[11px] text-txt-muted">
+              <span className={`${meta.cls} shrink-0`}>{meta.label}</span>
+              <span className="text-txt-secondary shrink-0" title="发起方">{formatInboundCaller(t.caller)}</span>
+              <span className="truncate" title={t.messagePreview}>{t.messagePreview}</span>
+            </li>
+          )
+        })}
+      </ul>
     </div>
   )
 }

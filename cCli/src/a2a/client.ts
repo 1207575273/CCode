@@ -43,10 +43,15 @@ function makeBearerFetch(token: string): typeof fetch {
 // ── 内部工具函数 ─────────────────────────────────────────────────────────────
 
 /**
- * 把调用方传入的 text（和可选 contextId）封装成 A2A MessageSendParams。
- * exactOptionalPropertyTypes：contextId 存在时才展开，不赋 undefined。
+ * 把调用方传入的 text（和可选 contextId / metadata）封装成 A2A MessageSendParams。
+ * exactOptionalPropertyTypes：可选字段存在时才展开，不赋 undefined。
+ * metadata 用于透传发起方身份等扩展信息（A2A extension 约定）。
  */
-function buildSendParams(text: string, contextId?: string): MessageSendParams {
+function buildSendParams(
+  text: string,
+  contextId?: string,
+  metadata?: Record<string, unknown>,
+): MessageSendParams {
   return {
     message: {
       kind: 'message',
@@ -54,6 +59,7 @@ function buildSendParams(text: string, contextId?: string): MessageSendParams {
       role: 'user',
       parts: [{ kind: 'text', text }],
       ...(contextId !== undefined ? { contextId } : {}),
+      ...(metadata !== undefined ? { metadata } : {}),
     },
   }
 }
@@ -142,18 +148,20 @@ export class A2AClientWrapper {
   /**
    * 发送单次消息，等待终态结果。
    * 返回 Message（轻量响应）或 Task（异步任务）。
+   * @param metadata 可选，透传发起方身份等扩展信息到 message.metadata。
    */
-  async sendMessage(text: string, contextId?: string): Promise<A2ASendResult> {
-    const params = buildSendParams(text, contextId)
+  async sendMessage(text: string, contextId?: string, metadata?: Record<string, unknown>): Promise<A2ASendResult> {
+    const params = buildSendParams(text, contextId, metadata)
     return this.client.sendMessage(params) as Promise<A2ASendResult>
   }
 
   /**
    * 流式发送消息，yield 底层 SDK 的每一个 A2AStreamEventData。
    * 调用方负责判断终态（TERMINAL_TASK_STATES）并停止消费。
+   * @param metadata 可选，透传发起方身份等扩展信息到 message.metadata。
    */
-  async *sendMessageStream(text: string, contextId?: string): AsyncGenerator<A2AStreamEvent> {
-    const params = buildSendParams(text, contextId)
+  async *sendMessageStream(text: string, contextId?: string, metadata?: Record<string, unknown>): AsyncGenerator<A2AStreamEvent> {
+    const params = buildSendParams(text, contextId, metadata)
     const gen = this.client.sendMessageStream(params)
     for await (const event of gen) {
       yield event as A2AStreamEvent

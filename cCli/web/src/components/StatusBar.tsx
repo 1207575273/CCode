@@ -43,7 +43,27 @@ interface StatusBarData {
     port: number
     baseUrl: string
     projectName: string
+    inbound?: InboundActivity
   } | null
+}
+
+/** inbound 被调活动（与 CLI 端 node-status.InboundActivity 对齐） */
+interface InboundCaller {
+  port?: number
+  projectName?: string
+}
+interface InboundTask {
+  taskId: string
+  messagePreview: string
+  caller?: InboundCaller
+  startedAt: string
+  state: 'running' | 'completed' | 'failed'
+  endedAt?: string
+  durationMs?: number
+}
+interface InboundActivity {
+  active: number
+  recent: InboundTask[]
 }
 
 interface StatusBarProps {
@@ -85,6 +105,39 @@ function formatTokenCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1000) return `${(n / 1000).toFixed(1)}K`
   return String(n)
+}
+
+/** "最近被调用"提示存活窗口 */
+const INBOUND_RECENT_WINDOW_MS = 60_000
+
+/** 发起方来源简写（项目名 > 端口 > "远程"，与 CLI 端一致） */
+function formatInboundCaller(caller: InboundCaller | undefined): string {
+  if (caller?.projectName) return caller.projectName
+  if (caller?.port !== undefined) return `:${caller.port}`
+  return '远程'
+}
+
+/** inbound 活动 -> 状态栏标签（与 CLI 端 formatInboundLabel 一致） */
+function formatInboundLabel(
+  activity: InboundActivity | undefined,
+  now: number,
+): { text: string; cls: string } | null {
+  if (!activity) return null
+  if (activity.active > 0) {
+    const text = activity.active === 1
+      ? `被调 ${formatInboundCaller(activity.recent.find((t) => t.state === 'running')?.caller)} 执行中`
+      : `被调 ${activity.active} 个执行中`
+    return { text, cls: 'text-accent' }
+  }
+  const last = activity.recent[0]
+  if (!last || !last.endedAt) return null
+  const ageMs = now - new Date(last.endedAt).getTime()
+  if (ageMs > INBOUND_RECENT_WINDOW_MS) return null
+  const secs = Math.max(0, Math.floor(ageMs / 1000))
+  const age = secs < 60 ? `${secs}秒前` : `${Math.floor(secs / 60)}分前`
+  const verb = last.state === 'completed' ? '完成' : '失败'
+  const cls = last.state === 'completed' ? 'text-success' : 'text-error'
+  return { text: `被调 ${formatInboundCaller(last.caller)} ${age} ${verb}`, cls }
 }
 
 // ═══════════════════════════════════════════════
@@ -197,6 +250,18 @@ export function StatusBar({ data }: StatusBarProps) {
             </span>
           </>
         )}
+        {a2a && (() => {
+          const label = formatInboundLabel(a2a.inbound, Date.now())
+          if (!label) return null
+          return (
+            <>
+              <Sep />
+              <span className={`${label.cls} font-semibold`} title="本会话被其他会话/Agent 通过 A2A 调用">
+                {label.text}
+              </span>
+            </>
+          )
+        })()}
       </div>
     </div>
   )
