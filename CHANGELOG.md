@@ -4,6 +4,30 @@
 
 ---
 
+## [1.0.0] - 2026-06-16
+
+首个稳定大版本。核心是从无到有引入 **A2A（Agent2Agent）分布式 Agent 协作**子系统，并完成配置与路径管理的基础重构。
+
+### Added
+
+- **A2A 协议支持（全新子系统）**
+  - **客户端（M1）**：`dispatch_remote_agent` 工具 + 信任白名单 + `/a2a` 命令（list/add/remove），可把任务委托给其他 Agent。
+  - **本机会话网格（M2）**：每个会话起独立 A2A 节点（动态端口），基于 `~/.ccode/instances/` lockfile 自动发现，带心跳与孤儿清理；本机会话之间用 `127.0.0.1` 互相委托。
+  - **标准 A2A Server 端点**：`/.well-known/agent-card.json`（AgentCard 声明 `preferredTransport: JSONRPC`、protocolVersion 0.3.0）+ JSON-RPC `message/send`、`message/stream`(SSE) + 任务生命周期 `tasks/get`、`tasks/cancel`、`tasks/resubscribe`；新增 `task-store` 维护 taskId→Task 映射（终态不可变 + TTL 清理 + 可取消）。
+  - **被调方可见反馈（双向可观测）**：被调方被远程调用时不再静默——状态栏轻量提示"被调 <来源> 执行中/完成"，并复用 SubAgent 卡片展示 inbound 执行过程（CLI 状态卡 + Web 完整时间轴）；发起方身份经 `message.metadata` 透传。守住"不打断主对话"底线（独立卡片，不注入历史）。
+  - **Web Agent 网格页 `/agents`**：本机会话 + 远程 Agent 列表/拓扑图、跨进程 inbound 活动聚合、每节点标准端点浮层（地址可复制、可打开真实 AgentCard）。
+- **配置 YAML 支持**：`config.json` → `config.yml` 迁移，双通道解析 + 迁移闸（写回校验无损才切换）+ 字段注释，支持 `CCODE_HOME` 覆盖。
+
+### Changed
+
+- **路径管理收口**：新增 `ccodeHome()`/`ccodePath()` 作为 `~/.ccode/*` 唯一出口，全仓 18 处散落路径收敛；`resolveHomeDir()` 多源防御式解析真实 home 并 memoize。
+
+### Fixed
+
+- 本机 A2A 节点地址统一用 `127.0.0.1`，修复代理/VPN 虚拟网卡（198.18.x）导致 dispatch 404。
+- `/a2a list` 显示完整 sessionId（UUIDv7 前缀同源，截取无区分度）。
+- `probe-openrouter` 脚本移除硬编码 API key，仅从环境变量读取。
+
 ## [0.13.0] - 2026-04-18
 
 ### Changed
