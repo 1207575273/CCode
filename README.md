@@ -1,5 +1,5 @@
 # CCode
-1
+
 **开源多模型 AI 编程 CLI 助手** — 支持 GLM / Claude / DeepSeek / GPT / Gemini / Ollama 及任意 OpenAI 兼容模型
 
 > **C** = **C**odeYang（作者）· **C**hina（中国开发者出品）· **C**ode Agent
@@ -87,50 +87,58 @@ pnpm dev
 
 ## 快速配置
 
-首次启动自动创建 `~/.ccode/config.json`。本项目全程在 **智谱 GLM** 下开发测试，最小配置：
+首次启动自动创建 `~/.ccode/config.yml`（YAML 格式，支持注释）。本项目全程在 **智谱 GLM** 下开发测试，最小配置：
 
-```jsonc
-{
-  "defaultProvider": "glm",
-  "defaultModel": "glm-5",
-  "subAgentModel": "glm-4.7",          // [可选] 子 Agent 使用的模型，不配则继承主 Agent
-  "providers": {
-    "glm": {
-      "apiKey": "your-zhipu-api-key",
-      "baseURL": "https://open.bigmodel.cn/api/coding/paas/v4",
-      "models": ["glm-5", "glm-4.7"]
-    }
-  }
-}
+```yaml
+defaultProvider: glm
+defaultModel: glm-5
+subAgentModel: glm-4.7        # [可选] 子 Agent 使用的模型，不配则继承主 Agent
+providers:
+  glm:
+    apiKey: your-zhipu-api-key
+    baseURL: https://open.bigmodel.cn/api/coding/paas/v4
+    models:
+      - glm-5
+      - glm-4.7
 ```
 
 1. 前往 [智谱开放平台](https://open.bigmodel.cn/) 注册并获取 API Key
-2. 将上述配置写入 `~/.ccode/config.json`，替换 `your-zhipu-api-key`
+2. 将上述配置写入 `~/.ccode/config.yml`，替换 `your-zhipu-api-key`
 3. 启动 `ccode`，即可使用
 
 > 只要模型服务支持 **OpenAI Chat Completion** 或 **Anthropic Messages** 协议，配置 `baseURL` + `apiKey` 即可接入，无需任何代码改动。
 
-### config.json 完整字段说明
+> **从旧版升级**：早期版本用 `~/.ccode/config.json`，首次启动会**自动迁移**到 `config.yml`（写回校验无损后才切换），原文件备份为 `config.json.bak`。设置环境变量 `CCODE_HOME` 可把整个 `~/.ccode` 目录重定向到别处。
 
-```jsonc
-{
-  // ────── 全局设置 ──────
-  "defaultProvider": "glm",          // 默认使用的 Provider 名称
-  "defaultModel": "glm-5",           // 默认模型（必须在对应 provider.models 列表中）
-  "subAgentModel": "glm-4.7",       // [可选] 子 Agent 独立模型，不配则继承主 Agent 当前模型
-  "statusBar": true,                 // 是否显示底部状态栏（token 消耗、模型名等）
+### config.yml 完整字段说明
 
-  // ────── Provider 配置 ──────
-  "providers": {
-    "<provider-name>": {             // 自定义名称，如 "glm"、"anthropic"、"my-proxy"
-      "apiKey": "sk-xxx",            // [必填] API 密钥
-      "baseURL": "https://...",      // [可选] 自定义 API 端点（OpenAI 兼容协议必填）
-      "protocol": "openai",          // [可选] 协议类型："openai"(默认) | "anthropic"
-      "models": ["model-a", "model-b"],  // [必填] 该 provider 可用的模型列表
-      "visionModels": ["model-a"]    // [可选] 支持图片理解的模型子集（默认空 = 全不支持）
-    }
-  }
-}
+```yaml
+# ────── 全局设置 ──────
+defaultProvider: glm          # 默认使用的 Provider 名称
+defaultModel: glm-5           # 默认模型（必须在对应 provider.models 列表中）
+subAgentModel: glm-4.7        # [可选] 子 Agent 独立模型，不配则继承主 Agent 当前模型
+statusBar: true               # 是否显示底部状态栏（token 消耗、模型名、A2A 状态等）
+
+# ────── Provider 配置 ──────
+providers:
+  <provider-name>:            # 自定义名称，如 glm / anthropic / my-proxy
+    apiKey: sk-xxx            # [必填] API 密钥
+    baseURL: https://...      # [可选] 自定义 API 端点（OpenAI 兼容协议必填）
+    protocol: openai          # [可选] 协议类型：openai(默认) | anthropic
+    models:                   # [必填] 该 provider 可用的模型列表
+      - model-a
+      - model-b
+    visionModels:             # [可选] 支持图片理解的模型子集（默认空 = 全不支持）
+      - model-a
+
+# ────── 记忆系统（可选，RAG 向量检索）──────
+memory:
+  enabled: true
+  embedding:
+    apiKey: your-embedding-api-key
+    baseURL: https://your-embedding-api-base-url/v4
+    model: embedding-3
+    dimension: 2048           # 向量维度，需与 embedding 模型匹配
 ```
 
 | 字段 | 类型 | 必填 | 说明 |
@@ -148,40 +156,43 @@ pnpm dev
 <details>
 <summary>多 Provider 配置示例</summary>
 
-```jsonc
-{
-  "defaultProvider": "glm",
-  "defaultModel": "glm-5",
-  "subAgentModel": "glm-4.7",        // 子 Agent 用轻量模型，降低成本
-  "providers": {
-    "glm": {
-      "apiKey": "your-zhipu-api-key",
-      "baseURL": "https://open.bigmodel.cn/api/coding/paas/v4",
-      "models": ["glm-5", "glm-4.7"]
-    },
-    "anthropic": {
-      "apiKey": "sk-ant-xxx",
-      "protocol": "anthropic",
-      "models": ["claude-sonnet-4-20250514"],
-      "visionModels": ["claude-sonnet-4-20250514"]
-    },
-    "deepseek": {
-      "apiKey": "sk-xxx",
-      "baseURL": "https://api.deepseek.com/v1",
-      "models": ["deepseek-chat", "deepseek-reasoner"]
-    },
-    "openai": {
-      "apiKey": "sk-xxx",
-      "models": ["gpt-4o", "gpt-4o-mini"],
-      "visionModels": ["gpt-4o"]
-    },
-    "ollama": {
-      "apiKey": "ollama",
-      "baseURL": "http://localhost:11434/v1",
-      "models": ["qwen2.5:7b", "deepseek-r1:14b"]
-    }
-  }
-}
+```yaml
+defaultProvider: glm
+defaultModel: glm-5
+subAgentModel: glm-4.7        # 子 Agent 用轻量模型，降低成本
+providers:
+  glm:
+    apiKey: your-zhipu-api-key
+    baseURL: https://open.bigmodel.cn/api/coding/paas/v4
+    models:
+      - glm-5
+      - glm-4.7
+  anthropic:
+    apiKey: sk-ant-xxx
+    protocol: anthropic
+    models:
+      - claude-sonnet-4-20250514
+    visionModels:
+      - claude-sonnet-4-20250514
+  deepseek:
+    apiKey: sk-xxx
+    baseURL: https://api.deepseek.com/v1
+    models:
+      - deepseek-chat
+      - deepseek-reasoner
+  openai:
+    apiKey: sk-xxx
+    models:
+      - gpt-4o
+      - gpt-4o-mini
+    visionModels:
+      - gpt-4o
+  ollama:
+    apiKey: ollama
+    baseURL: http://localhost:11434/v1
+    models:
+      - qwen2.5:7b
+      - deepseek-r1:14b
 ```
 
 </details>
@@ -226,7 +237,7 @@ ccode "解释这个函数" --no-tools                # 纯对话，不调用工�
 ccode --web          # 启动 CLI + Bridge Server + Web Dashboard
 ```
 
-浏览器打开 `http://localhost:9800`，获得 5 大管理页面：
+浏览器打开 `http://localhost:9800`，获得 6 大管理页面：
 
 <!-- 截图占位：你可以在 docs/res/ 下放截图，用 <img src="./docs/res/xxx.png" width="800" /> 引用 -->
 
@@ -255,7 +266,13 @@ ccode --web          # 启动 CLI + Bridge Server + Web Dashboard
 - **一键恢复对话**：点击 [恢复] 按钮，在当前 CLI 实例上继续历史会话
 - **搜索过滤**：按关键词搜索历史会话
 
-#### 4. 设置管理（Settings）
+#### 4. Agent 网格（Agents）— A2A 协作视图
+
+- **本机活跃会话 + 远程已信任 Agent** 的列表与拓扑图
+- **标准 A2A 端点浮层**：点击会话节点查看它暴露的标准 A2A 端点（地址可复制、可打开真实 AgentCard）
+- **被调活动聚合**：谁正在/曾被谁调用，跨进程全景可见
+
+#### 5. 设置管理（Settings）
 
 - **Provider 配置 Tab**
   - 在线编辑 apiKey、baseURL、模型列表
@@ -275,7 +292,7 @@ ccode --web          # 启动 CLI + Bridge Server + Web Dashboard
   - 查看已加载的 Runtime Plugin 列表、注册的工具和命令
   - MCP Server 连接状态、工具列表、错误信息
 
-#### 5. 系统日志（Logs）
+#### 6. 系统日志（Logs）
 
 - Agent 运行诊断日志
 - 系统事件追踪
@@ -309,22 +326,36 @@ CLI-1 (session-aaa)  CLI-2 (session-bbb)
 | **上下文管理** | `/compact` 三种压缩策略 + auto-compact + `/context` 查看使用率 |
 | **对话持久化** | JSONL 会话 + `--resume` 恢复 + `/fork` 分支 + Web 端一键恢复 |
 | **Token 计量** | 四维统计（input/output/cache_read/cache_write）+ 多币种计价 + `/usage` |
+| **A2A 分布式 Agent 协作** | 多会话/Agent 互相委托任务 + 标准 A2A Server 端点 + 双向可观测（详见下文） |
+
+### A2A 分布式 Agent 协作（1.0 新增）
+
+让多个 CCode 会话 / 外部 Agent 互相寻址、互相委托任务，并在界面上**双向可观测**——协作的两端都看得见。
+
+- **委托其他 Agent** — `dispatch_remote_agent` 工具把任务委托给本机其他会话或远程 A2A Agent，结果流式返回
+- **本机会话网格** — 每个会话自动起独立 A2A 节点（动态端口），基于 `~/.ccode/instances/` lockfile 自动发现，零配置；`/a2a list` 查看本机活跃会话
+- **标准 A2A Server** — 暴露符合 A2A 0.3.x 规范的端点，可被任意标准 A2A 客户端发现并调用：
+  - `GET /.well-known/agent-card.json`（AgentCard，`preferredTransport: JSONRPC`）
+  - `POST /` — JSON-RPC `message/send`、`message/stream`(SSE)
+  - 任务生命周期 `tasks/get`、`tasks/cancel`、`tasks/resubscribe`
+- **双向可观测** — 调用方与被调方都以 SubAgent 卡片展示执行过程（CLI 状态卡 + Web 完整时间轴），状态栏轻量提示"被调用"，且**不打断主对话**
+- **信任白名单** — 远程 Agent 需 `/a2a add <url>` 显式信任后才能调用（安全底线）；本机会话同机受信，无需配置
+
+> 本机互调统一走 `127.0.0.1`。跨机器协作（局域网 IP + 鉴权）规划在后续版本。
 
 ### 父子模型能力联动
 
 子 Agent 的模型选择支持三级优先级：
 
 1. **LLM 显式指定** — 派发时 `model` 参数指定具体模型
-2. **全局配置** — `config.json` 中的 `subAgentModel` 字段
+2. **全局配置** — `config.yml` 中的 `subAgentModel` 字段
 3. **继承父 Agent** — 不配置时自动使用主 Agent 当前模型
 
 典型用法：主 Agent 用强模型（如 GLM-5）做决策和编排，子 Agent 用轻量模型（如 GLM-4.7）做搜索和文件操作，**同 Provider 内灵活切换、成本可控**。
 
-```jsonc
-{
-  "defaultModel": "glm-5",        // 主 Agent：强模型，负责决策编排
-  "subAgentModel": "glm-4.7"      // 子 Agent：轻量模型，负责执行任务
-}
+```yaml
+defaultModel: glm-5        # 主 Agent：强模型，负责决策编排
+subAgentModel: glm-4.7     # 子 Agent：轻量模型，负责执行任务
 ```
 
 ### Git 深度集成
@@ -366,7 +397,7 @@ CLI-1 (session-aaa)  CLI-2 (session-bbb)
 动态注册外部工具，支持 4 种传输：stdio / SSE / streamable-http / http
 
 ```jsonc
-// ~/.ccode/mcp.json（兼容 ~/.claude.json）
+// ~/.ccode/.mcp.json（也会读取 ~/.claude.json、~/.mcp.json）
 {
   "mcpServers": {
     "my-server": {
@@ -412,7 +443,7 @@ CLI-1 (session-aaa)  CLI-2 (session-bbb)
 | 特性 | CCode | Claude Code | 兼容 |
 |------|-------|------------|------|
 | 指令文件 | CCODE.md | CLAUDE.md | 两者均识别 |
-| MCP 配置 | ~/.ccode/mcp.json | ~/.claude.json | 均可读取 |
+| MCP 配置 | ~/.ccode/.mcp.json | ~/.claude.json | 均可读取 |
 | SKILL.md 格式 | 相同 | 相同 | 直接使用 |
 | 项目设置 | .ccode/settings.local.json | .claude/settings.local.json | 格式兼容 |
 
@@ -434,6 +465,7 @@ CLI-1 (session-aaa)  CLI-2 (session-bbb)
 | `/skills` | `/skill` | Skills 管理 |
 | `/remember` | `/mem` | 记忆管理 |
 | `/mcp` | — | MCP 状态 |
+| `/a2a` | — | A2A 远程 Agent 白名单（list / add / remove）+ 本机会话 |
 | `/bridge` | — | Bridge 管理 |
 | `/plugins` | — | 插件列表 |
 | `/exit` | `/quit` | 强制退出 |
@@ -456,8 +488,10 @@ CLI-1 (session-aaa)  CLI-2 (session-bbb)
 
 | 文件 | 路径 | 用途 |
 |------|------|------|
-| 主配置 | `~/.ccode/config.json` | Provider / Model / Shell |
-| MCP | `~/.ccode/mcp.json` | MCP Server 连接 |
+| 主配置 | `~/.ccode/config.yml` | Provider / Model / 记忆（旧 config.json 自动迁移） |
+| MCP | `~/.ccode/.mcp.json` | MCP Server 连接 |
+| A2A 白名单 | `~/.ccode/a2a-trusted.json` | 已信任的远程 A2A Agent |
+| A2A 节点发现 | `~/.ccode/instances/` | 本机会话 lockfile（自动写入/清理） |
 | 指令文件 | CCODE.md / CLAUDE.md（多层级） | System Prompt 注入 |
 | 项目权限 | `<cwd>/.ccode/settings.local.json` | 工具白名单 |
 | Hooks | `hooks.json`（项目/用户/插件） | 事件钩子 |
