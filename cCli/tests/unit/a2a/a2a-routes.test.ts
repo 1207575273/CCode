@@ -7,9 +7,22 @@
 //   Accept 头：application/json（非流） / text/event-stream（流）
 // SSE 格式：每行 data: <JSON>，JSON 结构为 { jsonrpc:'2.0', id, result: <A2AStreamEvent> }
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createA2ARoutes } from '../../../src/server/a2a-routes.js'
+import { resetTaskStore } from '../../../src/a2a/task-store.js'
 import type { AgentCard, A2AStreamEvent, Task } from '../../../src/a2a/types.js'
+
+beforeEach(() => resetTaskStore())
+
+/** 发一个 tasks/* JSON-RPC 请求 */
+async function rpcRequest(app: ReturnType<typeof createA2ARoutes>, method: string, params: Record<string, unknown>, id = 9) {
+  const res = await app.request('/a2a/rpc', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', method, id, params }),
+  })
+  return res.json() as Promise<{ result?: Task; error?: { code: number; message: string } }>
+}
 
 // ──────────────────────────────────────────
 // 测试用工具函数
@@ -271,5 +284,46 @@ describe('createA2ARoutes', () => {
     })
 
     expect(runTask.mock.calls[0]?.[0]?.caller).toBeUndefined()
+  })
+
+  // 9. tasks/get：message/send 落库后可查到 Task
+  it('should_get_task_after_message_send', async () => {
+    const app = createA2ARoutes({ getAgentCard: fakeAgentCard, runTask: fakeRunTask, genId: () => 'task-g1' })
+    await app.request('/a2a/rpc', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: buildRpcBody('message/send'),
+    })
+
+    const got = await rpcRequest(app, 'tasks/get', { id: 'task-g1' })
+    expect(got.result?.kind).toBe('task')
+    expect(got.result?.id).toBe('task-g1')
+    expect(got.result?.status.state).toBe('completed')
+  })
+
+  // 10. tasks/get 未知任务 -> -32001
+  it('should_return_32001_when_get_unknown_task', async () => {
+    const app = createA2ARoutes({ getAgentCard: fakeAgentCard, runTask: fakeRunTask })
+    const got = await rpcRequest(app, 'tasks/get', { id: 'nope' })
+    expect(got.error?.code).toBe(-32001)
+  })
+
+  // 11. tasks/cancel 未知任务 -> -32001
+  it('should_return_32001_when_cancel_unknown_task', async () => {
+    const app = createA2ARoutes({ getAgentCard: fakeAgentCard, runTask: fakeRunTask })
+    const got = await rpcRequest(app, 'tasks/cancel', { id: 'nope' })
+    expect(got.error?.code).toBe(-32001)
+  })
+
+  // 12. tasks/cancel 已终态任务 -> -32002 (not cancelable)
+  it('should_return_32002_when_cancel_terminal_task', async () => {
+    const app = createA2ARoutes({ getAgentCard: fakeAgentCard, runTask: fakeRunTask, genId: () => 'task-c1' })
+    await app.request('/a2a/rpc', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: buildRpcBody('message/send'),
+    })
+    const got = await rpcRequest(app, 'tasks/cancel', { id: 'task-c1' })
+    expect(got.error?.code).toBe(-32002)
   })
 })

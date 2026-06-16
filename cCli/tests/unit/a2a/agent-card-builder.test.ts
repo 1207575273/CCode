@@ -40,6 +40,13 @@ describe('buildLocalAgentCard - url', () => {
   })
 })
 
+describe('buildLocalAgentCard - 标准传输声明', () => {
+  it('should_declare_preferredTransport_jsonrpc', () => {
+    const card = buildLocalAgentCard(baseInput)
+    expect(card.preferredTransport).toBe('JSONRPC')
+  })
+})
+
 // ─────────────────────────────────────────────────────────────────────
 // Case 3a：description 含 cwd；有 gitBranch 时含分支
 // ─────────────────────────────────────────────────────────────────────

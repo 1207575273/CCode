@@ -18,6 +18,21 @@ import { streamSSE } from 'hono/streaming'
 import { collectA2ATask } from '../a2a/server-executor.js'
 import type { AgentCard, A2AStreamEvent } from '../a2a/types.js'
 import { CALLER_METADATA_KEY, type InboundCaller, type InboundActivity } from '../a2a/node-status.js'
+import {
+  registerTaskController, applyTaskEvent, getStoredTask, cancelStoredTask, reapExpiredTasks,
+} from '../a2a/task-store.js'
+
+/** A2A 标准错误码 */
+const ERR_TASK_NOT_FOUND = -32001
+const ERR_TASK_NOT_CANCELABLE = -32002
+
+/** 旁路把每个流事件写入 task-store（维护 taskId->Task 快照），原样透传 */
+async function* teeToTaskStore(stream: AsyncGenerator<A2AStreamEvent>): AsyncGenerator<A2AStreamEvent> {
+  for await (const evt of stream) {
+    applyTaskEvent(evt)
+    yield evt
+  }
+}
 
 /**
  * 从 message.metadata 提取发起方身份（块 2 透传）。
@@ -47,7 +62,7 @@ export interface A2ARoutesDeps {
    * 执行一个 A2A 任务，产出流式事件序列。
    * 内部接 server-executor.executeA2ATask。
    */
-  runTask: (params: { message: string; taskId: string; contextId: string; caller?: InboundCaller }) => AsyncGenerator<A2AStreamEvent>
+  runTask: (params: { message: string; taskId: string; contextId: string; caller?: InboundCaller; signal?: AbortSignal }) => AsyncGenerator<A2AStreamEvent>
   /** 生成唯一 ID（注入便于测试） */
   genId?: () => string
   /**
@@ -114,6 +129,45 @@ export function createA2ARoutes(deps: A2ARoutesDeps): Hono {
       return c.json(rpcError(id ?? null, -32600, 'Invalid Request'))
     }
 
+    // 机会式清理过期终态 Task（轻量，避免无界增长）
+    reapExpiredTasks()
+
+    // ── tasks/get：查任务快照（标准 A2A method） ──
+    if (method === 'tasks/get') {
+      const targetId = params?.['id'] as string | undefined
+      const task = targetId ? getStoredTask(targetId) : undefined
+      if (!task) return c.json(rpcError(id, ERR_TASK_NOT_FOUND, `Task not found: ${targetId ?? ''}`))
+      return c.json(rpcOk(id, task))
+    }
+
+    // ── tasks/cancel：取消任务（标准 A2A method） ──
+    if (method === 'tasks/cancel') {
+      const targetId = params?.['id'] as string | undefined
+      const outcome = targetId ? cancelStoredTask(targetId) : 'not-found'
+      if (outcome === 'not-found') return c.json(rpcError(id, ERR_TASK_NOT_FOUND, `Task not found: ${targetId ?? ''}`))
+      if (outcome === 'not-cancelable') return c.json(rpcError(id, ERR_TASK_NOT_CANCELABLE, `Task not cancelable: ${targetId}`))
+      return c.json(rpcOk(id, getStoredTask(targetId!)))
+    }
+
+    // ── tasks/resubscribe：重新订阅任务流（标准 A2A method） ──
+    // 最小实现：不重放历史事件，按当前快照发一条状态事件（终态则 final）。
+    if (method === 'tasks/resubscribe') {
+      const targetId = params?.['id'] as string | undefined
+      const task = targetId ? getStoredTask(targetId) : undefined
+      if (!task) return c.json(rpcError(id, ERR_TASK_NOT_FOUND, `Task not found: ${targetId ?? ''}`))
+      return streamSSE(c, async (stream) => {
+        const terminal = ['completed', 'failed', 'canceled', 'rejected'].includes(task.status.state)
+        const evt: A2AStreamEvent = {
+          kind: 'status-update',
+          taskId: task.id,
+          contextId: task.contextId,
+          status: task.status,
+          final: terminal,
+        } as A2AStreamEvent
+        await stream.writeSSE({ data: JSON.stringify(rpcOk(id, evt)) })
+      })
+    }
+
     // 从 params.message.parts 提取第一个 text part 作为 message
     const messageObj = params?.['message'] as Record<string, unknown> | undefined
     const msgParts = messageObj?.['parts'] as Array<Record<string, unknown>> | undefined
@@ -127,11 +181,15 @@ export function createA2ARoutes(deps: A2ARoutesDeps): Hono {
     const contextId = (params?.['contextId'] as string | undefined) ?? genId()
     const taskId = genId()
 
+    // 为本次任务登记取消句柄（tasks/cancel 据此中断 sidechain）
+    const controller = new AbortController()
+    registerTaskController(taskId, controller)
+
     // ── method/send：收集流事件，同步返回最终 Task ──
     if (method === 'message/send') {
       try {
-        const stream = runTask({ message, taskId, contextId, ...(caller ? { caller } : {}) })
-        const task = await collectA2ATask(stream)
+        const stream = runTask({ message, taskId, contextId, signal: controller.signal, ...(caller ? { caller } : {}) })
+        const task = await collectA2ATask(teeToTaskStore(stream))
         return c.json(rpcOk(id, task))
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -143,7 +201,8 @@ export function createA2ARoutes(deps: A2ARoutesDeps): Hono {
     if (method === 'message/stream') {
       return streamSSE(c, async (stream) => {
         try {
-          for await (const evt of runTask({ message, taskId, contextId, ...(caller ? { caller } : {}) })) {
+          for await (const evt of runTask({ message, taskId, contextId, signal: controller.signal, ...(caller ? { caller } : {}) })) {
+            applyTaskEvent(evt)
             await stream.writeSSE({
               data: JSON.stringify(rpcOk(id, evt)),
             })

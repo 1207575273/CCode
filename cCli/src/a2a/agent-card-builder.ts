@@ -66,6 +66,9 @@ export function buildLocalAgentCard(input: LocalAgentCardInput): AgentCard {
     url: `http://127.0.0.1:${port}`,
     version,
     protocolVersion: A2A_PROTOCOL_VERSION,
+    // 显式声明传输协议（A2A 标准客户端据此选择 transport；不声明默认即 JSONRPC，
+    // 但显式声明可通过严格校验器并兼容异构客户端）
+    preferredTransport: 'JSONRPC',
     capabilities: { streaming: true },
     defaultInputModes: ['text/plain'],
     defaultOutputModes: ['text/plain'],

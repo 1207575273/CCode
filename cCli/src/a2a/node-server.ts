@@ -106,12 +106,12 @@ export function startA2ANode(deps: A2ANodeDeps): A2ANodeHandle {
     //   recordInbound      —— 记录"被调用"这件事，供 StatusBar / Agent 网格页展示
     //   mirrorInboundToUI  —— 把 sidechain 的 AgentEvent 镜像成 subagent 卡片，
     //                         让被调方像发起方一样看到执行过程（CLI 状态卡 + Web 时间轴）
-    runTask: ({ message, taskId, contextId, caller }) => {
+    runTask: ({ message, taskId, contextId, caller, signal }) => {
       const agentId = `a2a-in-${taskId.slice(0, 8)}`
       const name = `来自 ${formatCallerName(caller)} 的委托`
       const description = previewMessage(message)
-      const mirroredRunLoop: RunLoopFn = (msg, signal) =>
-        mirrorInboundToUI({ agentId, name, description }, deps.runLoop(msg, signal))
+      const mirroredRunLoop: RunLoopFn = (msg, sig) =>
+        mirrorInboundToUI({ agentId, name, description }, deps.runLoop(msg, sig))
 
       return recordInbound(
         { taskId, message, ...(caller ? { caller } : {}) },
@@ -120,7 +120,8 @@ export function startA2ANode(deps: A2ANodeDeps): A2ANodeHandle {
           taskId,
           contextId,
           runLoop: mirroredRunLoop,
-          signal: new AbortController().signal,
+          // 用协议层传入的 signal（tasks/cancel 可中断）；缺省时自建兜底
+          signal: signal ?? new AbortController().signal,
         }),
       )
     },
