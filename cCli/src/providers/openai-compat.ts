@@ -74,11 +74,11 @@ export class OpenAICompatProvider implements LLMProvider {
       : request.messages
     const langchainMsgs = toLangChainMessages(messagesWithSystem)
 
-    dbg(`[DEBUG][${this.name}] chat request:\n`)
-    dbg(`  model: ${request.model}\n`)
-    dbg(`  baseURL: ${this.#config.baseURL ?? '(default)'}\n`)
-    dbg(`  messages: ${JSON.stringify(request.messages, null, 2)}\n`)
-    dbg(`  langchainMsgs: ${JSON.stringify(langchainMsgs.map(m => ({ type: m._getType(), content: m.content })), null, 2)}\n`)
+    dbg(() => `[DEBUG][${this.name}] chat request:\n` +
+      `  model: ${request.model}\n` +
+      `  baseURL: ${this.#config.baseURL ?? '(default)'}\n` +
+      `  messages: ${JSON.stringify(request.messages, null, 2)}\n` +
+      `  langchainMsgs: ${JSON.stringify(langchainMsgs.map(m => ({ type: m._getType(), content: m.content })), null, 2)}\n`)
 
     // withRetry 包装：在连接建立阶段自动重试 429/5xx/网络错误
     const providerName = this.name
@@ -98,22 +98,27 @@ export class OpenAICompatProvider implements LLMProvider {
     const stream = await model.stream(langchainMsgs, streamOpts)
 
     dbg(`[DEBUG][${this.name}] stream opened, receiving chunks...\n`)
+    // 增量合并:只对携带工具/用量/结束元数据的 chunk 做 concat,纯文本 chunk 不进合并集。
+    // 规避「全量 reduce(concat)」对不断增长的 content 字符串反复拷贝导致的 O(n²);
+    // 文本已在循环内实时 yield,合并结果只用于提取 tool_calls / usage / finish_reason。
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const allChunks: any[] = []
+    let gathered: any
     for await (const chunk of stream) {
       const text = typeof chunk.content === 'string' ? chunk.content : ''
-      dbg(`[DEBUG][${this.name}] chunk: ${JSON.stringify(chunk)}\n`)
+      dbg(() => `[DEBUG][${this.name}] chunk: ${JSON.stringify(chunk)}\n`)
       if (text) {
         yield { type: 'text', text }
       }
-      allChunks.push(chunk)
+      if (carriesMergeData(chunk)) {
+        gathered = gathered === undefined ? chunk : gathered.concat(chunk)
+      }
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let finishReason = 'stop'
-    if (allChunks.length > 0) {
+    if (gathered !== undefined) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const final = allChunks.reduce((a: any, b: any) => a.concat(b))
+      const final = gathered as any
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const usageMeta = (final as any).usage_metadata ?? (final as any).response_metadata?.usage ?? null
@@ -205,4 +210,22 @@ export class OpenAICompatProvider implements LLMProvider {
       typeof m.content === 'string' ? m.content : ''
     ).join(' '))
   }
+}
+
+/**
+ * 判断 chunk 是否携带需要合并的非文本数据(工具调用 / 用量 / 结束元数据)。
+ * 纯文本增量 chunk 返回 false —— 其内容已实时 yield,无需进入合并集,从而把
+ * 合并规模从「全部 chunk」收敛到「少量带元数据的 chunk」,消除 O(n²) 拷贝。
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function carriesMergeData(chunk: any): boolean {
+  if (!chunk) return false
+  if ((chunk.tool_calls?.length ?? 0) > 0) return true
+  if ((chunk.tool_call_chunks?.length ?? 0) > 0) return true
+  if (chunk.usage_metadata != null) return true
+  if ((chunk.additional_kwargs?.tool_calls?.length ?? 0) > 0) return true
+  if (chunk.additional_kwargs?.finish_reason != null) return true
+  const rm = chunk.response_metadata
+  if (rm != null && (rm.finish_reason != null || rm.usage != null)) return true
+  return false
 }

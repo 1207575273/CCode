@@ -166,9 +166,9 @@ export class AnthropicProvider implements LLMProvider {
       input_schema: t.parameters as Anthropic.Tool.InputSchema,
     }))
 
-    dbg(`[DEBUG][anthropic] chat request:\n`)
-    dbg(`  model: ${request.model}\n`)
-    dbg(`  messages: ${JSON.stringify(anthropicMessages, null, 2)}\n`)
+    dbg(() => `[DEBUG][anthropic] chat request:\n` +
+      `  model: ${request.model}\n` +
+      `  messages: ${JSON.stringify(anthropicMessages, null, 2)}\n`)
 
     // withRetry 包装：在连接建立阶段自动重试 429/5xx/网络错误
     const createStream = () => this.#chatOnce(request.model, anthropicMessages, tools, systemPrompt, request)
@@ -227,7 +227,7 @@ export class AnthropicProvider implements LLMProvider {
     dbg(`[DEBUG][anthropic] stream opened, receiving events...\n`)
 
     for await (const event of stream) {
-      dbg(`[DEBUG][anthropic] event: ${JSON.stringify(event)}\n`)
+      dbg(() => `[DEBUG][anthropic] event: ${JSON.stringify(event)}\n`)
 
       if (event.type === 'content_block_delta') {
         if (event.delta.type === 'text_delta') {
