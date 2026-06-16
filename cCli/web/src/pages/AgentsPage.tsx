@@ -112,6 +112,115 @@ function inboundStateMeta(state: InboundTask['state']): { label: string; cls: st
   return { label: '失败', cls: 'text-error' }
 }
 
+// ═══ A2A 标准端点清单 ═══
+
+interface EndpointItem {
+  method: 'GET' | 'POST'
+  path: string
+  url: string
+  note: string
+}
+interface EndpointGroup {
+  title: string
+  items: EndpointItem[]
+}
+
+/** 基于节点 baseUrl 生成它暴露的标准 A2A 端点清单（路径固定，地址随节点变） */
+function buildEndpointGroups(base: string): EndpointGroup[] {
+  return [
+    { title: '发现', items: [
+      { method: 'GET', path: '/.well-known/agent-card.json', url: `${base}/.well-known/agent-card.json`, note: 'AgentCard 能力清单' },
+    ] },
+    { title: 'JSON-RPC 消息', items: [
+      { method: 'POST', path: '/', url: `${base}/`, note: 'message/send | message/stream (SSE)' },
+    ] },
+    { title: '任务生命周期 (JSON-RPC method)', items: [
+      { method: 'POST', path: '/', url: `${base}/`, note: 'tasks/get | tasks/cancel | tasks/resubscribe' },
+    ] },
+    { title: '兼容路径', items: [
+      { method: 'POST', path: '/a2a/rpc', url: `${base}/a2a/rpc`, note: '同 / 的旧别名' },
+    ] },
+    { title: '观测 (CCode 自定义)', items: [
+      { method: 'GET', path: '/a2a/inbound-activity', url: `${base}/a2a/inbound-activity`, note: '被调活动聚合' },
+    ] },
+  ]
+}
+
+/** 复制按钮：复制给定文本，短暂显示"已复制" */
+function CopyButton({ text, title }: { text: string; title?: string }) {
+  const [done, setDone] = useState(false)
+  const onCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setDone(true)
+      setTimeout(() => setDone(false), 1200)
+    } catch {
+      // 权限拒绝静默
+    }
+  }, [text])
+  return (
+    <button onClick={onCopy} title={title ?? `复制 ${text}`}
+      className="shrink-0 text-txt-muted hover:text-accent transition-colors">
+      {done ? <span className="text-success text-[10px]">已复制</span> : <IconCopy size={12} />}
+    </button>
+  )
+}
+
+/** 方法徽章：GET 绿 / POST 蓝（accent） */
+function MethodBadge({ method }: { method: 'GET' | 'POST' }) {
+  const cls = method === 'GET' ? 'bg-success/10 text-success' : 'bg-accent/10 text-accent'
+  return <span className={`px-1 py-0.5 rounded text-[10px] font-mono font-semibold ${cls}`}>{method}</span>
+}
+
+/** A2A 端点浮层：列出该节点暴露的标准端点 + 完整地址，可复制、可打开 AgentCard */
+function EndpointsPopover({ baseUrl, agentCardUrl, onClose }: { baseUrl: string; agentCardUrl: string; onClose: () => void }) {
+  const groups = buildEndpointGroups(baseUrl)
+  return (
+    <>
+      {/* 点击外部关闭 */}
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div className="absolute right-0 top-8 z-50 w-[340px] max-h-[420px] overflow-y-auto bg-elevated border border-border rounded-lg shadow-xl p-3 space-y-2 text-left">
+        <div className="flex items-center justify-between gap-2 pb-2 border-b border-border-subtle">
+          <span className="text-xs font-semibold text-txt-primary">A2A 标准端点</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-txt-muted font-mono">JSONRPC | 0.3.0</span>
+            <button onClick={onClose} className="text-txt-muted hover:text-txt-primary text-[11px]">收起</button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 text-[11px]">
+          <span className="text-txt-muted shrink-0">base</span>
+          <span className="font-mono text-accent truncate">{baseUrl}</span>
+          <CopyButton text={baseUrl} />
+        </div>
+
+        {groups.map((g) => (
+          <div key={g.title} className="space-y-1">
+            <div className="text-[10px] uppercase tracking-wide text-txt-muted">{g.title}</div>
+            {g.items.map((it) => (
+              <div key={g.title + it.note} className="flex items-start gap-1.5">
+                <MethodBadge method={it.method} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-[11px] text-txt-primary truncate">{it.path}</span>
+                    <CopyButton text={it.url} title={`复制 ${it.url}`} />
+                  </div>
+                  <div className="text-[10px] text-txt-secondary">{it.note}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+
+        <a href={agentCardUrl} target="_blank" rel="noopener noreferrer"
+          className="block pt-2 mt-1 border-t border-border-subtle text-[11px] text-accent hover:text-accent-hover">
+          打开真实 AgentCard JSON（新标签）
+        </a>
+      </div>
+    </>
+  )
+}
+
 // ═══ 子组件：本机会话卡片 ═══
 
 interface LocalCardProps {
@@ -121,6 +230,7 @@ interface LocalCardProps {
 function LocalAgentCard({ agent }: LocalCardProps) {
   const [copied, setCopied] = useState(false)
   const [copiedSid, setCopiedSid] = useState(false)
+  const [showEndpoints, setShowEndpoints] = useState(false)
   const addr = `http://127.0.0.1:${agent.port}`
 
   const handleCopy = useCallback(async () => {
@@ -144,16 +254,29 @@ function LocalAgentCard({ agent }: LocalCardProps) {
   }, [agent.sessionId])
 
   return (
-    <div className="bg-surface border border-border rounded-lg p-4 flex flex-col gap-2 hover:border-accent transition-colors">
-      {/* 项目名 + 端口（端口唯一，一眼区分同名会话） */}
+    <div className="relative bg-surface border border-border rounded-lg p-4 flex flex-col gap-2 hover:border-accent transition-colors">
+      {/* 项目名 + 端点入口 + 端口（端口唯一，一眼区分同名会话） */}
       <div className="flex items-center justify-between gap-2">
         <span className="text-base font-semibold text-txt-primary truncate">
           {agent.projectName}
         </span>
-        <span className="text-xs font-mono text-accent bg-elevated px-1.5 py-0.5 rounded shrink-0" title="端口（调用时可直接用）">
-          :{agent.port}
-        </span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={() => setShowEndpoints(v => !v)}
+            className={`text-xs px-1.5 py-0.5 rounded border transition-colors ${showEndpoints ? 'border-accent text-accent' : 'border-border text-txt-secondary hover:text-accent hover:border-accent'}`}
+            title="查看本节点暴露的 A2A 标准端点"
+          >
+            端点
+          </button>
+          <span className="text-xs font-mono text-accent bg-elevated px-1.5 py-0.5 rounded" title="端口（调用时可直接用）">
+            :{agent.port}
+          </span>
+        </div>
       </div>
+
+      {showEndpoints && (
+        <EndpointsPopover baseUrl={addr} agentCardUrl={agent.agentCardUrl} onClose={() => setShowEndpoints(false)} />
+      )}
 
       {/* 完整 sessionId（UUIDv7 前缀同源，同期会话需完整 id 才能区分；点击全选复制） */}
       <button
