@@ -4,6 +4,12 @@
 
 ---
 
+## [1.0.1] - 2026-06-16
+
+### Docs
+
+- **重写 README**：配置说明全面改为 `config.yml`（YAML 示例 + 字段表 + memory 块，含旧 `config.json` 自动迁移与 `CCODE_HOME` 说明）；新增「A2A 分布式 Agent 协作」核心能力章节；Web Dashboard 补 Agent 网格页（6 页）；命令表加 `/a2a`，配置文件表加 `a2a-trusted.json` 与 `instances/`，MCP 路径修正为 `~/.ccode/.mcp.json`。
+
 ## [1.0.0] - 2026-06-16
 
 首个稳定大版本。核心是从无到有引入 **A2A（Agent2Agent）分布式 Agent 协作**子系统，并完成配置与路径管理的基础重构。
