@@ -24,7 +24,7 @@ describe('MemoryWriteTool', () => {
       vectorStore: null,
     })
     await manager.initialize()
-    tool = new MemoryWriteTool(manager)
+    tool = new MemoryWriteTool(() => manager)
   })
 
   afterEach(() => {
@@ -99,8 +99,8 @@ describe('MemorySearchTool', () => {
       vectorStore: null,
     })
     await manager.initialize()
-    writeTool = new MemoryWriteTool(manager)
-    searchTool = new MemorySearchTool(manager)
+    writeTool = new MemoryWriteTool(() => manager)
+    searchTool = new MemorySearchTool(() => manager)
   })
 
   afterEach(() => {
@@ -131,6 +131,23 @@ describe('MemorySearchTool', () => {
     const result = await searchTool.execute({ query: '' }, ctx)
     expect(result.success).toBe(false)
     expect(result.error).toContain('查询')
+  })
+
+  it('惰性 manager:注册时 manager 为 null,后到也能正常写入(竞态修复回归)', async () => {
+    // 模拟启动竞态:工具注册时 memory 尚未初始化,getter 返回 null
+    let lazyManager: MemoryManager | null = null
+    const lazyTool = new MemoryWriteTool(() => lazyManager)
+
+    // manager 未就绪 → 返回友好错误,而非崩溃或工具缺失
+    const notReady = await lazyTool.execute({ title: 't', content: 'c', type: 'project' }, ctx)
+    expect(notReady.success).toBe(false)
+    expect(notReady.error).toContain('未就绪')
+
+    // manager 初始化完成(对话期场景)→ 同一工具实例自动可用,无需重建/重新注册
+    lazyManager = manager
+    const ready = await lazyTool.execute({ title: '竞态写入', content: 'c', type: 'project' }, ctx)
+    expect(ready.success).toBe(true)
+    expect(ready.output).toContain('竞态写入')
   })
 
   it('write → search → delete → search 端到端', async () => {

@@ -101,29 +101,29 @@ function buildRegistry(): ToolRegistry {
   reg.register(new AskUserQuestionTool())
   reg.register(new VerifyCodeTool())
   reg.register(new SkillTool(skillStore))
-  // Memory 工具（MemoryManager 初始化后注册）
-  if (memoryManagerInstance) {
-    reg.register(new MemoryWriteTool(memoryManagerInstance))
-    reg.register(new MemorySearchTool(memoryManagerInstance))
-    reg.register(new MemoryDeleteTool(memoryManagerInstance))
-  }
+  // Memory 工具：无条件注册,manager 惰性获取。
+  // 此处不能用 if (memoryManagerInstance) 守卫 —— buildRegistry 与 memory 初始化在启动时
+  // 并行(Promise.all),注册时 instance 可能仍为 null,守卫会导致工具永久缺失(且无人 invalidate)。
+  // 改为传 getter,execute 时(对话期)再取实例,届时初始化必已完成。
+  reg.register(new MemoryWriteTool(() => memoryManagerInstance))
+  reg.register(new MemorySearchTool(() => memoryManagerInstance))
+  reg.register(new MemoryDeleteTool(() => memoryManagerInstance))
   return reg
 }
 
 /** 会话级 registry 单例（工具实例无状态，安全复用） */
 let _registryCache: ToolRegistry | null = null
 
-/** 获取 ToolRegistry 单例，首次调用时构建，MCP 工具注册后 invalidate 重建 */
+/**
+ * 获取 ToolRegistry 单例,首次调用时构建。
+ * memory 工具用惰性 getter 注册(见 buildRegistry),不依赖 registry 重建;
+ * 故不提供 invalidate —— 单例一旦建立即固定,MCP/plugin 工具注册到同一实例上。
+ */
 export function getRegistry(): ToolRegistry {
   if (!_registryCache) {
     _registryCache = buildRegistry()
   }
   return _registryCache
-}
-
-/** 标记 registry 需要重建（MemoryManager 延迟初始化完成后调用） */
-export function invalidateRegistry(): void {
-  _registryCache = null
 }
 
 /** 确保 Skills 已发现（幂等） */

@@ -41,13 +41,20 @@ type 说明：
     required: ['title', 'content', 'type'],
   }
 
-  private manager: MemoryManager
+  private readonly getManager: () => MemoryManager | null
 
-  constructor(manager: MemoryManager) {
-    this.manager = manager
+  // 惰性获取 manager:解耦「工具注册时序」与「记忆系统初始化时序」。
+  // 注册时 manager 可能尚未就绪(启动竞态),execute 时(对话期)再取,届时必已初始化。
+  constructor(getManager: () => MemoryManager | null) {
+    this.getManager = getManager
   }
 
   async execute(args: Record<string, unknown>, _ctx: ToolContext): Promise<ToolResult> {
+    const manager = this.getManager()
+    if (!manager) {
+      return { success: false, output: '', error: '记忆系统尚未就绪（初始化中或未启用），请稍后重试' }
+    }
+
     const title = String(args['title'] ?? '')
     const content = String(args['content'] ?? '')
     const type = String(args['type'] ?? 'project')
@@ -68,7 +75,7 @@ type 说明：
     }
 
     try {
-      const entry = await this.manager.write({
+      const entry = await manager.write({
         scope: scope as 'global' | 'project',
         title: title.trim(),
         content: content.trim(),

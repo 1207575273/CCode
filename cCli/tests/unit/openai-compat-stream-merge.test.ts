@@ -72,7 +72,8 @@ describe('openai-compat 流式合并性能特征', () => {
 
   it('对照:旧式全量 reduce(concat) 在相同规模下合并次数 = chunk 数 - 1', () => {
     let calls = 0
-    const mk = (): { content: string; concat: (o: unknown) => unknown } => ({
+    type C = { content: string; concat: (o: C) => C }
+    const mk = (): C => ({
       content: 'x',
       concat: () => {
         calls++
@@ -80,7 +81,7 @@ describe('openai-compat 流式合并性能特征', () => {
       },
     })
     const arr = Array.from({ length: 1001 }, mk)
-    arr.reduce((a: { concat: (o: unknown) => unknown }, b) => a.concat(b) as typeof a)
+    arr.reduce((a, b) => a.concat(b))
     // 1001 个 chunk → 1000 次 concat;新实现同输入为 0~1 次
     expect(calls).toBe(1000)
   })

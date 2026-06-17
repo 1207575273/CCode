@@ -21,13 +21,20 @@ export class MemoryDeleteTool implements Tool {
     },
   }
 
-  private manager: MemoryManager
+  private readonly getManager: () => MemoryManager | null
 
-  constructor(manager: MemoryManager) {
-    this.manager = manager
+  // 惰性获取 manager:解耦「工具注册时序」与「记忆系统初始化时序」。
+  // 注册时 manager 可能尚未就绪(启动竞态),execute 时(对话期)再取,届时必已初始化。
+  constructor(getManager: () => MemoryManager | null) {
+    this.getManager = getManager
   }
 
   async execute(args: Record<string, unknown>, _ctx: ToolContext): Promise<ToolResult> {
+    const manager = this.getManager()
+    if (!manager) {
+      return { success: false, output: '', error: '记忆系统尚未就绪（初始化中或未启用），请稍后重试' }
+    }
+
     const id = String(args['id'] ?? '').trim()
     const title = String(args['title'] ?? '').trim()
 
@@ -38,12 +45,12 @@ export class MemoryDeleteTool implements Tool {
     try {
       // 按 id 精确删除
       if (id) {
-        const entries = await this.manager.list('all')
+        const entries = await manager.list('all')
         const target = entries.find(e => e.id === id)
         if (!target) {
           return { success: false, output: '', error: `未找到 id="${id}" 的记忆` }
         }
-        await this.manager.delete(id)
+        await manager.delete(id)
         return {
           success: true,
           output: `已删除记忆: "${target.title}" (${target.scope}/${target.type})`,
@@ -51,7 +58,7 @@ export class MemoryDeleteTool implements Tool {
       }
 
       // 按 title 模糊匹配
-      const entries = await this.manager.list('all')
+      const entries = await manager.list('all')
       const keyword = title.toLowerCase()
       const matches = entries.filter(e => e.title.toLowerCase().includes(keyword))
 
@@ -70,7 +77,7 @@ export class MemoryDeleteTool implements Tool {
 
       // 唯一匹配，直接删除
       const target = matches[0]!
-      await this.manager.delete(target.id)
+      await manager.delete(target.id)
       return {
         success: true,
         output: `已删除记忆: "${target.title}" (${target.scope}/${target.type})`,

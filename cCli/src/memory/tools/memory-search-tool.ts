@@ -26,13 +26,20 @@ export class MemorySearchTool implements Tool {
     required: ['query'],
   }
 
-  private manager: MemoryManager
+  private readonly getManager: () => MemoryManager | null
 
-  constructor(manager: MemoryManager) {
-    this.manager = manager
+  // 惰性获取 manager:解耦「工具注册时序」与「记忆系统初始化时序」。
+  // 注册时 manager 可能尚未就绪(启动竞态),execute 时(对话期)再取,届时必已初始化。
+  constructor(getManager: () => MemoryManager | null) {
+    this.getManager = getManager
   }
 
   async execute(args: Record<string, unknown>, _ctx: ToolContext): Promise<ToolResult> {
+    const manager = this.getManager()
+    if (!manager) {
+      return { success: false, output: '', error: '记忆系统尚未就绪（初始化中或未启用），请稍后重试' }
+    }
+
     const query = String(args['query'] ?? '')
     if (!query.trim()) {
       return { success: false, output: '', error: '查询不能为空' }
@@ -44,7 +51,7 @@ export class MemorySearchTool implements Tool {
     const topK = typeof args['topK'] === 'number' ? args['topK'] : 5
 
     try {
-      const results = await this.manager.search({
+      const results = await manager.search({
         query: query.trim(),
         ...(scope !== undefined ? { scope } : {}),
         ...(tags !== undefined ? { tags } : {}),
