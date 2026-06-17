@@ -11,4 +11,4 @@
  *   - src/ui/WelcomeScreen.tsx → 欢迎界面版本显示
  *   - src/mcp/mcp-manager.ts   → MCP Client 注册版本号
  */
-export const APP_VERSION = '1.0.1'
+export const APP_VERSION = '1.0.2'

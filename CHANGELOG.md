@@ -4,6 +4,16 @@
 
 ---
 
+## [1.0.2] - 2026-06-17
+
+### Performance
+
+- **流式链路与日志热路径优化**：`dbg()` 增加 `CCODE_DEBUG` 开关 + 惰性 thunk，关闭调试时彻底短路，消除流式消费中「每个 chunk 同步写盘 + 每轮整段历史序列化」的开销（实测热路径 5000 次 3873ms -> 0.8ms）；openai-compat 流式合并从全量 `reduce(concat)` 改为只合并带 tool/usage/finish 元数据的 chunk，O(n^2) -> O(meta)（N=4000 16.4ms -> 0.5ms）。anthropic 路径已确认无此问题，持久化层确认不在流式热路径。
+
+### Fixed
+
+- **memory 工具启动竞态导致漏挂**：`memory_write` / `memory_search` / `memory_delete` 改为无条件注册 + 惰性获取 MemoryManager，解耦「工具注册时序」与「记忆系统初始化时序」。此前 `buildRegistry` 与 memory 初始化在 `Promise.all` 并行，注册时实例常为 null（配置真实 embedding 时含网络探测更晚就绪），`if` 守卫导致工具不注册且无人 invalidate，记忆工具无法被 Agent 调度；现已根治并补回归测试。
+
 ## [1.0.1] - 2026-06-16
 
 ### Docs
